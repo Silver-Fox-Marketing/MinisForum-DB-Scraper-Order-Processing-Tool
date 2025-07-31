@@ -142,9 +142,9 @@
                     <!-- Data Search Tab -->
                     <div class="tab-panel" id="data-search-panel">
                         <div class="panel-header">
-                            <h2>Vehicle Data Search</h2>
+                            <h2>Data Management</h2>
                             <div class="control-buttons">
-                                <button class="btn btn-secondary" id="exportSearchResults">
+                                <button class="btn btn-secondary" id="exportSearchResults" style="display: none;">
                                     <i class="fas fa-download"></i>
                                     Export Results
                                 </button>
@@ -155,8 +155,24 @@
                             </div>
                         </div>
                         
-                        <!-- Search Interface -->
-                        <div class="search-interface">
+                        <!-- Sub-tab Navigation -->
+                        <div class="sub-tab-navigation">
+                            <button class="sub-tab-button active" data-subtab="vehicle-search">
+                                <i class="fas fa-car"></i>
+                                Vehicle Search
+                            </button>
+                            <button class="sub-tab-button" data-subtab="vin-history">
+                                <i class="fas fa-history"></i>
+                                VIN History Logs
+                            </button>
+                        </div>
+                        
+                        <!-- Sub-tab Panels -->
+                        <div class="sub-tab-panels">
+                            <!-- Vehicle Search Sub-panel -->
+                            <div class="sub-tab-panel active" id="vehicle-search-panel">
+                                <!-- Search Interface -->
+                                <div class="search-interface">
                             <div class="search-controls">
                                 <div class="search-bar-container">
                                     <input type="text" 
@@ -268,6 +284,111 @@
                                         Next
                                         <i class="fas fa-chevron-right"></i>
                                     </button>
+                                </div>
+                            </div>
+                        </div>
+                            </div>
+                            
+                            <!-- VIN History Sub-panel -->
+                            <div class="sub-tab-panel" id="vin-history-panel" style="display: none;">
+                                <div class="vin-history-interface">
+                                    <!-- VIN History Header with Stats -->
+                                    <div class="vin-history-stats">
+                                        <div class="stat-card">
+                                            <div class="stat-value" id="totalVins">0</div>
+                                            <div class="stat-label">Total VINs</div>
+                                        </div>
+                                        <div class="stat-card">
+                                            <div class="stat-value" id="uniqueVins">0</div>
+                                            <div class="stat-label">Unique VINs</div>
+                                        </div>
+                                        <div class="stat-card">
+                                            <div class="stat-value" id="totalDealerships">0</div>
+                                            <div class="stat-label">Dealerships</div>
+                                        </div>
+                                        <div class="stat-card">
+                                            <div class="stat-value" id="dateRange">--</div>
+                                            <div class="stat-label">Date Range</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- VIN History Search Controls -->
+                                    <div class="vin-history-controls">
+                                        <div class="search-bar-container">
+                                            <input type="text" 
+                                                   class="search-input" 
+                                                   id="vinHistorySearchInput" 
+                                                   placeholder="Search by VIN or dealership name...">
+                                            <button class="search-btn" id="searchVinHistoryBtn">
+                                                <i class="fas fa-search"></i>
+                                            </button>
+                                        </div>
+                                        
+                                        <div class="filter-controls">
+                                            <div class="filter-group">
+                                                <label for="vinHistoryDealerFilter">Dealership:</label>
+                                                <select id="vinHistoryDealerFilter" class="filter-select">
+                                                    <option value="">All Dealerships</option>
+                                                </select>
+                                            </div>
+                                            
+                                            <div class="filter-group">
+                                                <label for="vinHistoryDateFrom">From:</label>
+                                                <input type="date" id="vinHistoryDateFrom" class="date-input">
+                                            </div>
+                                            
+                                            <div class="filter-group">
+                                                <label for="vinHistoryDateTo">To:</label>
+                                                <input type="date" id="vinHistoryDateTo" class="date-input">
+                                            </div>
+                                            
+                                            <button class="btn btn-secondary" id="clearVinHistoryFilters">
+                                                <i class="fas fa-times"></i>
+                                                Clear Filters
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- VIN History Results -->
+                                    <div class="vin-history-results">
+                                        <div class="results-header" id="vinHistoryResultsHeader">
+                                            <div class="results-count">
+                                                <span id="vinHistoryResultsCount">0</span> records found
+                                            </div>
+                                            <button class="btn btn-secondary" id="exportVinHistory">
+                                                <i class="fas fa-download"></i>
+                                                Export VIN History
+                                            </button>
+                                        </div>
+                                        
+                                        <div class="vin-history-table-container" id="vinHistoryTableContainer">
+                                            <div class="initial-message">
+                                                <i class="fas fa-history"></i>
+                                                <h3>VIN History Database</h3>
+                                                <p>View historical VIN data used for determining which vehicles need graphics</p>
+                                                <ul class="search-features">
+                                                    <li>28,289+ VINs across 36 dealerships</li>
+                                                    <li>Cross-dealership tracking capabilities</li>
+                                                    <li>Read-only access for data integrity</li>
+                                                    <li>Export historical data for analysis</li>
+                                                </ul>
+                                                <p class="help-text">This data is critical for order processing decisions</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Pagination -->
+                                        <div class="pagination" id="vinHistoryPagination" style="display: none;">
+                                            <button class="btn btn-secondary" id="vinHistoryPrevBtn" disabled>
+                                                <i class="fas fa-chevron-left"></i>
+                                                Previous
+                                            </button>
+                                            <span class="page-info" id="vinHistoryPageInfo">Page 1 of 1</span>
+                                            <button class="btn btn-secondary" id="vinHistoryNextBtn" disabled>
+                                                Next
+                                                <i class="fas fa-chevron-right"></i>
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>

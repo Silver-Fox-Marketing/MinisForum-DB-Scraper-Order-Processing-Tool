@@ -987,45 +987,68 @@ def search_vehicle_data():
         # Dealer filtering
         dealer_names = request.args.getlist('dealer_names')
         
-        # Build base query based on data type
+        # Build base query based on data type - with deduplication by VIN showing most recent scrape
         if data_type == 'raw':
             base_query = """
-                SELECT 
-                    r.vin, r.stock, r.location, r.year, r.make, r.model,
-                    r.trim, r.ext_color as exterior_color, r.price, r.type as vehicle_type,
-                    r.import_timestamp, 'raw' as data_source
-                FROM raw_vehicle_data r
-                WHERE 1=1
-            """
-        elif data_type == 'normalized':
-            base_query = """
-                SELECT 
-                    n.vin, n.stock, n.location, n.year, n.make, n.model,
-                    n.trim, '' as exterior_color, n.price, n.vehicle_condition as vehicle_type,
-                    r.import_timestamp, 'normalized' as data_source
-                FROM normalized_vehicle_data n
-                JOIN raw_vehicle_data r ON n.raw_data_id = r.id
-                WHERE 1=1
-            """
-        else:  # both
-            base_query = """
-                SELECT vin, stock, location, year, make, model, trim, 
-                       exterior_color, price, vehicle_type, import_timestamp, data_source
-                FROM (
+                WITH ranked_vehicles AS (
                     SELECT 
                         r.vin, r.stock, r.location, r.year, r.make, r.model,
                         r.trim, r.ext_color as exterior_color, r.price, r.type as vehicle_type,
-                        r.import_timestamp, 'raw' as data_source
+                        r.import_timestamp, 'raw' as data_source,
+                        COUNT(*) OVER (PARTITION BY r.vin) as scrape_count,
+                        ROW_NUMBER() OVER (PARTITION BY r.vin ORDER BY r.import_timestamp DESC, r.id DESC) as rn
+                    FROM raw_vehicle_data r
+                )
+                SELECT vin, stock, location, year, make, model, trim, 
+                       exterior_color, price, vehicle_type, import_timestamp, data_source, scrape_count
+                FROM ranked_vehicles
+                WHERE rn = 1
+            """
+        elif data_type == 'normalized':
+            base_query = """
+                WITH ranked_vehicles AS (
+                    SELECT 
+                        n.vin, n.stock, n.location, n.year, n.make, n.model,
+                        n.trim, '' as exterior_color, n.price, n.vehicle_condition as vehicle_type,
+                        r.import_timestamp, 'normalized' as data_source,
+                        COUNT(*) OVER (PARTITION BY n.vin) as scrape_count,
+                        ROW_NUMBER() OVER (PARTITION BY n.vin ORDER BY r.import_timestamp DESC, n.id DESC) as rn
+                    FROM normalized_vehicle_data n
+                    JOIN raw_vehicle_data r ON n.raw_data_id = r.id
+                )
+                SELECT vin, stock, location, year, make, model, trim, 
+                       exterior_color, price, vehicle_type, import_timestamp, data_source, scrape_count
+                FROM ranked_vehicles 
+                WHERE rn = 1
+            """
+        else:  # both - deduplicated showing most recent from either source
+            base_query = """
+                WITH all_vehicles AS (
+                    SELECT 
+                        r.vin, r.stock, r.location, r.year, r.make, r.model,
+                        r.trim, r.ext_color as exterior_color, r.price, r.type as vehicle_type,
+                        r.import_timestamp, 'raw' as data_source, r.id
                     FROM raw_vehicle_data r
                     UNION ALL
                     SELECT 
                         n.vin, n.stock, n.location, n.year, n.make, n.model,
                         n.trim, '' as exterior_color, n.price, n.vehicle_condition as vehicle_type,
-                        r.import_timestamp, 'normalized' as data_source
+                        r.import_timestamp, 'normalized' as data_source, n.id
                     FROM normalized_vehicle_data n
                     JOIN raw_vehicle_data r ON n.raw_data_id = r.id
-                ) combined_data
-                WHERE 1=1
+                ),
+                ranked_vehicles AS (
+                    SELECT 
+                        vin, stock, location, year, make, model, trim, 
+                        exterior_color, price, vehicle_type, import_timestamp, data_source,
+                        COUNT(*) OVER (PARTITION BY vin) as scrape_count,
+                        ROW_NUMBER() OVER (PARTITION BY vin ORDER BY import_timestamp DESC, id DESC) as rn
+                    FROM all_vehicles
+                )
+                SELECT vin, stock, location, year, make, model, trim, 
+                       exterior_color, price, vehicle_type, import_timestamp, data_source, scrape_count
+                FROM ranked_vehicles
+                WHERE rn = 1
             """
         
         # Build WHERE conditions
@@ -1294,6 +1317,118 @@ def get_filter_options():
         
     except Exception as e:
         logger.error(f"Error getting filter options: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/data/vin-history')
+def get_vin_history():
+    """Get VIN history data for the viewer - READ ONLY"""
+    try:
+        # Get query parameters
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 100))
+        search_query = request.args.get('query', '').strip()
+        dealership_filter = request.args.get('dealership', '')
+        date_from = request.args.get('date_from', '')
+        date_to = request.args.get('date_to', '')
+        
+        # Calculate offset
+        offset = (page - 1) * per_page
+        
+        # Build query conditions
+        conditions = []
+        params = []
+        
+        # Search filter
+        if search_query:
+            conditions.append("(LOWER(vh.vin) LIKE LOWER(%s) OR LOWER(vh.dealership_name) LIKE LOWER(%s))")
+            search_param = f'%{search_query}%'
+            params.extend([search_param, search_param])
+        
+        # Dealership filter
+        if dealership_filter:
+            conditions.append("vh.dealership_name = %s")
+            params.append(dealership_filter)
+        
+        # Date range filters
+        if date_from:
+            conditions.append("vh.order_date >= %s")
+            params.append(date_from)
+        
+        if date_to:
+            conditions.append("vh.order_date <= %s")
+            params.append(date_to)
+        
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        
+        # Get total count
+        count_query = f"SELECT COUNT(*) as total FROM vin_history vh WHERE {where_clause}"
+        total_result = db_manager.execute_query(count_query, params)
+        total_count = total_result[0]['total'] if total_result else 0
+        
+        # Get VIN history data with vehicle details
+        query = f"""
+            SELECT 
+                vh.id,
+                vh.vin,
+                vh.dealership_name,
+                vh.order_date,
+                vh.created_at,
+                vh.vehicle_type,
+                r.stock,
+                r.year,
+                r.make,
+                r.model,
+                r.trim,
+                r.status,
+                r.price
+            FROM vin_history vh
+            LEFT JOIN raw_vehicle_data r ON vh.vin = r.vin AND vh.dealership_name = r.location
+            WHERE {where_clause}
+            ORDER BY vh.order_date DESC, vh.created_at DESC
+            LIMIT %s OFFSET %s
+        """
+        
+        # Add pagination params
+        params.extend([per_page, offset])
+        
+        results = db_manager.execute_query(query, params)
+        
+        # Get summary statistics
+        stats_query = """
+            SELECT 
+                COUNT(DISTINCT vin) as unique_vins,
+                COUNT(DISTINCT dealership_name) as unique_dealerships,
+                COUNT(*) as total_records,
+                MIN(order_date) as earliest_date,
+                MAX(order_date) as latest_date
+            FROM vin_history
+        """
+        stats = db_manager.execute_query(stats_query)[0]
+        
+        # Get dealership list for filter dropdown
+        dealership_query = """
+            SELECT DISTINCT dealership_name, COUNT(*) as count
+            FROM vin_history
+            GROUP BY dealership_name
+            ORDER BY dealership_name
+        """
+        dealerships = db_manager.execute_query(dealership_query)
+        
+        return jsonify({
+            'success': True,
+            'data': results,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total_count,
+                'pages': (total_count + per_page - 1) // per_page
+            },
+            'statistics': stats,
+            'dealerships': dealerships
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting VIN history: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/data/export', methods=['POST'])

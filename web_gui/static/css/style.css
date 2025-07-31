@@ -2018,6 +2018,21 @@ body {
     font-weight: 500;
 }
 
+.results-table .scrape-count-cell {
+    text-align: center;
+    font-weight: 600;
+    color: var(--primary-blue);
+    background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+    border-radius: var(--radius);
+    position: relative;
+}
+
+.results-table .scrape-count-cell::before {
+    content: '×';
+    font-size: 0.8em;
+    opacity: 0.7;
+}
+
 .pagination {
     display: flex;
     justify-content: space-between;
@@ -2792,5 +2807,249 @@ body {
     .console-controls {
         flex-direction: column;
         gap: var(--spacing-xs);
+    }
+}
+
+/* =============================================================================
+   SUB-TAB NAVIGATION STYLES
+   ============================================================================= */
+
+.sub-tab-navigation {
+    display: flex;
+    background: #f8f9fa;
+    border-bottom: 2px solid #e1e5e9;
+    margin: calc(var(--spacing-xl) * -1) calc(var(--spacing-xl) * -1) var(--spacing-xl);
+    padding: 0 var(--spacing-xl);
+}
+
+.sub-tab-button {
+    background: transparent;
+    border: none;
+    padding: var(--spacing-md) var(--spacing-lg);
+    font-family: var(--font-body);
+    font-weight: 500;
+    color: var(--gray);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-bottom: 3px solid transparent;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.sub-tab-button:hover {
+    color: var(--primary-red);
+    background: rgba(253, 65, 13, 0.05);
+}
+
+.sub-tab-button.active {
+    color: var(--primary-red);
+    border-bottom-color: var(--primary-red);
+    background: var(--white);
+}
+
+.sub-tab-panels {
+    margin-top: var(--spacing-lg);
+}
+
+.sub-tab-panel {
+    display: none;
+}
+
+.sub-tab-panel.active {
+    display: block;
+    animation: fadeIn 0.2s ease-in;
+}
+
+/* =============================================================================
+   VIN HISTORY VIEWER STYLES
+   ============================================================================= */
+
+.vin-history-interface {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+}
+
+/* VIN History Statistics */
+.vin-history-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
+}
+
+.vin-history-stats .stat-card {
+    background: var(--white);
+    border: 1px solid #e0e0e0;
+    border-radius: var(--radius-md);
+    padding: var(--spacing-lg);
+    text-align: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.vin-history-stats .stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border-color: var(--primary-red);
+}
+
+.vin-history-stats .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary-red);
+    line-height: 1;
+    margin-bottom: var(--spacing-xs);
+    font-family: var(--font-header);
+}
+
+.vin-history-stats .stat-label {
+    font-size: 0.9rem;
+    color: var(--gray);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* VIN History Controls */
+.vin-history-controls {
+    background: var(--white);
+    border: 1px solid #e0e0e0;
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    box-shadow: var(--shadow-sm);
+}
+
+.vin-history-controls .search-bar-container {
+    margin-bottom: var(--spacing-lg);
+}
+
+.vin-history-controls .filter-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-lg);
+    align-items: end;
+}
+
+/* VIN History Results */
+.vin-history-results {
+    background: var(--white);
+    border: 1px solid #e0e0e0;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    min-height: 400px;
+}
+
+.vin-history-table-container {
+    padding: var(--spacing-lg);
+    min-height: 300px;
+    overflow-x: auto;
+}
+
+.vin-history-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: var(--spacing-md);
+}
+
+.vin-history-table th,
+.vin-history-table td {
+    padding: var(--spacing-md);
+    text-align: left;
+    border-bottom: 1px solid #e1e5e9;
+}
+
+.vin-history-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+    color: var(--black);
+    position: sticky;
+    top: 0;
+    white-space: nowrap;
+}
+
+.vin-history-table td {
+    font-size: 0.9rem;
+}
+
+.vin-history-table .vin-cell {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--primary-red);
+}
+
+.vin-history-table .dealership-cell {
+    font-weight: 500;
+    color: var(--black);
+}
+
+.vin-history-table .date-cell {
+    color: var(--gray);
+    white-space: nowrap;
+}
+
+.vin-history-table .vehicle-info-cell {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vin-history-table tr:hover {
+    background: #f8f9fa;
+}
+
+/* Export/Refresh buttons specific to sub-tabs */
+#data-search-panel .control-buttons button {
+    display: none;
+}
+
+#vehicle-search-panel.active ~ .control-buttons #exportSearchResults {
+    display: inline-flex !important;
+}
+
+/* Responsive Design for VIN History */
+@media (max-width: 1200px) {
+    .vin-history-stats {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    }
+    
+    .vin-history-stats .stat-value {
+        font-size: 1.5rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .sub-tab-navigation {
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+    
+    .sub-tab-button {
+        flex-shrink: 0;
+    }
+    
+    .vin-history-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .vin-history-controls .filter-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .vin-history-table-container {
+        padding: var(--spacing-sm);
+    }
+    
+    .vin-history-table {
+        font-size: 0.8rem;
+    }
+    
+    .vin-history-table th,
+    .vin-history-table td {
+        padding: var(--spacing-sm);
     }
 }

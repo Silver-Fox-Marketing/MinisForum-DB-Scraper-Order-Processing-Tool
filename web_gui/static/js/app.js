@@ -2329,6 +2329,9 @@ class MinisFornumApp {
     async initDataSearch() {
         console.log('Initializing data search interface...');
         
+        // Initialize sub-tab functionality
+        this.initSubTabs();
+        
         // Re-bind event listeners since elements are now available
         this.bindDataSearchEventListeners();
         
@@ -2343,7 +2346,369 @@ class MinisFornumApp {
         // Load initial search results (recent vehicles)
         await this.executeVehicleSearch('');
         
+        // Initialize VIN history viewer
+        this.initVinHistory();
+        
         console.log('Data search interface initialized');
+    }
+    
+    initSubTabs() {
+        // Handle sub-tab switching
+        document.querySelectorAll('.sub-tab-button').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const subtab = e.currentTarget.dataset.subtab;
+                this.switchSubTab(subtab);
+            });
+        });
+    }
+    
+    switchSubTab(subtabName) {
+        // Update sub-tab buttons
+        document.querySelectorAll('.sub-tab-button').forEach(button => {
+            button.classList.remove('active');
+        });
+        document.querySelector(`[data-subtab="${subtabName}"]`).classList.add('active');
+        
+        // Update sub-tab panels
+        document.querySelectorAll('.sub-tab-panel').forEach(panel => {
+            panel.classList.remove('active');
+            panel.style.display = 'none';
+        });
+        const activePanel = document.getElementById(`${subtabName}-panel`);
+        if (activePanel) {
+            activePanel.classList.add('active');
+            activePanel.style.display = 'block';
+        }
+        
+        // Update control buttons visibility
+        const exportSearchBtn = document.getElementById('exportSearchResults');
+        if (subtabName === 'vehicle-search') {
+            exportSearchBtn.style.display = 'inline-flex';
+        } else {
+            exportSearchBtn.style.display = 'none';
+        }
+    }
+    
+    // =============================================================================
+    // VIN HISTORY VIEWER FUNCTIONALITY
+    // =============================================================================
+    
+    async initVinHistory() {
+        console.log('Initializing VIN history viewer...');
+        
+        // VIN history properties
+        this.vinHistory = {
+            currentPage: 1,
+            perPage: 100,
+            totalCount: 0,
+            results: [],
+            dealerships: []
+        };
+        
+        // Bind VIN history event listeners
+        this.bindVinHistoryEventListeners();
+        
+        // Load initial statistics
+        await this.loadVinHistoryStats();
+        
+        console.log('VIN history viewer initialized');
+    }
+    
+    bindVinHistoryEventListeners() {
+        // Search functionality
+        const searchInput = document.getElementById('vinHistorySearchInput');
+        const searchBtn = document.getElementById('searchVinHistoryBtn');
+        
+        if (searchInput) {
+            searchInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.searchVinHistory();
+                }
+            });
+        }
+        
+        if (searchBtn) {
+            searchBtn.addEventListener('click', () => {
+                this.searchVinHistory();
+            });
+        }
+        
+        // Filter controls
+        const dealerFilter = document.getElementById('vinHistoryDealerFilter');
+        const dateFromFilter = document.getElementById('vinHistoryDateFrom');
+        const dateToFilter = document.getElementById('vinHistoryDateTo');
+        const clearFiltersBtn = document.getElementById('clearVinHistoryFilters');
+        
+        if (dealerFilter) {
+            dealerFilter.addEventListener('change', () => {
+                this.searchVinHistory();
+            });
+        }
+        
+        if (dateFromFilter) {
+            dateFromFilter.addEventListener('change', () => {
+                this.searchVinHistory();
+            });
+        }
+        
+        if (dateToFilter) {
+            dateToFilter.addEventListener('change', () => {
+                this.searchVinHistory();
+            });
+        }
+        
+        if (clearFiltersBtn) {
+            clearFiltersBtn.addEventListener('click', () => {
+                this.clearVinHistoryFilters();
+            });
+        }
+        
+        // Export functionality
+        const exportBtn = document.getElementById('exportVinHistory');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => {
+                this.exportVinHistory();
+            });
+        }
+        
+        // Pagination
+        const prevBtn = document.getElementById('vinHistoryPrevBtn');
+        const nextBtn = document.getElementById('vinHistoryNextBtn');
+        
+        if (prevBtn) {
+            prevBtn.addEventListener('click', () => {
+                if (this.vinHistory.currentPage > 1) {
+                    this.vinHistory.currentPage--;
+                    this.searchVinHistory();
+                }
+            });
+        }
+        
+        if (nextBtn) {
+            nextBtn.addEventListener('click', () => {
+                const totalPages = Math.ceil(this.vinHistory.totalCount / this.vinHistory.perPage);
+                if (this.vinHistory.currentPage < totalPages) {
+                    this.vinHistory.currentPage++;
+                    this.searchVinHistory();
+                }
+            });
+        }
+    }
+    
+    async loadVinHistoryStats() {
+        // This loads initial stats when switching to VIN history tab
+        await this.searchVinHistory();
+    }
+    
+    async searchVinHistory() {
+        const container = document.getElementById('vinHistoryTableContainer');
+        if (!container) return;
+        
+        // Show loading state
+        container.innerHTML = `
+            <div class="loading-search">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Searching VIN history database...</p>
+            </div>
+        `;
+        
+        // Build query parameters
+        const params = new URLSearchParams();
+        params.append('page', this.vinHistory.currentPage);
+        params.append('per_page', this.vinHistory.perPage);
+        
+        // Add search query
+        const searchQuery = document.getElementById('vinHistorySearchInput')?.value.trim();
+        if (searchQuery) {
+            params.append('query', searchQuery);
+        }
+        
+        // Add filters
+        const dealership = document.getElementById('vinHistoryDealerFilter')?.value;
+        if (dealership) {
+            params.append('dealership', dealership);
+        }
+        
+        const dateFrom = document.getElementById('vinHistoryDateFrom')?.value;
+        if (dateFrom) {
+            params.append('date_from', dateFrom);
+        }
+        
+        const dateTo = document.getElementById('vinHistoryDateTo')?.value;
+        if (dateTo) {
+            params.append('date_to', dateTo);
+        }
+        
+        try {
+            const response = await fetch(`/api/data/vin-history?${params}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                this.vinHistory.results = data.data;
+                this.vinHistory.totalCount = data.pagination.total;
+                
+                // Update statistics
+                this.updateVinHistoryStats(data.statistics);
+                
+                // Update dealership filter if needed
+                if (data.dealerships && !dealership) {
+                    this.updateDealershipFilter(data.dealerships);
+                }
+                
+                // Display results
+                this.displayVinHistoryResults();
+                
+                // Update pagination
+                this.updateVinHistoryPagination(data.pagination);
+            } else {
+                throw new Error(data.error || 'Failed to load VIN history');
+            }
+            
+        } catch (error) {
+            console.error('Error searching VIN history:', error);
+            container.innerHTML = `
+                <div class="search-error">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Error Loading VIN History</h3>
+                    <p>${error.message}</p>
+                </div>
+            `;
+        }
+    }
+    
+    updateVinHistoryStats(stats) {
+        if (!stats) return;
+        
+        document.getElementById('totalVins').textContent = stats.total_records?.toLocaleString() || '0';
+        document.getElementById('uniqueVins').textContent = stats.unique_vins?.toLocaleString() || '0';
+        document.getElementById('totalDealerships').textContent = stats.unique_dealerships?.toLocaleString() || '0';
+        
+        // Format date range
+        if (stats.earliest_date && stats.latest_date) {
+            const earliest = new Date(stats.earliest_date).toLocaleDateString();
+            const latest = new Date(stats.latest_date).toLocaleDateString();
+            document.getElementById('dateRange').textContent = `${earliest} - ${latest}`;
+        } else {
+            document.getElementById('dateRange').textContent = '--';
+        }
+    }
+    
+    updateDealershipFilter(dealerships) {
+        const select = document.getElementById('vinHistoryDealerFilter');
+        if (!select) return;
+        
+        // Preserve current selection
+        const currentValue = select.value;
+        
+        // Clear and rebuild options
+        select.innerHTML = '<option value="">All Dealerships</option>';
+        
+        dealerships.forEach(dealer => {
+            const option = document.createElement('option');
+            option.value = dealer.dealership_name;
+            option.textContent = `${dealer.dealership_name} (${dealer.count.toLocaleString()})`;
+            select.appendChild(option);
+        });
+        
+        // Restore selection
+        select.value = currentValue;
+    }
+    
+    displayVinHistoryResults() {
+        const container = document.getElementById('vinHistoryTableContainer');
+        if (!container) return;
+        
+        if (this.vinHistory.results.length === 0) {
+            container.innerHTML = `
+                <div class="no-results">
+                    <i class="fas fa-search"></i>
+                    <h3>No VIN History Found</h3>
+                    <p>Try adjusting your search criteria or filters</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Build table HTML
+        let tableHTML = `
+            <table class="vin-history-table">
+                <thead>
+                    <tr>
+                        <th>VIN</th>
+                        <th>Dealership</th>
+                        <th>Order Date</th>
+                        <th>Vehicle Info</th>
+                        <th>Stock #</th>
+                        <th>Status</th>
+                        <th>Price</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        this.vinHistory.results.forEach(record => {
+            const vehicleInfo = record.year && record.make && record.model 
+                ? `${record.year} ${record.make} ${record.model} ${record.trim || ''}`.trim()
+                : 'N/A';
+            
+            const price = record.price 
+                ? `$${parseFloat(record.price).toLocaleString()}`
+                : 'N/A';
+            
+            tableHTML += `
+                <tr>
+                    <td class="vin-cell">${record.vin || 'N/A'}</td>
+                    <td class="dealership-cell">${record.dealership_name || 'N/A'}</td>
+                    <td class="date-cell">${new Date(record.order_date).toLocaleDateString()}</td>
+                    <td class="vehicle-info-cell" title="${vehicleInfo}">${vehicleInfo}</td>
+                    <td>${record.stock || 'N/A'}</td>
+                    <td>${record.status || record.vehicle_type || 'N/A'}</td>
+                    <td class="price-cell">${price}</td>
+                </tr>
+            `;
+        });
+        
+        tableHTML += `
+                </tbody>
+            </table>
+        `;
+        
+        container.innerHTML = tableHTML;
+        
+        // Update results count
+        document.getElementById('vinHistoryResultsCount').textContent = this.vinHistory.totalCount.toLocaleString();
+    }
+    
+    updateVinHistoryPagination(pagination) {
+        const pageInfo = document.getElementById('vinHistoryPageInfo');
+        const prevBtn = document.getElementById('vinHistoryPrevBtn');
+        const nextBtn = document.getElementById('vinHistoryNextBtn');
+        const paginationContainer = document.getElementById('vinHistoryPagination');
+        
+        if (pagination.pages > 1) {
+            paginationContainer.style.display = 'flex';
+            pageInfo.textContent = `Page ${pagination.page} of ${pagination.pages}`;
+            
+            prevBtn.disabled = pagination.page <= 1;
+            nextBtn.disabled = pagination.page >= pagination.pages;
+        } else {
+            paginationContainer.style.display = 'none';
+        }
+    }
+    
+    clearVinHistoryFilters() {
+        document.getElementById('vinHistorySearchInput').value = '';
+        document.getElementById('vinHistoryDealerFilter').value = '';
+        document.getElementById('vinHistoryDateFrom').value = '';
+        document.getElementById('vinHistoryDateTo').value = '';
+        
+        this.vinHistory.currentPage = 1;
+        this.searchVinHistory();
+    }
+    
+    async exportVinHistory() {
+        // TODO: Implement VIN history export functionality
+        alert('VIN history export functionality coming soon!');
     }
     
     async loadAvailableDealers() {
@@ -2897,6 +3262,7 @@ class MinisFornumApp {
                                 </div>
                             </div>
                         </th>
+                        <th class="sortable" onclick="app.sortBy('scrape_count')">Scrapes</th>
                         <th>Data Source</th>
                     </tr>
                 </thead>
@@ -2935,6 +3301,7 @@ class MinisFornumApp {
                 <td>${vehicle.mileage_formatted || 'N/A'}</td>
                 <td>${vehicle.vehicle_type || 'N/A'}</td>
                 <td class="date-cell">${scrapedTime}</td>
+                <td class="scrape-count-cell">${vehicle.scrape_count || 1}</td>
                 <td>${dataSourceBadge}</td>
             </tr>
         `;
