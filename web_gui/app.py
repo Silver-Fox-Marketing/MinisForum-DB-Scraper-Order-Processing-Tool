@@ -1573,6 +1573,69 @@ def get_vehicle_history(vin):
         logger.error(f"Error getting vehicle history for VIN {vin}: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/data/vehicle-single/<vin>')
+def get_single_vehicle_data(vin):
+    """Get single vehicle data (raw or normalized) for individual row toggle"""
+    try:
+        if not vin:
+            return jsonify({'error': 'VIN is required'}), 400
+        
+        data_type = request.args.get('data_type', 'raw')  # Default to raw
+        
+        if data_type == 'raw':
+            query = """
+                SELECT 
+                    r.vin, r.stock, r.location, r.year, r.make, r.model,
+                    r.trim, r.ext_color as exterior_color, r.price, r.type as vehicle_type,
+                    r.import_timestamp, 'raw' as data_source,
+                    COUNT(*) OVER (PARTITION BY r.vin) as scrape_count
+                FROM raw_vehicle_data r
+                WHERE r.vin = %s
+                ORDER BY r.import_timestamp DESC
+                LIMIT 1
+            """
+        else:  # normalized
+            query = """
+                SELECT 
+                    n.vin, n.stock, n.location, n.year, n.make, n.model,
+                    n.trim, '' as exterior_color, n.price, n.vehicle_condition as vehicle_type,
+                    r.import_timestamp, 'normalized' as data_source,
+                    1 as scrape_count
+                FROM normalized_vehicle_data n
+                JOIN raw_vehicle_data r ON n.raw_data_id = r.id
+                WHERE n.vin = %s
+                ORDER BY r.import_timestamp DESC
+                LIMIT 1
+            """
+        
+        result = db_manager.execute_query(query, [vin])
+        
+        if not result:
+            if data_type == 'normalized':
+                return jsonify({'error': 'No normalized data found for this VIN'}), 404
+            else:
+                return jsonify({'error': 'No data found for this VIN'}), 404
+        
+        vehicle = dict(result[0])
+        
+        # Format price
+        if vehicle.get('price'):
+            vehicle['price_formatted'] = f"${vehicle['price']:,.2f}"
+        
+        # Format mileage (if available)
+        if vehicle.get('mileage'):
+            vehicle['mileage_formatted'] = f"{vehicle['mileage']:,} mi"
+            
+        return jsonify({
+            'success': True,
+            'vehicle': vehicle,
+            'data_type': data_type
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting single vehicle data for VIN {vin}: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/data/export', methods=['POST'])
 def export_search_results():
     """Export search results to CSV"""

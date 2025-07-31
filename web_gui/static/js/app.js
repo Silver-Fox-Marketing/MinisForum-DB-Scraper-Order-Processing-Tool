@@ -2589,6 +2589,157 @@ class MinisFornumApp {
     }
 
     // =============================================================================
+    // INDIVIDUAL VEHICLE DATA TYPE TOGGLE FUNCTIONALITY
+    // =============================================================================
+    
+    async toggleVehicleDataType(vin, toggleElement) {
+        if (!vin) return;
+        
+        const isNormalized = toggleElement.checked;
+        const rowElement = toggleElement.closest('tr');
+        
+        if (!rowElement) return;
+        
+        try {
+            // Show loading state
+            toggleElement.disabled = true;
+            const originalRow = rowElement.innerHTML;
+            
+            // Fetch the appropriate data type for this VIN
+            const dataType = isNormalized ? 'normalized' : 'raw';
+            const response = await fetch(`/api/data/vehicle-single/${encodeURIComponent(vin)}?data_type=${dataType}`);
+            const data = await response.json();
+            
+            if (data.success && data.vehicle) {
+                // Update the row with new data while preserving the toggle state
+                this.updateVehicleRow(rowElement, data.vehicle, isNormalized);
+            } else {
+                // If no normalized data exists, show message and revert toggle
+                if (isNormalized && data.error && data.error.includes('No normalized data')) {
+                    this.showToast('No normalized data available for this vehicle', 'warning');
+                    toggleElement.checked = false;
+                } else {
+                    throw new Error(data.error || 'Failed to load vehicle data');
+                }
+            }
+            
+        } catch (error) {
+            console.error('Error toggling vehicle data type:', error);
+            this.showToast(`Error loading ${isNormalized ? 'normalized' : 'raw'} data: ${error.message}`, 'error');
+            // Revert toggle state on error
+            toggleElement.checked = !isNormalized;
+        } finally {
+            toggleElement.disabled = false;
+        }
+    }
+    
+    updateVehicleRow(rowElement, vehicleData, isNormalized) {
+        // Get the current toggle element before updating
+        const currentToggle = rowElement.querySelector('.toggle-input');
+        const currentVin = currentToggle ? currentToggle.getAttribute('data-vin') : '';
+        
+        // Format the new vehicle data
+        const dataSourceBadge = `<span class="data-type-badge data-type-${isNormalized ? 'normalized' : 'raw'}">${isNormalized ? 'NORMALIZED' : 'RAW'}</span>`;
+        
+        const scrapedTime = vehicleData.import_timestamp ? 
+            new Date(vehicleData.import_timestamp).toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            }) : 'N/A';
+        
+        // Update vehicle info data attribute
+        const vehicleInfo = JSON.stringify({
+            vin: vehicleData.vin,
+            year: vehicleData.year,
+            make: vehicleData.make,
+            model: vehicleData.model,
+            trim: vehicleData.trim,
+            location: vehicleData.location,
+            scrape_count: vehicleData.scrape_count
+        }).replace(/'/g, '&apos;');
+        
+        // Update row attributes
+        rowElement.setAttribute('data-vehicle-info', vehicleInfo);
+        
+        // Update row content
+        rowElement.innerHTML = `
+            <td class="vin-cell">${vehicleData.vin || 'N/A'}</td>
+            <td>${vehicleData.stock || 'N/A'}</td>
+            <td class="dealer-cell">${vehicleData.location || 'N/A'}</td>
+            <td>${vehicleData.year || 'N/A'}</td>
+            <td>${vehicleData.make || 'N/A'}</td>
+            <td>${vehicleData.model || 'N/A'}</td>
+            <td>${vehicleData.trim || 'N/A'}</td>
+            <td class="price-cell">${vehicleData.price_formatted || 'N/A'}</td>
+            <td>${vehicleData.mileage_formatted || 'N/A'}</td>
+            <td>${vehicleData.vehicle_type || 'N/A'}</td>
+            <td class="date-cell">${scrapedTime}</td>
+            <td class="scrape-count-cell">${vehicleData.scrape_count || 1}</td>
+            <td class="toggle-cell" onclick="event.stopPropagation();">
+                <label class="data-toggle-switch">
+                    <input type="checkbox" class="toggle-input" data-vin="${currentVin}" ${isNormalized ? 'checked' : ''} onchange="app.toggleVehicleDataType('${currentVin}', this)">
+                    <span class="toggle-slider">
+                        <span class="toggle-label-raw">R</span>
+                        <span class="toggle-label-norm">N</span>
+                    </span>
+                </label>
+            </td>
+            <td>${dataSourceBadge}</td>
+        `;
+    }
+    
+    showToast(message, type = 'info') {
+        // Simple toast notification
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.textContent = message;
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 24px;
+            border-radius: 6px;
+            color: white;
+            font-weight: 500;
+            z-index: 10000;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+        `;
+        
+        // Set background color based on type
+        const colors = {
+            info: '#2196F3',
+            success: '#4CAF50',
+            warning: '#FF9800',
+            error: '#F44336'
+        };
+        toast.style.backgroundColor = colors[type] || colors.info;
+        
+        document.body.appendChild(toast);
+        
+        // Animate in
+        setTimeout(() => {
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateX(0)';
+        }, 100);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(100%)';
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 300);
+        }, 3000);
+    }
+
+    // =============================================================================
     // VIN HISTORY VIEWER FUNCTIONALITY
     // =============================================================================
     
@@ -3071,10 +3222,8 @@ class MinisFornumApp {
             params.filter_by = filterBy.value;
         }
         
-        // Data type
-        if (dataTypeRadios.length > 0) {
-            params.data_type = dataTypeRadios[0].value;
-        }
+        // Always use raw data type (data type filter removed)
+        params.data_type = 'raw';
         
         // Sorting
         if (sortBy) {
@@ -3355,9 +3504,8 @@ class MinisFornumApp {
             params.filter_by = filterBy.value;
         }
         
-        if (dataTypeRadios.length > 0) {
-            params.data_type = dataTypeRadios[0].value;
-        }
+        // Always use raw data type (data type filter removed)
+        params.data_type = 'raw';
         
         if (sortBy) {
             params.sort_by = sortBy.value;
@@ -3462,6 +3610,7 @@ class MinisFornumApp {
                             </div>
                         </th>
                         <th class="sortable" onclick="app.sortBy('scrape_count')">Scrapes</th>
+                        <th class="toggle-header">Raw/Norm</th>
                         <th>Data Source</th>
                     </tr>
                 </thead>
@@ -3509,6 +3658,15 @@ class MinisFornumApp {
                 <td>${vehicle.vehicle_type || 'N/A'}</td>
                 <td class="date-cell">${scrapedTime}</td>
                 <td class="scrape-count-cell">${vehicle.scrape_count || 1}</td>
+                <td class="toggle-cell" onclick="event.stopPropagation();">
+                    <label class="data-toggle-switch">
+                        <input type="checkbox" class="toggle-input" data-vin="${vehicle.vin}" onchange="app.toggleVehicleDataType('${vehicle.vin}', this)">
+                        <span class="toggle-slider">
+                            <span class="toggle-label-raw">R</span>
+                            <span class="toggle-label-norm">N</span>
+                        </span>
+                    </label>
+                </td>
                 <td>${dataSourceBadge}</td>
             </tr>
         `;

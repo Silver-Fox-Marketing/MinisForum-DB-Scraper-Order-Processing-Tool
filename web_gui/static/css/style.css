@@ -2000,12 +2000,12 @@ body {
 }
 
 .results-table td {
-    font-size: 0.9rem;
+    font-size: 0.765rem; /* 15% smaller than 0.9rem (0.9 * 0.85 = 0.765) */
 }
 
 .results-table .vin-cell {
     font-family: 'Courier New', monospace;
-    font-size: 0.8rem;
+    font-size: 0.68rem; /* 15% smaller than 0.8rem (0.8 * 0.85 = 0.68) */
     background: #f8f9fa;
 }
 
@@ -2048,6 +2048,106 @@ body {
 .results-table .vehicle-row:active {
     transform: translateY(0);
     box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+/* Toggle Column Styles */
+.results-table .toggle-header {
+    text-align: center;
+    width: 80px;
+    min-width: 80px;
+}
+
+.results-table .toggle-cell {
+    text-align: center;
+    padding: var(--spacing-sm) !important;
+    width: 80px;
+    min-width: 80px;
+}
+
+/* Data Toggle Switch */
+.data-toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 24px;
+    cursor: pointer;
+}
+
+.data-toggle-switch .toggle-input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, var(--primary-blue) 0%, #1976D2 100%);
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.toggle-slider::before {
+    content: '';
+    position: absolute;
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    background: white;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    z-index: 2;
+}
+
+.toggle-input:checked + .toggle-slider {
+    background: linear-gradient(135deg, var(--success-green) 0%, #2E7D32 100%);
+}
+
+.toggle-input:checked + .toggle-slider::before {
+    transform: translateX(26px);
+}
+
+.toggle-input:disabled + .toggle-slider {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Toggle Labels */
+.toggle-label-raw, .toggle-label-norm {
+    font-size: 10px;
+    font-weight: 600;
+    color: white;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    position: relative;
+    z-index: 1;
+    width: 12px;
+    text-align: center;
+}
+
+.toggle-label-raw {
+    margin-left: 2px;
+}
+
+.toggle-label-norm {
+    margin-right: 2px;
+}
+
+/* Toggle hover effect */
+.data-toggle-switch:hover .toggle-slider {
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.2), 0 0 0 2px rgba(33, 150, 243, 0.3);
+}
+
+.toggle-input:checked + .toggle-slider:hover {
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.2), 0 0 0 2px rgba(76, 175, 80, 0.3);
 }
 
 .pagination {
