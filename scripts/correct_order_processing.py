@@ -89,8 +89,8 @@ class CorrectOrderProcessor:
             # Step 5: Generate Adobe CSV in EXACT format we need
             csv_path = self._generate_adobe_csv(new_vehicles, dealership_name, template_type, order_folder, qr_paths)
             
-            # Step 6: Update VIN history for next comparison (Enhanced)
-            self._update_vin_history_enhanced(dealership_name, new_vehicles)
+            # Step 6: CRITICAL - Log processed vehicle VINs to history database
+            vin_logging_result = self._log_processed_vins_to_history(new_vehicles, dealership_name, 'CAO_ORDER')
             
             return {
                 'success': True,
@@ -102,7 +102,10 @@ class CorrectOrderProcessor:
                 'qr_folder': str(qr_folder),
                 'csv_file': str(csv_path),
                 'download_csv': f"/download_csv/{csv_path.name}",
-                'timestamp': timestamp
+                'timestamp': timestamp,
+                'vins_logged_to_history': vin_logging_result['vins_logged'],
+                'duplicate_vins_skipped': vin_logging_result['duplicates_skipped'],
+                'vin_logging_success': vin_logging_result['success']
             }
             
         except Exception as e:
@@ -149,6 +152,9 @@ class CorrectOrderProcessor:
             # Generate Adobe CSV
             csv_path = self._generate_adobe_csv(vehicles, dealership_name, template_type, order_folder, qr_paths)
             
+            # CRITICAL: Log processed vehicle VINs to history database for future order accuracy
+            vin_logging_result = self._log_processed_vins_to_history(vehicles, dealership_name, 'LIST_ORDER')
+            
             return {
                 'success': True,
                 'dealership': dealership_name,
@@ -158,12 +164,90 @@ class CorrectOrderProcessor:
                 'qr_folder': str(qr_folder),
                 'csv_file': str(csv_path),
                 'download_csv': f"/download_csv/{csv_path.name}",
-                'timestamp': timestamp
+                'timestamp': timestamp,
+                'vins_logged_to_history': vin_logging_result['vins_logged'],
+                'duplicate_vins_skipped': vin_logging_result['duplicates_skipped'],
+                'vin_logging_success': vin_logging_result['success']
             }
             
         except Exception as e:
             logger.error(f"Error processing list order: {e}")
             return {'success': False, 'error': str(e)}
+    
+    def _log_processed_vins_to_history(self, vehicles: List[Dict], dealership_name: str, order_type: str) -> Dict[str, Any]:
+        """
+        Log VINs of vehicles that were actually processed in the order output.
+        This is CRITICAL for preventing duplicate processing in future orders.
+        
+        Args:
+            vehicles: List of vehicle dictionaries that were processed
+            dealership_name: Name of the dealership
+            order_type: 'CAO_ORDER' or 'LIST_ORDER'
+        """
+        try:
+            vins_logged = 0
+            duplicates_skipped = 0
+            errors = []
+            
+            logger.info(f"Logging {len(vehicles)} processed vehicle VINs to history for {dealership_name} ({order_type})")
+            
+            for vehicle in vehicles:
+                vin = vehicle.get('vin')
+                if not vin:
+                    continue
+                    
+                vin = vin.strip().upper()
+                
+                try:
+                    # Check if VIN already exists for this dealership (prevent duplicates)
+                    existing = db_manager.execute_query("""
+                        SELECT id FROM vin_history 
+                        WHERE vin = %s AND dealership_name = %s
+                    """, (vin, dealership_name))
+                    
+                    if existing:
+                        duplicates_skipped += 1
+                        logger.debug(f"VIN {vin} already logged for {dealership_name}, skipping")
+                        continue
+                    
+                    # Insert processed VIN into history database
+                    db_manager.execute_query("""
+                        INSERT INTO vin_history (vin, dealership_name, order_date, source)
+                        VALUES (%s, %s, CURRENT_DATE, %s)
+                    """, (vin, dealership_name, order_type))
+                    
+                    vins_logged += 1
+                    logger.info(f"Successfully logged processed VIN {vin} from {order_type} for {dealership_name}")
+                    
+                except Exception as vin_error:
+                    error_msg = f"Failed to log VIN {vin}: {str(vin_error)}"
+                    errors.append(error_msg)
+                    logger.error(error_msg)
+            
+            result = {
+                'success': len(errors) == 0,
+                'vins_logged': vins_logged,
+                'duplicates_skipped': duplicates_skipped,
+                'errors': errors,
+                'total_vehicles': len(vehicles)
+            }
+            
+            if errors:
+                result['error'] = f"Failed to log {len(errors)} VINs"
+            
+            logger.info(f"VIN logging complete: {vins_logged} logged, {duplicates_skipped} duplicates skipped, {len(errors)} errors")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Critical error logging processed VINs: {e}")
+            return {
+                'success': False,
+                'error': f"Critical VIN logging failure: {str(e)}",
+                'vins_logged': 0,
+                'duplicates_skipped': 0,
+                'errors': [str(e)]
+            }
     
     def _get_dealership_vehicles(self, dealership_name: str) -> List[Dict]:
         """Get all vehicles for dealership with filtering"""
