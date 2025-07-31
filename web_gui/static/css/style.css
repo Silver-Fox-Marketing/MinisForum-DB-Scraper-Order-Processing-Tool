@@ -2033,6 +2033,23 @@ body {
     opacity: 0.7;
 }
 
+/* Clickable Vehicle Rows */
+.results-table .vehicle-row {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.results-table .vehicle-row:hover {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e3f2fd 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.results-table .vehicle-row:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
 .pagination {
     display: flex;
     justify-content: space-between;
@@ -3051,5 +3068,300 @@ body {
     .vin-history-table th,
     .vin-history-table td {
         padding: var(--spacing-sm);
+    }
+}
+
+/* =============================================================================
+   VEHICLE HISTORY MODAL STYLES
+   ============================================================================= */
+
+/* Vehicle History Modal */
+.vehicle-history-modal {
+    max-width: 900px;
+    width: 90vw;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.vehicle-history-modal .modal-body {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Vehicle Summary Section */
+.vehicle-summary {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e3f2fd 100%);
+    border-bottom: 2px solid #e1e5e9;
+    padding: var(--spacing-lg);
+    margin-bottom: 0;
+}
+
+.vehicle-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--spacing-md);
+}
+
+.vehicle-info .info-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.vehicle-info .info-group label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--gray);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.vehicle-info .info-group span {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--black);
+}
+
+.vin-display {
+    font-family: 'Courier New', monospace;
+    background: var(--white);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius);
+    border: 1px solid #e0e0e0;
+    font-size: 0.9rem !important;
+}
+
+.scrape-badge {
+    background: var(--primary-blue);
+    color: var(--white);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius);
+    font-weight: 600;
+    text-align: center;
+    min-width: 30px;
+    display: inline-block;
+}
+
+/* History Section */
+.history-section {
+    flex: 1;
+    padding: var(--spacing-lg);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.history-section h4 {
+    margin: 0 0 var(--spacing-lg) 0;
+    color: var(--black);
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.history-timeline {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: var(--spacing-sm);
+}
+
+/* Timeline Styles */
+.timeline {
+    position: relative;
+    padding-left: var(--spacing-xl);
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 15px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(to bottom, var(--primary-blue), var(--primary-red));
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: var(--spacing-lg);
+    padding-left: var(--spacing-lg);
+}
+
+.timeline-item:last-child {
+    margin-bottom: 0;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -23px;
+    top: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    color: var(--white);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Timeline Event Type Colors */
+.timeline-item.scrape .timeline-marker {
+    background: var(--primary-blue);
+}
+
+.timeline-item.order .timeline-marker {
+    background: var(--success-green);
+}
+
+.timeline-item.vin_log .timeline-marker {
+    background: var(--primary-red);
+}
+
+.timeline-item.price_change .timeline-marker {
+    background: #ff9800;
+}
+
+.timeline-item.dealer_change .timeline-marker {
+    background: #9c27b0;
+}
+
+.timeline-content {
+    background: var(--white);
+    border: 1px solid #e1e5e9;
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.timeline-content:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.timeline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--spacing-sm);
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+}
+
+.timeline-header h5 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--black);
+}
+
+.timeline-date {
+    font-size: 0.85rem;
+    color: var(--gray);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.timeline-details {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.detail-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: 0.9rem;
+}
+
+.detail-row strong {
+    min-width: 80px;
+    color: var(--black);
+    font-weight: 600;
+}
+
+/* Loading and Error States */
+.loading-spinner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-xl);
+    color: var(--gray);
+    gap: var(--spacing-md);
+}
+
+.loading-spinner i {
+    font-size: 2rem;
+    color: var(--primary-blue);
+}
+
+.error-message {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-xl);
+    text-align: center;
+    color: var(--danger-red);
+    gap: var(--spacing-sm);
+}
+
+.error-message i {
+    font-size: 2rem;
+}
+
+.error-details {
+    font-size: 0.85rem;
+    color: var(--gray);
+    margin-top: var(--spacing-xs);
+}
+
+.no-history {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-xl);
+    text-align: center;
+    color: var(--gray);
+    gap: var(--spacing-md);
+}
+
+.no-history i {
+    font-size: 2rem;
+    color: var(--gray);
+}
+
+/* Responsive Design for Vehicle History Modal */
+@media (max-width: 768px) {
+    .vehicle-history-modal {
+        width: 95vw;
+        max-height: 95vh;
+    }
+    
+    .vehicle-info {
+        grid-template-columns: 1fr;
+    }
+    
+    .timeline-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .timeline {
+        padding-left: var(--spacing-lg);
+    }
+    
+    .timeline-marker {
+        left: -19px;
+        width: 28px;
+        height: 28px;
+        font-size: 0.8rem;
     }
 }

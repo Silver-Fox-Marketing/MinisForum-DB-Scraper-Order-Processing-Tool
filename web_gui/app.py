@@ -1431,6 +1431,148 @@ def get_vin_history():
         logger.error(f"Error getting VIN history: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/data/vehicle-history/<vin>')
+def get_vehicle_history(vin):
+    """Get complete history for a specific VIN including scrapes, VIN logs, and orders"""
+    try:
+        if not vin:
+            return jsonify({'error': 'VIN is required'}), 400
+        
+        history = []
+        
+        # Get all scrape history for this VIN
+        scrape_query = """
+            SELECT 
+                r.import_timestamp as date,
+                r.location as dealership,
+                r.price,
+                r.year, r.make, r.model, r.trim,
+                r.type as vehicle_type,
+                r.ext_color as exterior_color,
+                'scrape' as event_type
+            FROM raw_vehicle_data r
+            WHERE r.vin = %s
+            ORDER BY r.import_timestamp DESC
+        """
+        
+        scrape_results = db_manager.execute_query(scrape_query, [vin])
+        
+        # Process scrape history
+        previous_location = None
+        previous_price = None
+        
+        for scrape in scrape_results:
+            event_date = scrape['date']
+            dealership = scrape['dealership']
+            price = scrape['price']
+            
+            # Create scrape event
+            scrape_event = {
+                'date': event_date.isoformat() if event_date else None,
+                'time': event_date.isoformat() if event_date else None,
+                'title': 'Vehicle Scraped',
+                'type': 'scrape',
+                'dealership': dealership,
+                'price': str(price) if price else None,
+                'notes': f"Found at {dealership}" + (f" - {scrape['vehicle_type']}" if scrape['vehicle_type'] else "")
+            }
+            history.append(scrape_event)
+            
+            # Check for location change
+            if previous_location and previous_location != dealership:
+                dealer_change_event = {
+                    'date': event_date.isoformat() if event_date else None,
+                    'time': event_date.isoformat() if event_date else None,
+                    'title': 'Dealership Change',
+                    'type': 'dealer_change',
+                    'dealership': dealership,
+                    'notes': f"Moved from {previous_location} to {dealership}"
+                }
+                history.append(dealer_change_event)
+            
+            # Check for price change
+            if previous_price and price and abs(float(previous_price) - float(price)) > 100:
+                price_diff = float(price) - float(previous_price)
+                price_change_event = {
+                    'date': event_date.isoformat() if event_date else None,
+                    'time': event_date.isoformat() if event_date else None,
+                    'title': 'Price Change',
+                    'type': 'price_change',
+                    'dealership': dealership,
+                    'price': str(price),
+                    'notes': f"Price {'increased' if price_diff > 0 else 'decreased'} by ${abs(price_diff):,.2f} (was ${previous_price})"
+                }
+                history.append(price_change_event)
+            
+            previous_location = dealership
+            previous_price = price
+        
+        # Get VIN log history
+        vin_log_query = """
+            SELECT 
+                vh.order_date as date,
+                vh.dealership_name as dealership,
+                'vin_log' as event_type
+            FROM vin_history vh
+            WHERE vh.vin = %s
+            ORDER BY vh.order_date DESC
+        """
+        
+        vin_log_results = db_manager.execute_query(vin_log_query, [vin])
+        
+        for log_entry in vin_log_results:
+            vin_event = {
+                'date': log_entry['date'].isoformat() if log_entry['date'] else None,
+                'time': log_entry['date'].isoformat() if log_entry['date'] else None,
+                'title': 'VIN Log Entry',
+                'type': 'vin_log',
+                'dealership': log_entry['dealership'],
+                'notes': f"Vehicle recorded in VIN logs at {log_entry['dealership']}"
+            }
+            history.append(vin_event)
+        
+        # Get order processing history
+        order_query = """
+            SELECT 
+                opj.created_at as date,
+                opj.dealership_name as dealership,
+                opj.job_type as order_type,
+                opj.status,
+                'order' as event_type
+            FROM order_processing_jobs opj
+            JOIN qr_file_tracking qft ON opj.id = qft.job_id
+            WHERE qft.vin = %s
+            ORDER BY opj.created_at DESC
+        """
+        
+        order_results = db_manager.execute_query(order_query, [vin])
+        
+        for order in order_results:
+            order_event = {
+                'date': order['date'].isoformat() if order['date'] else None,
+                'time': order['date'].isoformat() if order['date'] else None,
+                'title': f"Order Processed - {order['order_type'].title()}",
+                'type': 'order',
+                'dealership': order['dealership'],
+                'order_type': order['order_type'],
+                'notes': f"Order status: {order['status']}"
+            }
+            history.append(order_event)
+        
+        # Sort all history by date (most recent first)
+        history.sort(key=lambda x: x['date'] if x['date'] else '1900-01-01', reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'vin': vin,
+            'history': history,
+            'total_events': len(history)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting vehicle history for VIN {vin}: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/data/export', methods=['POST'])
 def export_search_results():
     """Export search results to CSV"""

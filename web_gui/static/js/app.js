@@ -2332,6 +2332,9 @@ class MinisFornumApp {
         // Initialize sub-tab functionality
         this.initSubTabs();
         
+        // Setup vehicle history modal
+        this.setupVehicleHistoryModal();
+        
         // Re-bind event listeners since elements are now available
         this.bindDataSearchEventListeners();
         
@@ -2389,6 +2392,202 @@ class MinisFornumApp {
         }
     }
     
+    // =============================================================================
+    // VEHICLE HISTORY MODAL FUNCTIONALITY
+    // =============================================================================
+    
+    showVehicleHistory(vin, rowElement) {
+        if (!vin) return;
+        
+        try {
+            // Get vehicle info from row data
+            const vehicleInfo = JSON.parse(rowElement.getAttribute('data-vehicle-info'));
+            
+            // Populate modal with vehicle summary
+            this.populateVehicleSummary(vehicleInfo);
+            
+            // Show the modal
+            const modal = document.getElementById('vehicleHistoryModal');
+            if (modal) {
+                modal.style.display = 'block';
+                document.body.style.overflow = 'hidden';
+            }
+            
+            // Load vehicle history
+            this.loadVehicleHistory(vin);
+            
+        } catch (error) {
+            console.error('Error showing vehicle history:', error);
+            this.addTerminalMessage(`Error loading vehicle history: ${error.message}`, 'error');
+        }
+    }
+    
+    populateVehicleSummary(vehicleInfo) {
+        // Update modal title and vehicle summary
+        const title = document.getElementById('vehicleHistoryTitle');
+        const modalVin = document.getElementById('modalVin');
+        const modalVehicle = document.getElementById('modalVehicle');
+        const modalTotalScrapes = document.getElementById('modalTotalScrapes');
+        const modalCurrentLocation = document.getElementById('modalCurrentLocation');
+        
+        if (title) {
+            title.textContent = `Vehicle History - ${vehicleInfo.vin}`;
+        }
+        
+        if (modalVin) {
+            modalVin.textContent = vehicleInfo.vin || 'N/A';
+        }
+        
+        if (modalVehicle) {
+            const vehicleDisplay = `${vehicleInfo.year || ''} ${vehicleInfo.make || ''} ${vehicleInfo.model || ''}${vehicleInfo.trim ? ' ' + vehicleInfo.trim : ''}`.trim();
+            modalVehicle.textContent = vehicleDisplay || 'N/A';
+        }
+        
+        if (modalTotalScrapes) {
+            modalTotalScrapes.textContent = vehicleInfo.scrape_count || '1';
+        }
+        
+        if (modalCurrentLocation) {
+            modalCurrentLocation.textContent = vehicleInfo.location || 'N/A';
+        }
+    }
+    
+    async loadVehicleHistory(vin) {
+        const timelineContainer = document.getElementById('historyTimeline');
+        if (!timelineContainer) return;
+        
+        // Show loading state
+        timelineContainer.innerHTML = `
+            <div class="loading-spinner">
+                <i class="fas fa-spinner fa-spin"></i>
+                Loading vehicle history...
+            </div>
+        `;
+        
+        try {
+            const response = await fetch(`/api/data/vehicle-history/${encodeURIComponent(vin)}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                this.renderVehicleTimeline(data.history);
+            } else {
+                throw new Error(data.error || 'Failed to load vehicle history');
+            }
+            
+        } catch (error) {
+            console.error('Error loading vehicle history:', error);
+            timelineContainer.innerHTML = `
+                <div class="error-message">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Error loading vehicle history</p>
+                    <p class="error-details">${error.message}</p>
+                </div>
+            `;
+        }
+    }
+    
+    renderVehicleTimeline(history) {
+        const timelineContainer = document.getElementById('historyTimeline');
+        if (!timelineContainer) return;
+        
+        if (!history || history.length === 0) {
+            timelineContainer.innerHTML = `
+                <div class="no-history">
+                    <i class="fas fa-history"></i>
+                    <p>No history available for this vehicle</p>
+                </div>
+            `;
+            return;
+        }
+        
+        const timelineHTML = history.map((event, index) => {
+            const eventDate = new Date(event.date).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+            
+            const eventTime = event.time ? new Date(event.time).toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit'
+            }) : '';
+            
+            return `
+                <div class="timeline-item ${event.type}">
+                    <div class="timeline-marker">
+                        <i class="fas ${this.getTimelineIcon(event.type)}"></i>
+                    </div>
+                    <div class="timeline-content">
+                        <div class="timeline-header">
+                            <h5>${event.title}</h5>
+                            <span class="timeline-date">${eventDate}${eventTime ? ' ' + eventTime : ''}</span>
+                        </div>
+                        <div class="timeline-details">
+                            <div class="detail-row">
+                                <strong>Dealership:</strong> ${event.dealership || 'N/A'}
+                            </div>
+                            ${event.order_type ? `<div class="detail-row"><strong>Order Type:</strong> ${event.order_type}</div>` : ''}
+                            ${event.price ? `<div class="detail-row"><strong>Price:</strong> $${parseFloat(event.price).toLocaleString()}</div>` : ''}
+                            ${event.notes ? `<div class="detail-row"><strong>Notes:</strong> ${event.notes}</div>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        timelineContainer.innerHTML = `
+            <div class="timeline">
+                ${timelineHTML}
+            </div>
+        `;
+    }
+    
+    getTimelineIcon(eventType) {
+        const iconMap = {
+            'scrape': 'fa-spider',
+            'order': 'fa-shopping-cart',
+            'vin_log': 'fa-clipboard-list',
+            'price_change': 'fa-dollar-sign',
+            'dealer_change': 'fa-exchange-alt',
+            'default': 'fa-circle'
+        };
+        return iconMap[eventType] || iconMap.default;
+    }
+    
+    setupVehicleHistoryModal() {
+        // Close modal handlers
+        const closeBtn = document.getElementById('closeVehicleHistoryModal');
+        const modal = document.getElementById('vehicleHistoryModal');
+        
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => this.closeVehicleHistoryModal());
+        }
+        
+        if (modal) {
+            // Close on backdrop click
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    this.closeVehicleHistoryModal();
+                }
+            });
+        }
+        
+        // Close on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modal && modal.style.display === 'block') {
+                this.closeVehicleHistoryModal();
+            }
+        });
+    }
+    
+    closeVehicleHistoryModal() {
+        const modal = document.getElementById('vehicleHistoryModal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+    }
+
     // =============================================================================
     // VIN HISTORY VIEWER FUNCTIONALITY
     // =============================================================================
@@ -3289,7 +3488,15 @@ class MinisFornumApp {
             }) : 'N/A';
         
         return `
-            <tr>
+            <tr class="vehicle-row" data-vin="${vehicle.vin}" data-vehicle-info='${JSON.stringify({
+                vin: vehicle.vin,
+                year: vehicle.year,
+                make: vehicle.make,
+                model: vehicle.model,
+                trim: vehicle.trim,
+                location: vehicle.location,
+                scrape_count: vehicle.scrape_count
+            }).replace(/'/g, '&apos;')}' onclick="app.showVehicleHistory('${vehicle.vin}', this)">
                 <td class="vin-cell">${vehicle.vin || 'N/A'}</td>
                 <td>${vehicle.stock || 'N/A'}</td>
                 <td class="dealer-cell">${vehicle.location || 'N/A'}</td>

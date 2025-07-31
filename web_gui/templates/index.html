@@ -677,6 +677,52 @@
         </div>
     </div>
 
+    <!-- Vehicle History Modal -->
+    <div class="modal" id="vehicleHistoryModal">
+        <div class="modal-content vehicle-history-modal">
+            <div class="modal-header">
+                <h3 id="vehicleHistoryTitle">Vehicle History</h3>
+                <button class="modal-close" id="closeVehicleHistoryModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Vehicle Summary Section -->
+                <div class="vehicle-summary" id="vehicleSummary">
+                    <div class="vehicle-info">
+                        <div class="info-group">
+                            <label>VIN:</label>
+                            <span id="modalVin" class="vin-display">-</span>
+                        </div>
+                        <div class="info-group">
+                            <label>Vehicle:</label>
+                            <span id="modalVehicle">-</span>
+                        </div>
+                        <div class="info-group">
+                            <label>Total Scrapes:</label>
+                            <span id="modalTotalScrapes" class="scrape-badge">-</span>
+                        </div>
+                        <div class="info-group">
+                            <label>Current Location:</label>
+                            <span id="modalCurrentLocation">-</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- History Timeline -->
+                <div class="history-section">
+                    <h4>Complete Vehicle History</h4>
+                    <div class="history-timeline" id="historyTimeline">
+                        <div class="loading-spinner">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            Loading vehicle history...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Schedule Modal -->
     <div class="modal" id="scheduleModal">
         <div class="modal-content">
