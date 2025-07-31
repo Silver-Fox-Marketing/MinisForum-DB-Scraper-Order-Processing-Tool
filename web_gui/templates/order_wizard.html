@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Order Processing Wizard - Silver Fox Marketing</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ range(1000, 9999) | random }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Wizard-specific styles */
+        .wizard-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: var(--spacing-xl);
+        }
+        
+        .wizard-header {
+            text-align: center;
+            margin-bottom: var(--spacing-xl);
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--dark-red) 100%);
+            color: var(--white);
+            padding: var(--spacing-xl);
+            border-radius: var(--radius-lg);
+        }
+        
+        .wizard-progress {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: var(--spacing-xl);
+            background: var(--white);
+            padding: var(--spacing-lg);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .progress-step {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-sm) var(--spacing-lg);
+            border-radius: var(--radius-md);
+            transition: all 0.3s ease;
+        }
+        
+        .progress-step.active {
+            background: var(--primary-red);
+            color: var(--white);
+        }
+        
+        .progress-step.completed {
+            background: var(--success-green);
+            color: var(--white);
+        }
+        
+        .progress-arrow {
+            color: var(--gray);
+            margin: 0 var(--spacing-md);
+        }
+        
+        .wizard-content {
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-xl);
+            box-shadow: var(--shadow-md);
+            min-height: 500px;
+        }
+        
+        .wizard-step {
+            display: none;
+        }
+        
+        .wizard-step.active {
+            display: block;
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        .step-header {
+            text-align: center;
+            margin-bottom: var(--spacing-xl);
+        }
+        
+        .step-title {
+            font-size: 1.8rem;
+            color: var(--black);
+            margin-bottom: var(--spacing-sm);
+        }
+        
+        .step-description {
+            color: var(--gray);
+            font-size: 1.1rem;
+        }
+        
+        .dealership-card {
+            background: #f8f9fa;
+            border: 2px solid var(--primary-red);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-xl);
+            margin-bottom: var(--spacing-xl);
+            text-align: center;
+        }
+        
+        .dealership-card h3 {
+            color: var(--primary-red);
+            font-size: 1.5rem;
+            margin-bottom: var(--spacing-sm);
+        }
+        
+        .dealership-type {
+            background: var(--primary-red);
+            color: var(--white);
+            padding: var(--spacing-xs) var(--spacing-md);
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            display: inline-block;
+        }
+        
+        .vin-input-section {
+            margin-top: var(--spacing-xl);
+        }
+        
+        .vin-textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: var(--spacing-lg);
+            border: 2px solid #e1e5e9;
+            border-radius: var(--radius-md);
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            resize: vertical;
+        }
+        
+        .vin-textarea:focus {
+            outline: none;
+            border-color: var(--primary-red);
+            box-shadow: 0 0 0 3px rgba(253, 65, 13, 0.1);
+        }
+        
+        .vin-help {
+            background: #f0f9ff;
+            border: 1px solid #0ea5e9;
+            border-radius: var(--radius-md);
+            padding: var(--spacing-lg);
+            margin-top: var(--spacing-md);
+        }
+        
+        .output-preview {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-xl);
+            margin-top: var(--spacing-xl);
+        }
+        
+        .preview-section {
+            background: #f8f9fa;
+            border: 1px solid #e1e5e9;
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+        }
+        
+        .preview-section h4 {
+            color: var(--black);
+            margin-bottom: var(--spacing-md);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+        
+        .file-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+        }
+        
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--white);
+            padding: var(--spacing-md);
+            border-radius: var(--radius-md);
+            border: 1px solid #e1e5e9;
+        }
+        
+        .file-name {
+            font-weight: 500;
+            color: var(--black);
+        }
+        
+        .file-size {
+            color: var(--gray);
+            font-size: 0.9rem;
+        }
+        
+        .download-btn {
+            background: var(--primary-red);
+            color: var(--white);
+            border: none;
+            padding: var(--spacing-xs) var(--spacing-md);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        
+        .adobe-readiness {
+            background: var(--white);
+            border: 2px solid #e1e5e9;
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-xl);
+            margin-top: var(--spacing-xl);
+            text-align: center;
+        }
+        
+        .readiness-question {
+            font-size: 1.2rem;
+            color: var(--black);
+            margin-bottom: var(--spacing-lg);
+        }
+        
+        .readiness-actions {
+            display: flex;
+            justify-content: center;
+            gap: var(--spacing-lg);
+        }
+        
+        .wizard-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: var(--spacing-xl);
+            padding-top: var(--spacing-lg);
+            border-top: 1px solid #e1e5e9;
+        }
+        
+        .btn-wizard {
+            padding: var(--spacing-md) var(--spacing-xl);
+            font-weight: 600;
+            border-radius: var(--radius-md);
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            transition: all 0.2s ease;
+        }
+        
+        .btn-wizard.primary {
+            background: var(--primary-red);
+            color: var(--white);
+        }
+        
+        .btn-wizard.primary:hover {
+            background: var(--dark-red);
+            transform: translateY(-1px);
+        }
+        
+        .btn-wizard.secondary {
+            background: var(--white);
+            color: var(--gray);
+            border: 1px solid #e1e5e9;
+        }
+        
+        .btn-wizard.secondary:hover {
+            background: #f8f9fa;
+            color: var(--black);
+        }
+        
+        .btn-wizard.success {
+            background: var(--success-green);
+            color: var(--white);
+        }
+        
+        .btn-wizard.warning {
+            background: var(--warning-orange);
+            color: var(--white);
+        }
+        
+        .completion-summary {
+            text-align: center;
+            padding: var(--spacing-xl);
+        }
+        
+        .completion-icon {
+            font-size: 4rem;
+            color: var(--success-green);
+            margin-bottom: var(--spacing-lg);
+        }
+        
+        .completion-title {
+            font-size: 2rem;
+            color: var(--black);
+            margin-bottom: var(--spacing-md);
+        }
+        
+        .completion-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: var(--spacing-lg);
+            margin-top: var(--spacing-xl);
+        }
+        
+        .stat-card {
+            background: #f8f9fa;
+            padding: var(--spacing-lg);
+            border-radius: var(--radius-md);
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary-red);
+        }
+        
+        .stat-label {
+            color: var(--gray);
+            font-weight: 500;
+        }
+        
+        /* Data Editor Styles */
+        .editor-controls {
+            margin-bottom: var(--spacing-xl);
+        }
+        
+        .editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            background: #f8f9fa;
+            padding: var(--spacing-lg);
+            border-radius: var(--radius-lg);
+            border: 1px solid #e1e5e9;
+        }
+        
+        .editor-info h4 {
+            margin: 0 0 var(--spacing-sm) 0;
+            color: var(--black);
+        }
+        
+        .editor-info p {
+            margin: 0;
+            color: var(--gray);
+            font-size: 0.9rem;
+        }
+        
+        .editor-actions {
+            display: flex;
+            gap: var(--spacing-sm);
+        }
+        
+        .data-editor-container {
+            background: var(--white);
+            border: 1px solid #e1e5e9;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+        
+        .editor-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f8f9fa;
+            padding: var(--spacing-md) var(--spacing-lg);
+            border-bottom: 1px solid #e1e5e9;
+        }
+        
+        .editor-stats {
+            display: flex;
+            gap: var(--spacing-lg);
+        }
+        
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            font-size: 0.9rem;
+            color: var(--gray);
+        }
+        
+        .stat-item i {
+            color: var(--primary-red);
+        }
+        
+        .editor-search {
+            display: flex;
+            gap: var(--spacing-xs);
+        }
+        
+        .search-input {
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border: 1px solid #e1e5e9;
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            width: 200px;
+        }
+        
+        .search-btn {
+            padding: var(--spacing-xs) var(--spacing-sm);
+            background: var(--primary-red);
+            color: var(--white);
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+        }
+        
+        .data-table-container {
+            max-height: 500px;
+            overflow: auto;
+        }
+        
+        .data-editor-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        
+        .data-editor-table th {
+            background: var(--primary-red);
+            color: var(--white);
+            padding: var(--spacing-sm);
+            text-align: left;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .data-editor-table td {
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-bottom: 1px solid #e1e5e9;
+            vertical-align: top;
+        }
+        
+        .data-editor-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .data-editor-table .editable-cell {
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .data-editor-table .editable-cell:hover {
+            background: #fff3cd;
+        }
+        
+        .data-editor-table .editing {
+            background: #d1ecf1;
+        }
+        
+        .cell-input {
+            width: 100%;
+            padding: 2px 4px;
+            border: 2px solid var(--primary-red);
+            border-radius: 2px;
+            font-size: 0.85rem;
+            background: var(--white);
+        }
+        
+        .cell-error {
+            background: #f8d7da !important;
+            border: 1px solid #dc3545;
+        }
+        
+        .cell-changed {
+            background: #d4edda !important;
+            border-left: 3px solid var(--success-green);
+        }
+        
+        .row-actions {
+            display: flex;
+            gap: var(--spacing-xs);
+        }
+        
+        .row-btn {
+            padding: 2px 6px;
+            border: none;
+            border-radius: 2px;
+            cursor: pointer;
+            font-size: 0.7rem;
+        }
+        
+        .row-btn.delete {
+            background: #dc3545;
+            color: var(--white);
+        }
+        
+        .row-btn.duplicate {
+            background: var(--primary-red);
+            color: var(--white);
+        }
+        
+        .editor-validation {
+            margin-top: var(--spacing-lg);
+            background: #f8f9fa;
+            padding: var(--spacing-lg);
+            border-radius: var(--radius-lg);
+            border: 1px solid #e1e5e9;
+        }
+        
+        .editor-validation h4 {
+            margin: 0 0 var(--spacing-md) 0;
+            color: var(--black);
+        }
+        
+        .validation-results {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--spacing-md);
+        }
+        
+        .validation-item {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-sm);
+            background: var(--white);
+            border-radius: var(--radius-sm);
+            border: 1px solid #e1e5e9;
+        }
+        
+        .validation-item.error {
+            border-color: #dc3545;
+            background: #f8d7da;
+        }
+        
+        .validation-item.warning {
+            border-color: #ffc107;
+            background: #fff3cd;
+        }
+        
+        .validation-item.success {
+            border-color: var(--success-green);
+            background: #d4edda;
+        }
+        
+        .validation-icon {
+            font-size: 1.2rem;
+        }
+        
+        .validation-item.error .validation-icon {
+            color: #dc3545;
+        }
+        
+        .validation-item.warning .validation-icon {
+            color: #ffc107;
+        }
+        
+        .validation-item.success .validation-icon {
+            color: var(--success-green);
+        }
+        
+        /* QR URL Editor Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .qr-url-modal {
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            width: 90%;
+            max-width: 1000px;
+            max-height: 80vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .modal-header {
+            background: var(--primary-red);
+            color: var(--white);
+            padding: var(--spacing-lg);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-header h3 {
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--white);
+            cursor: pointer;
+            padding: var(--spacing-xs);
+            border-radius: var(--radius-sm);
+            transition: background 0.2s ease;
+        }
+        
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .modal-body {
+            padding: var(--spacing-lg);
+            flex: 1;
+            overflow: auto;
+        }
+        
+        .qr-url-info {
+            background: #f0f9ff;
+            border: 1px solid #0ea5e9;
+            border-radius: var(--radius-md);
+            padding: var(--spacing-md);
+            margin-bottom: var(--spacing-lg);
+        }
+        
+        .url-editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-lg);
+            background: #f8f9fa;
+            padding: var(--spacing-md);
+            border-radius: var(--radius-md);
+        }
+        
+        .bulk-actions {
+            display: flex;
+            gap: var(--spacing-sm);
+            align-items: center;
+        }
+        
+        .bulk-url-input {
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border: 1px solid #e1e5e9;
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            width: 300px;
+        }
+        
+        .url-stats {
+            display: flex;
+            gap: var(--spacing-md);
+        }
+        
+        .url-stat {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            color: var(--gray);
+            font-size: 0.9rem;
+        }
+        
+        .url-stat i {
+            color: var(--primary-red);
+        }
+        
+        .url-list-container {
+            border: 1px solid #e1e5e9;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+        
+        .url-list-header {
+            display: grid;
+            grid-template-columns: 100px 200px 1fr 100px;
+            background: var(--primary-red);
+            color: var(--white);
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        
+        .url-list-header > div {
+            padding: var(--spacing-sm);
+            border-right: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .url-list-header > div:last-child {
+            border-right: none;
+        }
+        
+        .url-list-body {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .url-row {
+            display: grid;
+            grid-template-columns: 100px 200px 1fr 100px;
+            border-bottom: 1px solid #e1e5e9;
+            font-size: 0.85rem;
+        }
+        
+        .url-row:hover {
+            background: #f8f9fa;
+        }
+        
+        .url-cell {
+            padding: var(--spacing-sm);
+            border-right: 1px solid #e1e5e9;
+            display: flex;
+            align-items: center;
+        }
+        
+        .url-cell:last-child {
+            border-right: none;
+        }
+        
+        .url-input {
+            width: 100%;
+            padding: 2px 4px;
+            border: 1px solid #e1e5e9;
+            border-radius: 2px;
+            font-size: 0.85rem;
+        }
+        
+        .url-input:focus {
+            border-color: var(--primary-red);
+            outline: none;
+        }
+        
+        .url-preview {
+            text-align: center;
+        }
+        
+        .qr-preview-btn {
+            padding: 2px 6px;
+            background: var(--primary-red);
+            color: var(--white);
+            border: none;
+            border-radius: 2px;
+            cursor: pointer;
+            font-size: 0.7rem;
+        }
+        
+        .qr-preview-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .modal-footer {
+            background: #f8f9fa;
+            padding: var(--spacing-lg);
+            border-top: 1px solid #e1e5e9;
+            display: flex;
+            justify-content: flex-end;
+            gap: var(--spacing-md);
+        }
+        
+        .btn {
+            padding: var(--spacing-xs) var(--spacing-md);
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+        }
+        
+        .btn.btn-secondary {
+            background: #6c757d;
+            color: var(--white);
+        }
+        
+        .btn.btn-success {
+            background: var(--success-green);
+            color: var(--white);
+        }
+        
+        .vehicle-info {
+            font-size: 0.8rem;
+            color: var(--gray);
+        }
+    </style>
+</head>
+<body>
+    <div class="wizard-container">
+        <!-- Wizard Header -->
+        <div class="wizard-header">
+            <h1><i class="fas fa-magic"></i> Order Processing Wizard v2.0</h1>
+            <p>Guided workflow for processing dealership orders</p>
+            <p style="color: #28a745; font-weight: bold; font-size: 1.2rem; margin-top: 10px;">
+                ✅ NEW VERSION WITH MANUAL DATA EDITOR & QR URL EDITOR
+            </p>
+        </div>
+        
+        <!-- Progress Indicator -->
+        <div class="wizard-progress" id="wizardProgress">
+            <div class="progress-step active" id="step-initialize">
+                <i class="fas fa-play"></i>
+                <span>Initialize</span>
+            </div>
+            <i class="fas fa-chevron-right progress-arrow"></i>
+            <div class="progress-step" id="step-cao">
+                <i class="fas fa-robot"></i>
+                <span>Auto Process</span>
+            </div>
+            <i class="fas fa-chevron-right progress-arrow"></i>
+            <div class="progress-step" id="step-list">
+                <i class="fas fa-list"></i>
+                <span>VIN Entry</span>
+            </div>
+            <i class="fas fa-chevron-right progress-arrow"></i>
+            <div class="progress-step" id="step-review">
+                <i class="fas fa-eye"></i>
+                <span>Review</span>
+            </div>
+            <i class="fas fa-chevron-right progress-arrow"></i>
+            <div class="progress-step" id="step-complete">
+                <i class="fas fa-check"></i>
+                <span>Complete</span>
+            </div>
+        </div>
+        
+        <!-- Wizard Content -->
+        <div class="wizard-content">
+            <!-- Step 1: Initialize -->
+            <div class="wizard-step active" id="initializeStep">
+                <div class="step-header">
+                    <h2 class="step-title">Processing Queue Initialized</h2>
+                    <p class="step-description">Ready to process <span id="totalDealerships">0</span> dealerships from your queue</p>
+                </div>
+                
+                <div class="queue-summary" id="queueSummaryDisplay">
+                    <!-- Will be populated dynamically -->
+                </div>
+                
+                <div class="wizard-actions">
+                    <div></div>
+                    <button class="btn-wizard primary" onclick="wizard.startProcessing()">
+                        <i class="fas fa-play"></i>
+                        Start Processing
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Step 2: CAO Processing -->
+            <div class="wizard-step" id="caoStep">
+                <div class="step-header">
+                    <h2 class="step-title">Auto-Processing CAO Orders</h2>
+                    <p class="step-description">Automatic processing of CAO dealerships (no user input required)</p>
+                </div>
+                
+                <div class="processing-status" id="caoProcessingStatus">
+                    <!-- Will show CAO processing progress -->
+                </div>
+                
+                <div class="wizard-actions">
+                    <button class="btn-wizard secondary" onclick="wizard.skipCAO()">
+                        <i class="fas fa-forward"></i>
+                        Skip CAO Processing
+                    </button>
+                    <button class="btn-wizard primary" id="caoNextBtn" onclick="wizard.proceedToListProcessing()" style="display: none;">
+                        <i class="fas fa-arrow-right"></i>
+                        Continue to VIN Entry
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Step 3: List Processing (VIN Entry) -->
+            <div class="wizard-step" id="listStep">
+                <div class="step-header">
+                    <h2 class="step-title">VIN Entry</h2>
+                    <p class="step-description">Enter VINs for <span id="currentDealershipName">dealership</span></p>
+                </div>
+                
+                <div class="dealership-card" id="currentDealershipCard">
+                    <h3 id="dealershipDisplayName">Loading...</h3>
+                    <span class="dealership-type">LIST ORDER</span>
+                </div>
+                
+                <div class="vin-input-section">
+                    <label for="vinInput">Enter VINs (one per line):</label>
+                    <textarea id="vinInput" class="vin-textarea" placeholder="Enter VINs here, one per line..."></textarea>
+                    
+                    <div class="vin-help">
+                        <strong><i class="fas fa-info-circle"></i> VIN Entry Instructions:</strong>
+                        <ul>
+                            <li>Enter one VIN per line</li>
+                            <li>VINs will be automatically validated</li>
+                            <li>Invalid VINs will be highlighted for correction</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="wizard-actions">
+                    <button class="btn-wizard secondary" onclick="wizard.skipCurrentDealership()">
+                        <i class="fas fa-forward"></i>
+                        Skip This Dealership
+                    </button>
+                    <button class="btn-wizard primary" onclick="wizard.processCurrentDealership()">
+                        <i class="fas fa-cog"></i>
+                        Process Order
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Step 4: Review Output -->
+            <div class="wizard-step" id="reviewStep">
+                <div class="step-header">
+                    <h2 class="step-title">Review Output</h2>
+                    <p class="step-description">Inspect generated files for <span id="reviewDealershipName">dealership</span></p>
+                </div>
+                
+                <div class="output-preview">
+                    <div class="preview-section">
+                        <h4><i class="fas fa-file-csv"></i> CSV Files</h4>
+                        <div class="file-list" id="csvFileList">
+                            <!-- Will be populated with CSV files -->
+                        </div>
+                    </div>
+                    
+                    <div class="preview-section">
+                        <h4><i class="fas fa-qrcode"></i> QR Codes</h4>
+                        <div class="file-list" id="qrFileList">
+                            <!-- Will be populated with QR code files -->
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="adobe-readiness">
+                    <div class="readiness-question">Is this output ready for Adobe?</div>
+                    <div class="readiness-actions">
+                        <button class="btn-wizard warning" onclick="wizard.showDataEditor()">
+                            <i class="fas fa-edit"></i>
+                            Needs Editing
+                        </button>
+                        <button class="btn-wizard success" onclick="wizard.approveOutput()">
+                            <i class="fas fa-check"></i>
+                            Looks Good
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="wizard-actions">
+                    <button class="btn-wizard secondary" onclick="wizard.backToVINEntry()">
+                        <i class="fas fa-arrow-left"></i>
+                        Back to VIN Entry
+                    </button>
+                    <div></div>
+                </div>
+            </div>
+
+            <!-- Step 4.5: Manual Data Editor -->
+            <div class="wizard-step" id="dataEditorStep">
+                <div class="step-header">
+                    <h2 class="step-title">Manual Data Editor</h2>
+                    <p class="step-description">Edit CSV data before finalizing for Adobe</p>
+                </div>
+                
+                <div class="editor-controls">
+                    <div class="editor-header">
+                        <div class="editor-info">
+                            <h4><i class="fas fa-table"></i> CSV Data Editor</h4>
+                            <p>Edit any incorrect data before finalizing the order. Changes will be saved to the CSV file.</p>
+                        </div>
+                        <div class="editor-actions">
+                            <button class="btn-wizard secondary" onclick="wizard.addNewRow()">
+                                <i class="fas fa-plus"></i>
+                                Add Row
+                            </button>
+                            <button class="btn-wizard warning" onclick="wizard.resetData()">
+                                <i class="fas fa-undo"></i>
+                                Reset Changes
+                            </button>
+                            <button class="btn-wizard primary" onclick="wizard.showQRUrlEditor()">
+                                <i class="fas fa-qrcode"></i>
+                                Edit QR URLs
+                            </button>
+                            <button class="btn-wizard success" onclick="wizard.saveAndRegenerate()">
+                                <i class="fas fa-save"></i>
+                                Save & Regenerate
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="data-editor-container">
+                    <div class="editor-toolbar">
+                        <div class="editor-stats">
+                            <span class="stat-item">
+                                <i class="fas fa-car"></i>
+                                <span id="editorVehicleCount">0</span> vehicles
+                            </span>
+                            <span class="stat-item">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <span id="editorErrorCount">0</span> errors
+                            </span>
+                            <span class="stat-item">
+                                <i class="fas fa-edit"></i>
+                                <span id="editorChangeCount">0</span> changes
+                            </span>
+                        </div>
+                        <div class="editor-search">
+                            <input type="text" id="editorSearchInput" placeholder="Search VIN, Stock, etc..." class="search-input">
+                            <button class="search-btn" onclick="wizard.searchData()">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="data-table-container">
+                        <table class="data-editor-table" id="dataEditorTable">
+                            <thead>
+                                <tr id="dataEditorHeaders">
+                                    <!-- Headers will be populated dynamically -->
+                                </tr>
+                            </thead>
+                            <tbody id="dataEditorBody">
+                                <!-- Data rows will be populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="editor-validation">
+                    <h4><i class="fas fa-check-circle"></i> Data Validation</h4>
+                    <div class="validation-results" id="validationResults">
+                        <!-- Validation results will be shown here -->
+                    </div>
+                </div>
+                
+                <div class="wizard-actions">
+                    <button class="btn-wizard secondary" onclick="wizard.backToReview()">
+                        <i class="fas fa-arrow-left"></i>
+                        Back to Review
+                    </button>
+                    <button class="btn-wizard primary" onclick="wizard.finalizeCorrectedData()">
+                        <i class="fas fa-check"></i>
+                        Apply Changes & Continue
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Step 5: Completion -->
+            <div class="wizard-step" id="completeStep">
+                <div class="completion-summary">
+                    <div class="completion-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <h2 class="completion-title">Queue Processing Complete!</h2>
+                    <p>All dealerships have been processed and files are ready for Adobe.</p>
+                    
+                    <div class="completion-stats" id="completionStats">
+                        <!-- Will be populated with processing statistics -->
+                    </div>
+                </div>
+                
+                <div class="wizard-actions">
+                    <button class="btn-wizard secondary" onclick="window.close()">
+                        <i class="fas fa-times"></i>
+                        Close Wizard
+                    </button>
+                    <button class="btn-wizard primary" onclick="wizard.downloadAllFiles()">
+                        <i class="fas fa-download"></i>
+                        Download All Files
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- QR URL Editor Modal -->
+    <div class="modal-overlay" id="qrUrlEditorModal" style="display: none;">
+        <div class="qr-url-modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-qrcode"></i> QR Code URL Editor</h3>
+                <button class="modal-close" onclick="wizard.closeQRUrlEditor()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="qr-url-info">
+                    <p><strong>Instructions:</strong> Enter the correct vehicle page URL for each vehicle. These URLs will be embedded in the QR codes.</p>
+                </div>
+                
+                <div class="url-editor-container">
+                    <div class="url-editor-header">
+                        <div class="bulk-actions">
+                            <input type="text" id="bulkUrlTemplate" placeholder="https://example.com/vehicle/{STOCK}" class="bulk-url-input">
+                            <button class="btn btn-secondary" onclick="wizard.applyBulkUrlTemplate()">
+                                <i class="fas fa-magic"></i>
+                                Apply Template
+                            </button>
+                        </div>
+                        <div class="url-stats">
+                            <span class="url-stat">
+                                <i class="fas fa-link"></i>
+                                <span id="urlsCompleteCount">0</span>/<span id="urlsTotalCount">0</span> URLs set
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="url-list-container">
+                        <div class="url-list-header">
+                            <div class="url-col-stock">Stock #</div>
+                            <div class="url-col-vehicle">Vehicle</div>
+                            <div class="url-col-url">Vehicle URL</div>
+                            <div class="url-col-preview">QR Preview</div>
+                        </div>
+                        <div class="url-list-body" id="urlListBody">
+                            <!-- URL rows will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="wizard.closeQRUrlEditor()">
+                    <i class="fas fa-times"></i>
+                    Cancel
+                </button>
+                <button class="btn btn-success" onclick="wizard.regenerateQRWithUrls()">
+                    <i class="fas fa-qrcode"></i>
+                    Generate QR Codes
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/order_wizard.js') }}?v={{ range(1000, 9999) | random }}"></script>
+    <script>
+        // Initialize the wizard when page loads
+        let wizard;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Order Wizard page loaded - VERSION 2.0 WITH MANUAL DATA EDITOR');
+            console.log('Features: Manual data editor, QR URL editor, inline editing, validation');
+            
+            try {
+                wizard = new OrderWizard();
+                console.log('Order Wizard initialized successfully');
+            } catch (error) {
+                console.error('Error initializing Order Wizard:', error);
+                
+                // Show error message to user
+                document.body.innerHTML = `
+                    <div style="padding: 40px; text-align: center; font-family: Arial;">
+                        <h2 style="color: #dc3545;">Order Wizard Initialization Error</h2>
+                        <p>Failed to initialize the order wizard. Please check the console for details.</p>
+                        <p><strong>Error:</strong> ${error.message}</p>
+                        <button onclick="window.close()" style="padding: 10px 20px; margin: 10px;">Close Window</button>
+                        <button onclick="location.reload()" style="padding: 10px 20px; margin: 10px;">Retry</button>
+                    </div>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>

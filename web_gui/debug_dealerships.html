@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Dealerships</title>
+</head>
+<body>
+    <h1>Dealerships Debug Page</h1>
+    <div id="status">Loading...</div>
+    <div id="dealerships"></div>
+    <div id="error" style="color: red; display: none;"></div>
+
+    <script>
+        async function testDealerships() {
+            const statusDiv = document.getElementById('status');
+            const dealershipsDiv = document.getElementById('dealerships');
+            const errorDiv = document.getElementById('error');
+            
+            try {
+                statusDiv.textContent = 'Fetching dealerships...';
+                
+                const response = await fetch('/api/dealerships');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const dealerships = await response.json();
+                
+                statusDiv.textContent = `Found ${dealerships.length} dealerships`;
+                
+                const activeDealerships = dealerships.filter(d => d.is_active);
+                
+                dealershipsDiv.innerHTML = `
+                    <h2>Active Dealerships (${activeDealerships.length})</h2>
+                    <ul>
+                        ${activeDealerships.map(d => `<li>${d.name}</li>`).join('')}
+                    </ul>
+                    <h2>All Dealerships (${dealerships.length})</h2>
+                    <ul>
+                        ${dealerships.map(d => `<li>${d.name} - ${d.is_active ? 'ACTIVE' : 'INACTIVE'}</li>`).join('')}
+                    </ul>
+                `;
+                
+                // Check specifically for Dave Sinclair Lincoln South
+                const daveSinclair = dealerships.find(d => d.name === 'Dave Sinclair Lincoln South');
+                if (daveSinclair) {
+                    console.log('Dave Sinclair Lincoln South found:', daveSinclair);
+                } else {
+                    console.log('Dave Sinclair Lincoln South NOT found');
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                statusDiv.textContent = 'Error loading dealerships';
+                errorDiv.style.display = 'block';
+                errorDiv.textContent = error.message;
+            }
+        }
+        
+        // Run the test when page loads
+        testDealerships();
+    </script>
+</body>
+</html>

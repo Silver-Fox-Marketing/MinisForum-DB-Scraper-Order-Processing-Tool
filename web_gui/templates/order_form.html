@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Processing - Silver Fox Marketing</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .order-form-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .order-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 10px;
+            margin-bottom: 2rem;
+        }
+        
+        .order-type-selector {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .order-type-btn {
+            flex: 1;
+            padding: 1rem;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+        
+        .order-type-btn.active {
+            border-color: #667eea;
+            background: #f3f4ff;
+        }
+        
+        .order-type-btn:hover {
+            border-color: #667eea;
+        }
+        
+        .order-section {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        
+        .dealership-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .dealership-option {
+            padding: 1rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .dealership-option:hover {
+            border-color: #667eea;
+        }
+        
+        .dealership-option.selected {
+            border-color: #667eea;
+            background: #f3f4ff;
+        }
+        
+        .vehicle-type-filters {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .vehicle-type-filter {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .vin-list-input {
+            width: 100%;
+            min-height: 200px;
+            padding: 1rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-family: monospace;
+            resize: vertical;
+        }
+        
+        .order-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
+        
+        .schedule-info {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        
+        .progress-section {
+            display: none;
+            margin-top: 2rem;
+        }
+        
+        .order-progress {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 1rem 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .order-results {
+            display: none;
+            margin-top: 2rem;
+        }
+        
+        .result-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 1rem;
+        }
+        
+        .result-success {
+            border-left: 4px solid #4caf50;
+        }
+        
+        .result-error {
+            border-left: 4px solid #f44336;
+        }
+        
+        .result-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="order-form-container">
+        <div class="order-header">
+            <h1><i class="fas fa-clipboard-list"></i> Order Processing</h1>
+            <p>Process CAO (Comparative Analysis Orders) and List-based orders</p>
+        </div>
+        
+        <!-- Order Type Selection -->
+        <div class="order-type-selector">
+            <div class="order-type-btn active" data-type="cao">
+                <i class="fas fa-chart-line fa-2x"></i>
+                <h3>CAO Order</h3>
+                <p>Comparative Analysis Order - Find new vehicles on lot</p>
+            </div>
+            <div class="order-type-btn" data-type="list">
+                <i class="fas fa-list fa-2x"></i>
+                <h3>List Order</h3>
+                <p>Process specific VINs from installer list</p>
+            </div>
+        </div>
+        
+        <!-- CAO Order Form -->
+        <div id="cao-form" class="order-section">
+            <h2>CAO Order Processing</h2>
+            
+            <!-- Today's Schedule -->
+            <div class="schedule-info">
+                <h4><i class="fas fa-calendar-day"></i> Today's CAO Schedule</h4>
+                <div id="todaySchedule">Loading schedule...</div>
+            </div>
+            
+            <!-- Dealership Selection -->
+            <h3>Select Dealership</h3>
+            <div class="dealership-selector" id="caoDealershipList">
+                <!-- Dealerships will be loaded dynamically -->
+            </div>
+            
+            <!-- Vehicle Type Filters -->
+            <h3>Vehicle Types</h3>
+            <div class="vehicle-type-filters">
+                <label class="vehicle-type-filter">
+                    <input type="checkbox" name="vehicle_type" value="new" checked>
+                    <span>New Vehicles</span>
+                </label>
+                <label class="vehicle-type-filter">
+                    <input type="checkbox" name="vehicle_type" value="cpo" checked>
+                    <span>Certified Pre-Owned</span>
+                </label>
+                <label class="vehicle-type-filter">
+                    <input type="checkbox" name="vehicle_type" value="used" checked>
+                    <span>Used Vehicles</span>
+                </label>
+            </div>
+            
+            <!-- Actions -->
+            <div class="order-actions">
+                <button class="btn btn-secondary" onclick="processAllCAO()">
+                    <i class="fas fa-play-circle"></i> Process All Today's CAO
+                </button>
+                <button class="btn btn-primary" onclick="processSelectedCAO()">
+                    <i class="fas fa-cogs"></i> Process Selected
+                </button>
+            </div>
+        </div>
+        
+        <!-- List Order Form -->
+        <div id="list-form" class="order-section" style="display: none;">
+            <h2>List Order Processing</h2>
+            
+            <!-- Dealership Selection -->
+            <h3>Select Dealership</h3>
+            <select id="listDealershipSelect" class="form-control">
+                <option value="">-- Select Dealership --</option>
+                <!-- Options will be loaded dynamically -->
+            </select>
+            
+            <!-- VIN List Input -->
+            <h3>Enter VINs (one per line)</h3>
+            <textarea id="vinListInput" class="vin-list-input" 
+                placeholder="Enter VINs here, one per line...
+Example:
+WBA23GG01S7T67141
+3MW33CM03S8F59581
+WBA63DA0XTCV61555"></textarea>
+            
+            <p class="text-muted">
+                <i class="fas fa-info-circle"></i> 
+                Paste the VIN list from the installer's transcription
+            </p>
+            
+            <!-- Actions -->
+            <div class="order-actions">
+                <button class="btn btn-secondary" onclick="clearVinList()">
+                    <i class="fas fa-eraser"></i> Clear
+                </button>
+                <button class="btn btn-primary" onclick="processListOrder()">
+                    <i class="fas fa-cogs"></i> Process VIN List
+                </button>
+            </div>
+        </div>
+        
+        <!-- Progress Section -->
+        <div id="progressSection" class="progress-section">
+            <div class="order-progress">
+                <h3><i class="fas fa-spinner fa-spin"></i> Processing Orders...</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="orderProgressFill" style="width: 0%">0%</div>
+                </div>
+                <div id="progressStatus">Initializing...</div>
+            </div>
+        </div>
+        
+        <!-- Results Section -->
+        <div id="resultsSection" class="order-results">
+            <h2><i class="fas fa-check-circle"></i> Order Processing Results</h2>
+            <div id="resultsContainer">
+                <!-- Results will be displayed here -->
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Order type switching
+        document.querySelectorAll('.order-type-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.order-type-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                
+                const type = this.dataset.type;
+                if (type === 'cao') {
+                    document.getElementById('cao-form').style.display = 'block';
+                    document.getElementById('list-form').style.display = 'none';
+                } else {
+                    document.getElementById('cao-form').style.display = 'none';
+                    document.getElementById('list-form').style.display = 'block';
+                }
+            });
+        });
+        
+        // Load today's schedule
+        async function loadTodaySchedule() {
+            try {
+                const response = await fetch('/api/orders/today-schedule');
+                const schedule = await response.json();
+                
+                const scheduleDiv = document.getElementById('todaySchedule');
+                if (schedule.length === 0) {
+                    scheduleDiv.innerHTML = '<p>No CAO orders scheduled for today</p>';
+                } else {
+                    scheduleDiv.innerHTML = schedule.map(item => 
+                        `<span class="badge">${item.name} (${item.template})</span>`
+                    ).join(' ');
+                }
+            } catch (error) {
+                console.error('Error loading schedule:', error);
+            }
+        }
+        
+        // Load dealerships
+        async function loadDealerships() {
+            try {
+                const response = await fetch('/api/dealerships');
+                const dealerships = await response.json();
+                
+                // CAO dealership list
+                const caoList = document.getElementById('caoDealershipList');
+                caoList.innerHTML = dealerships.map(d => `
+                    <div class="dealership-option" data-name="${d.name}">
+                        <h4>${d.name}</h4>
+                        <small>Last scraped: ${d.updated_at || 'Never'}</small>
+                    </div>
+                `).join('');
+                
+                // Add click handlers
+                document.querySelectorAll('.dealership-option').forEach(opt => {
+                    opt.addEventListener('click', function() {
+                        this.classList.toggle('selected');
+                    });
+                });
+                
+                // List dealership dropdown
+                const listSelect = document.getElementById('listDealershipSelect');
+                listSelect.innerHTML = '<option value="">-- Select Dealership --</option>' +
+                    dealerships.map(d => `<option value="${d.name}">${d.name}</option>`).join('');
+                    
+            } catch (error) {
+                console.error('Error loading dealerships:', error);
+            }
+        }
+        
+        // Process selected CAO orders
+        async function processSelectedCAO() {
+            const selected = document.querySelectorAll('.dealership-option.selected');
+            if (selected.length === 0) {
+                alert('Please select at least one dealership');
+                return;
+            }
+            
+            const dealerships = Array.from(selected).map(el => el.dataset.name);
+            const vehicleTypes = Array.from(document.querySelectorAll('input[name="vehicle_type"]:checked'))
+                .map(cb => cb.value);
+            
+            showProgress();
+            
+            try {
+                const response = await fetch('/api/orders/process-cao', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dealerships, vehicle_types: vehicleTypes })
+                });
+                
+                const results = await response.json();
+                showResults(results);
+            } catch (error) {
+                console.error('Error processing CAO:', error);
+                alert('Error processing orders. Please check the logs.');
+            }
+            
+            hideProgress();
+        }
+        
+        // Process all today's CAO
+        async function processAllCAO() {
+            showProgress();
+            
+            try {
+                const response = await fetch('/api/orders/process-daily-cao', {
+                    method: 'POST'
+                });
+                
+                const results = await response.json();
+                showResults(results);
+            } catch (error) {
+                console.error('Error processing daily CAO:', error);
+                alert('Error processing orders. Please check the logs.');
+            }
+            
+            hideProgress();
+        }
+        
+        // Process list order
+        async function processListOrder() {
+            const dealership = document.getElementById('listDealershipSelect').value;
+            const vinText = document.getElementById('vinListInput').value.trim();
+            
+            if (!dealership) {
+                alert('Please select a dealership');
+                return;
+            }
+            
+            if (!vinText) {
+                alert('Please enter at least one VIN');
+                return;
+            }
+            
+            const vins = vinText.split('\n').map(v => v.trim()).filter(v => v.length > 0);
+            
+            showProgress();
+            
+            try {
+                const response = await fetch('/api/orders/process-list', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dealership, vins })
+                });
+                
+                const result = await response.json();
+                showResults([result]);
+            } catch (error) {
+                console.error('Error processing list order:', error);
+                alert('Error processing order. Please check the logs.');
+            }
+            
+            hideProgress();
+        }
+        
+        // Show/hide progress
+        function showProgress() {
+            document.getElementById('progressSection').style.display = 'block';
+            document.getElementById('resultsSection').style.display = 'none';
+        }
+        
+        function hideProgress() {
+            document.getElementById('progressSection').style.display = 'none';
+        }
+        
+        // Show results
+        function showResults(results) {
+            const container = document.getElementById('resultsContainer');
+            container.innerHTML = '';
+            
+            results.forEach(result => {
+                const card = document.createElement('div');
+                card.className = `result-card ${result.success ? 'result-success' : 'result-error'}`;
+                
+                if (result.success) {
+                    card.innerHTML = `
+                        <h3>${result.dealership}</h3>
+                        <p>Order Type: ${result.order_type}</p>
+                        <div class="result-stats">
+                            <div class="stat-item">
+                                <div class="stat-value">${result.new_vehicles || result.found_vehicles || 0}</div>
+                                <div class="stat-label">Vehicles Processed</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">${result.qr_codes_generated || 0}</div>
+                                <div class="stat-label">QR Codes</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">${result.total_vehicles || result.requested_vins || 0}</div>
+                                <div class="stat-label">Total Checked</div>
+                            </div>
+                        </div>
+                        <p class="text-muted">
+                            <i class="fas fa-folder"></i> QR Codes: ${result.qr_folder}<br>
+                            <i class="fas fa-file-csv"></i> CSV: ${result.csv_file}
+                        </p>
+                    `;
+                } else {
+                    card.innerHTML = `
+                        <h3>${result.dealership}</h3>
+                        <p class="text-danger">
+                            <i class="fas fa-exclamation-circle"></i> 
+                            Error: ${result.error}
+                        </p>
+                    `;
+                }
+                
+                container.appendChild(card);
+            });
+            
+            document.getElementById('resultsSection').style.display = 'block';
+        }
+        
+        // Clear VIN list
+        function clearVinList() {
+            document.getElementById('vinListInput').value = '';
+        }
+        
+        // Initialize
+        loadTodaySchedule();
+        loadDealerships();
+    </script>
+</body>
+</html>

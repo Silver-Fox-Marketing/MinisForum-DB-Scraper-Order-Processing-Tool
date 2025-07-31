@@ -1,0 +1,86 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+*.egg-info/
+dist/
+build/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+database_config.json
+config/database_config.json
+
+# Logs
+*.log
+logs/
+web_gui.log
+order_processing.log
+stress_test.log
+
+# Orders and Output Data
+orders/
+output_data/
+exports/
+queue_orders/
+simple_test_output/
+test_qr_output/
+test_verification_output/
+
+# Sensitive Configuration
+.env
+*.env
+secrets.json
+credentials.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Test and Temporary Files
+*.tmp
+*.temp
+*.bak
+nul
+test_output/
+temp/
+
+# Session and Cache
+*.session
+*.cache
+__pycache__/
+
+# Project Specific
+web_gui/orders/
+web_gui/exports/
+web_gui/logs/
+web_gui/output_data/
+scripts/orders/
+scripts/output_data/
+scripts/queue_orders/
+validation_results.json
+stress_test_report_*.json
+pipeline_integration_report_*.json
+
+# Keep structure but not content
+!orders/.gitkeep
+!exports/.gitkeep
+!logs/.gitkeep
+!output_data/.gitkeep

@@ -1,0 +1,15 @@
+{
+    "database": {
+        "host": "localhost",
+        "port": 5432,
+        "database": "silverfox_db",
+        "user": "postgres",
+        "password": "your_password_here",
+        "pool_size": 10,
+        "max_overflow": 20
+    },
+    "logging": {
+        "level": "INFO",
+        "file": "database.log"
+    }
+}

@@ -1,0 +1,36 @@
+{
+  "start_time": "2025-07-29T11:43:54.772896",
+  "tests": {
+    "qr_before_csv": {
+      "success": false,
+      "qr_generation_time": 0.0,
+      "csv_generation_time": 0.0,
+      "qr_files_generated": 0,
+      "qr_files_exist": true,
+      "csv_has_qr_paths": false,
+      "paths_match": true,
+      "qr_paths": [],
+      "csv_qr_paths": []
+    },
+    "complete_workflow": {
+      "success": false,
+      "workflow_time": 0.0,
+      "workflow_result": {
+        "success": false,
+        "error": "No vehicles found",
+        "dealership": "Columbia Honda"
+      },
+      "csv_has_qr_column": false
+    }
+  },
+  "summary": {
+    "total_tests": 3,
+    "passed_tests": 0,
+    "failed_tests": 3,
+    "success_rate": 0.0,
+    "duration_seconds": 7.717695,
+    "overall_success": false
+  },
+  "errors": [],
+  "end_time": "2025-07-29T11:44:02.490591"
+}
