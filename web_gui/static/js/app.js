@@ -52,6 +52,16 @@ class MinisFornumApp {
             filterOptions: {}
         };
         
+        // Modal scraper properties
+        this.modalProgress = {
+            dealershipsProcessed: 0,
+            vehiclesProcessed: 0,
+            errors: 0,
+            totalDealerships: 0,
+            progressPercent: 0
+        };
+        this.modalConsolePaused = false;
+        
         // Initialize Socket.IO
         this.initSocketIO();
         
@@ -69,6 +79,11 @@ class MinisFornumApp {
         this.socket.on('connect', () => {
             console.log('Socket.IO connected');
             this.addTerminalMessage('Real-time connection established', 'success');
+            
+            // Check if we're on the scraper tab and restore visibility if needed
+            if (this.currentTab === 'scraper') {
+                this.restoreScraperStatusVisibility();
+            }
         });
         
         this.socket.on('disconnect', () => {
@@ -96,6 +111,10 @@ class MinisFornumApp {
         this.socket.on('scraper_session_complete', (data) => {
             this.onScrapingSessionComplete(data);
         });
+        
+        this.socket.on('scraper_output', (data) => {
+            this.handleScraperOutput(data);
+        });
     }
     
     async init() {
@@ -113,6 +132,17 @@ class MinisFornumApp {
             console.error('❌ Failed to load dealerships:', error);
             this.addTerminalMessage(`Failed to load dealerships: ${error.message}`, 'error');
         }
+        
+        // Select all dealerships by default to ensure Start Scrape button works
+        if (this.dealerships && this.dealerships.length > 0) {
+            this.dealerships.forEach(dealership => {
+                this.selectedDealerships.add(dealership.name);
+            });
+            console.log(`✅ Selected all ${this.selectedDealerships.size} dealerships by default`);
+        }
+        
+        // Update button states
+        this.updateScraperButtonStates();
         
         this.checkScraperStatus();
         
@@ -139,20 +169,33 @@ class MinisFornumApp {
             this.showScheduleModal();
         });
         
-        // New scraper selection functionality
-        document.getElementById('selectDealershipsBtn').addEventListener('click', () => {
-            this.toggleDealershipSelection();
+        document.getElementById('testWebSocketBtn').addEventListener('click', () => {
+            this.testWebSocketConnection();
         });
         
-        document.getElementById('selectAllBtn').addEventListener('click', () => {
+        // New scraper selection functionality
+        document.getElementById('selectDealershipsBtn').addEventListener('click', () => {
+            this.showDealershipSelectionModal();
+        });
+        
+        // Modal controls
+        document.getElementById('closeDealershipSelectionModal').addEventListener('click', () => {
+            this.closeModal('dealershipSelectionModal');
+        });
+        
+        document.getElementById('cancelDealershipSelection').addEventListener('click', () => {
+            this.closeModal('dealershipSelectionModal');
+        });
+        
+        document.getElementById('selectAllBtnModal').addEventListener('click', () => {
             this.selectAllDealerships();
         });
         
-        document.getElementById('selectNoneBtn').addEventListener('click', () => {
+        document.getElementById('selectNoneBtnModal').addEventListener('click', () => {
             this.selectNoneDealerships();
         });
         
-        document.getElementById('scrapeSelectedBtn').addEventListener('click', () => {
+        document.getElementById('saveDealershipSelection').addEventListener('click', () => {
             this.startSelectedScraper();
         });
         
@@ -614,42 +657,73 @@ class MinisFornumApp {
     }
     
     async startScraper() {
-        if (this.scraperRunning || this.selectedDealerships.size === 0) return;
+        if (this.scraperRunning) return;
+        
+        if (this.selectedDealerships.size === 0) {
+            this.addTerminalMessage('Please select at least one dealership before starting the scraper.', 'warning');
+            this.addScraperConsoleMessage('⚠️ Please select at least one dealership before starting the scraper.', 'warning');
+            return;
+        }
         
         try {
             this.scraperRunning = true;
-            this.updateDealershipSelection();
+            this.updateScraperButtonStates();
             
             this.addTerminalMessage('Starting scraper pipeline...', 'info');
-            this.showScraperStatus();
+            this.addScraperConsoleMessage('🚀 Starting scraper pipeline...', 'info');
             
-            const response = await fetch('/api/scraper/start', {
+            const response = await fetch('/api/scrapers/start', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    dealerships: Array.from(this.selectedDealerships)
+                    dealership_names: Array.from(this.selectedDealerships) // Send all selected dealerships
                 })
             });
             
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
             const result = await response.json();
             
-            if (result.success) {
+            if (result && result.success) {
                 this.addTerminalMessage('Scraper started successfully', 'success');
+                this.addScraperConsoleMessage('✅ Scraper started successfully - Waiting for data...', 'success');
             } else {
-                this.addTerminalMessage(`Failed to start scraper: ${result.message}`, 'error');
+                const errorMessage = result?.message || result?.error || 'Unknown error occurred';
+                this.addTerminalMessage(`Failed to start scraper: ${errorMessage}`, 'error');
+                this.addScraperConsoleMessage(`❌ Failed to start scraper: ${errorMessage}`, 'error');
                 this.scraperRunning = false;
-                this.updateDealershipSelection();
-                this.hideScraperStatus();
+                this.updateScraperButtonStates();
             }
             
         } catch (error) {
             console.error('Error starting scraper:', error);
             this.addTerminalMessage(`Error starting scraper: ${error.message}`, 'error');
+            this.addScraperConsoleMessage(`❌ Error starting scraper: ${error.message}`, 'error');
             this.scraperRunning = false;
-            this.updateDealershipSelection();
-            this.hideScraperStatus();
+            this.updateScraperButtonStates();
+        }
+    }
+    
+    updateScraperButtonStates() {
+        const startBtn = document.getElementById('startScrapeBtn');
+        const selectBtn = document.getElementById('selectDealershipsBtn');
+        
+        if (startBtn) {
+            if (this.scraperRunning) {
+                startBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scraping...';
+                startBtn.disabled = true;
+            } else {
+                startBtn.innerHTML = '<i class="fas fa-play"></i> Start Scrape (All)';
+                startBtn.disabled = this.selectedDealerships.size === 0;
+            }
+        }
+        
+        if (selectBtn) {
+            selectBtn.disabled = this.scraperRunning;
         }
     }
     
@@ -759,6 +833,16 @@ class MinisFornumApp {
         }
     }
     
+    restoreScraperStatusVisibility() {
+        // Check if scraper is currently running by looking at our progress data
+        const scraperStatus = document.getElementById('scraperStatus');
+        if (scraperStatus && this.scraperRunning) {
+            // Ensure scraper status is visible when switching back to scraper tab
+            scraperStatus.style.display = 'block';
+            console.log('Restored scraper status visibility');
+        }
+    }
+    
     switchTab(tabName) {
         // Update tab buttons
         document.querySelectorAll('.tab-button').forEach(button => {
@@ -773,6 +857,11 @@ class MinisFornumApp {
         document.getElementById(`${tabName}-panel`).classList.add('active');
         
         this.currentTab = tabName;
+        
+        // If switching to scraper tab, ensure scraper status visibility is preserved
+        if (tabName === 'scraper') {
+            this.restoreScraperStatusVisibility();
+        }
         
         // Load tab-specific data
         this.loadTabData(tabName);
@@ -1073,6 +1162,11 @@ class MinisFornumApp {
         this.showModal('scheduleModal');
     }
     
+    showDealershipSelectionModal() {
+        this.renderDealershipCheckboxes('dealershipCheckboxGridModal');
+        this.showModal('dealershipSelectionModal');
+    }
+    
     saveScheduleSettings() {
         // This would save schedule settings
         this.addTerminalMessage('Schedule settings saved', 'success');
@@ -1192,6 +1286,15 @@ class MinisFornumApp {
         this.progressData.completedScrapers = 0;
         this.progressData.progressPercent = 0;
         
+        // Initialize modal progress
+        this.modalProgress = {
+            dealershipsProcessed: 0,
+            vehiclesProcessed: 0,
+            errors: 0,
+            totalDealerships: data.total_scrapers,
+            progressPercent: 0
+        };
+        
         // Show progress bar
         const scraperStatus = document.getElementById('scraperStatus');
         if (scraperStatus) {
@@ -1206,6 +1309,10 @@ class MinisFornumApp {
         // Add to scraper console
         this.addScraperConsoleMessage(`🚀 SCRAPER SESSION STARTED`, 'success');
         this.addScraperConsoleMessage(`📊 Total scrapers: ${data.total_scrapers}`, 'info');
+        
+        // Add to modal console
+        this.addModalConsoleMessage(`🚀 SCRAPER SESSION STARTED`, 'success');
+        this.addModalConsoleMessage(`📊 Total scrapers: ${data.total_scrapers}`, 'info');
         this.addScraperConsoleMessage(`📋 Dealerships: ${data.scraper_names.join(', ')}`, 'info');
         this.addScraperConsoleMessage('', 'info'); // Empty line
         
@@ -1244,19 +1351,117 @@ class MinisFornumApp {
     onScraperProgress(data) {
         console.log('Scraper progress:', data);
         
+        // Add terminal message (scraper 18 style)
         this.addTerminalMessage(`   [${data.timestamp}] ${data.status}`, 'info');
         if (data.details) {
             this.addTerminalMessage(`   └── ${data.details}`, 'info');
         }
         
-        // Add to scraper console - this is where we get the detailed progress
+        // Add to scraper console with enhanced detail
         this.addScraperConsoleMessage(`${data.status}`, 'info');
         if (data.details) {
             this.addScraperConsoleMessage(`└── ${data.details}`, 'info');
         }
         
-        // Update status details
-        this.updateStatusDetails(`${data.scraper_name}: ${data.status}`);
+        // Update Live Scraper Console progress indicators
+        this.updateScraperConsoleIndicators(data);
+        
+        // Update real-time progress indicators
+        if (data.overall_progress !== undefined) {
+            this.updateProgressBar(data.overall_progress);
+            this.progressData.progressPercent = data.overall_progress;
+        }
+        
+        // Update dealership progress indicators
+        if (data.completed_scrapers !== undefined) {
+            this.progressData.completedScrapers = data.completed_scrapers;
+        }
+        
+        // Update vehicles processed indicator
+        if (data.vehicles_processed !== undefined) {
+            this.updateVehiclesProcessed(data.vehicles_processed);
+        }
+        
+        
+        // Update errors indicator
+        if (data.errors !== undefined) {
+            this.updateErrorsCount(data.errors);
+        }
+        
+        // Update page progress for current scraper
+        if (data.current_page && data.total_pages) {
+            this.updateCurrentScraperProgress(data.scraper_name, data.current_page, data.total_pages);
+        }
+        
+        // Update status details with enhanced info
+        let statusMessage = `${data.scraper_name}: ${data.status}`;
+        if (data.vehicles_processed > 0) {
+            statusMessage += ` (${data.vehicles_processed} vehicles)`;
+        }
+        if (data.current_page && data.total_pages) {
+            statusMessage += ` [Page ${data.current_page}/${data.total_pages}]`;
+        }
+        this.updateStatusDetails(statusMessage);
+    }
+    
+    updateScraperConsoleIndicators(data) {
+        // Update the progress indicators in the Live Scraper Console header
+        const dealershipsProcessed = data.completed_scrapers || this.progressData.completedScrapers || 0;
+        const vehiclesProcessed = this.progressData.totalVehiclesProcessed || 0;
+        const errors = this.progressData.totalErrors || 0;
+        
+        // Update indicator values
+        const dealershipsElement = document.getElementById('dealershipsProcessed');
+        const vehiclesElement = document.getElementById('vehiclesProcessed');
+        const errorsElement = document.getElementById('errorsCount');
+        
+        if (dealershipsElement) dealershipsElement.textContent = dealershipsProcessed;
+        if (vehiclesElement) vehiclesElement.textContent = vehiclesProcessed;
+        if (errorsElement) errorsElement.textContent = errors;
+    }
+    
+    handleScraperOutput(data) {
+        // Handle raw scraper output messages
+        console.log('Scraper output received:', data);
+        
+        if (data.message) {
+            this.addScraperConsoleMessage(data.message, data.type || 'info');
+        }
+        
+        if (data.status) {
+            this.addScraperConsoleMessage(`Status: ${data.status}`, 'info');
+        }
+        
+        // Update progress if available
+        if (data.progress !== undefined) {
+            this.updateProgressBar(data.progress);
+        }
+        
+        // Update indicators if available
+        this.updateScraperConsoleIndicators(data);
+    }
+    
+    async testWebSocketConnection() {
+        this.addScraperConsoleMessage('🧪 Testing WebSocket connection...', 'info');
+        
+        try {
+            const response = await fetch('/api/test-websocket', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                this.addScraperConsoleMessage('📡 WebSocket test message sent from server', 'success');
+            } else {
+                this.addScraperConsoleMessage('❌ Failed to send WebSocket test message', 'error');
+            }
+        } catch (error) {
+            console.error('Error testing WebSocket:', error);
+            this.addScraperConsoleMessage(`❌ WebSocket test error: ${error.message}`, 'error');
+        }
     }
     
     onScraperComplete(data) {
@@ -1351,13 +1556,8 @@ class MinisFornumApp {
         this.addTerminalMessage('=' * 80, 'info');
         
         // Reset UI state
-        const startBtn = document.getElementById('startScrapeBtn');
-        if (startBtn) {
-            startBtn.innerHTML = '<i class="fas fa-play"></i> Start Scrape';
-            startBtn.disabled = false;
-        }
-        
         this.scraperRunning = false;
+        this.updateScraperButtonStates();
         
         // Update status details
         this.updateStatusDetails(`Session complete: ${data.success_rate.toFixed(1)}% success rate`);
@@ -1378,6 +1578,49 @@ class MinisFornumApp {
         const statusHeader = document.querySelector('.scraper-status .status-header h3');
         if (statusHeader) {
             statusHeader.textContent = `Scraper Progress (${percent.toFixed(1)}%)`;
+        }
+    }
+    
+    updateVehiclesProcessed(count) {
+        // Update vehicles processed indicator in the GUI
+        const vehiclesEl = document.getElementById('vehiclesProcessed');
+        if (vehiclesEl) {
+            vehiclesEl.textContent = count.toLocaleString();
+        }
+        
+        // Update any other vehicle counter elements
+        const vehicleCounters = document.querySelectorAll('.vehicle-count');
+        vehicleCounters.forEach(el => {
+            el.textContent = count.toLocaleString();
+        });
+    }
+    
+    updateErrorsCount(count) {
+        // Update errors indicator in the GUI
+        const errorsEl = document.getElementById('errorsCount');
+        if (errorsEl) {
+            errorsEl.textContent = count;
+            // Change color based on error count
+            if (count > 0) {
+                errorsEl.className = 'metric-value status-error';
+            } else {
+                errorsEl.className = 'metric-value status-online';
+            }
+        }
+    }
+    
+    updateCurrentScraperProgress(scraperName, currentPage, totalPages) {
+        // Update current scraper progress indicator
+        const currentScraperEl = document.getElementById('currentScraper');
+        if (currentScraperEl) {
+            currentScraperEl.textContent = `${scraperName} (Page ${currentPage}/${totalPages})`;
+        }
+        
+        // Update scraper-specific progress bar if it exists
+        const scraperProgressEl = document.getElementById('scraperSpecificProgress');
+        if (scraperProgressEl && totalPages > 0) {
+            const scraperPercent = (currentPage / totalPages) * 100;
+            scraperProgressEl.style.width = `${scraperPercent}%`;
         }
     }
     
@@ -1915,17 +2158,17 @@ class MinisFornumApp {
         }
     }
     
-    renderDealershipCheckboxes() {
-        console.log('🔧 DEBUG: renderDealershipCheckboxes called');
+    renderDealershipCheckboxes(containerId = 'dealershipCheckboxGrid') {
+        console.log('🔧 DEBUG: renderDealershipCheckboxes called with containerId:', containerId);
         
-        const grid = document.getElementById('dealershipCheckboxGrid');
+        const grid = document.getElementById(containerId);
         console.log('🔧 DEBUG: grid element:', grid);
         console.log('🔧 DEBUG: this.dealerships:', this.dealerships);
         console.log('🔧 DEBUG: dealerships length:', this.dealerships ? this.dealerships.length : 'null/undefined');
         
         if (!grid) {
-            console.error('❌ dealershipCheckboxGrid element not found!');
-            this.addScraperConsoleMessage('ERROR: dealershipCheckboxGrid element not found', 'error');
+            console.error(`❌ ${containerId} element not found!`);
+            this.addScraperConsoleMessage(`ERROR: ${containerId} element not found`, 'error');
             return;
         }
         
@@ -2007,11 +2250,11 @@ class MinisFornumApp {
             return;
         }
         
+        // Close the modal
+        this.closeModal('dealershipSelectionModal');
+        
         this.addTerminalMessage(`Starting scraper for ${this.selectedDealerships.size} selected dealerships`, 'info');
         this.startScraper(); // Use existing scraper method
-        
-        // Hide selection panel after starting
-        this.toggleDealershipSelection();
     }
     
     setupQueueEventListeners() {
@@ -2453,14 +2696,14 @@ class MinisFornumApp {
     }
     
     async loadVehicleHistory(vin) {
-        const timelineContainer = document.getElementById('historyTimeline');
-        if (!timelineContainer) return;
+        const scraperContainer = document.getElementById('historyTimeline');
+        if (!scraperContainer) return;
         
         // Show loading state
-        timelineContainer.innerHTML = `
+        scraperContainer.innerHTML = `
             <div class="loading-spinner">
                 <i class="fas fa-spinner fa-spin"></i>
-                Loading vehicle history...
+                Loading scrape history...
             </div>
         `;
         
@@ -2469,75 +2712,89 @@ class MinisFornumApp {
             const data = await response.json();
             
             if (data.success) {
-                this.renderVehicleTimeline(data.history);
+                this.renderScrapesList(data.scrapes, data.first_scraped, data.total_scrapes);
             } else {
                 throw new Error(data.error || 'Failed to load vehicle history');
             }
             
         } catch (error) {
             console.error('Error loading vehicle history:', error);
-            timelineContainer.innerHTML = `
+            scraperContainer.innerHTML = `
                 <div class="error-message">
                     <i class="fas fa-exclamation-triangle"></i>
-                    <p>Error loading vehicle history</p>
+                    <p>Error loading scrape history</p>
                     <p class="error-details">${error.message}</p>
                 </div>
             `;
         }
     }
     
-    renderVehicleTimeline(history) {
-        const timelineContainer = document.getElementById('historyTimeline');
-        if (!timelineContainer) return;
+    renderScrapesList(scrapes, firstScraped, totalScrapes) {
+        const scraperContainer = document.getElementById('historyTimeline');
+        if (!scraperContainer) return;
         
-        if (!history || history.length === 0) {
-            timelineContainer.innerHTML = `
+        if (!scrapes || scrapes.length === 0) {
+            scraperContainer.innerHTML = `
                 <div class="no-history">
-                    <i class="fas fa-history"></i>
-                    <p>No history available for this vehicle</p>
+                    <i class="fas fa-spider"></i>
+                    <p>No scrape history available for this vehicle</p>
                 </div>
             `;
             return;
         }
         
-        const timelineHTML = history.map((event, index) => {
-            const eventDate = new Date(event.date).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric'
-            });
+        // Create header with first scraped info
+        const firstScrapedDate = firstScraped ? new Date(firstScraped).toLocaleDateString('en-US', {
+            year: 'numeric', month: 'short', day: 'numeric'
+        }) : 'Unknown';
+        
+        // Group scrapes by dealership for color coding
+        const dealershipColors = {};
+        const dealerships = [...new Set(scrapes.map(s => s.dealership))];
+        const colors = ['#e3f2fd', '#f3e5f5', '#e8f5e8', '#fff3e0', '#fce4ec'];
+        dealerships.forEach((dealer, index) => {
+            dealershipColors[dealer] = colors[index % colors.length];
+        });
+        
+        const scrapesHTML = scrapes.map((scrape, index) => {
+            const scrapeDate = scrape.date ? new Date(scrape.date).toLocaleDateString('en-US', {
+                year: 'numeric', month: 'short', day: 'numeric'
+            }) : 'Unknown';
             
-            const eventTime = event.time ? new Date(event.time).toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit'
+            const scrapeTime = scrape.date ? new Date(scrape.date).toLocaleTimeString('en-US', {
+                hour: '2-digit', minute: '2-digit'
             }) : '';
             
+            const backgroundColor = dealershipColors[scrape.dealership] || '#f5f5f5';
+            
             return `
-                <div class="timeline-item ${event.type}">
-                    <div class="timeline-marker">
-                        <i class="fas ${this.getTimelineIcon(event.type)}"></i>
+                <div class="scrape-item" style="background-color: ${backgroundColor}">
+                    <div class="scrape-header">
+                        <span class="scrape-number">#${index + 1}</span>
+                        <span class="scrape-date">${scrapeDate} ${scrapeTime}</span>
+                        <span class="scrape-dealership">${scrape.dealership || 'Unknown'}</span>
+                        <span class="scrape-price">${scrape.price_formatted || 'N/A'}</span>
                     </div>
-                    <div class="timeline-content">
-                        <div class="timeline-header">
-                            <h5>${event.title}</h5>
-                            <span class="timeline-date">${eventDate}${eventTime ? ' ' + eventTime : ''}</span>
-                        </div>
-                        <div class="timeline-details">
-                            <div class="detail-row">
-                                <strong>Dealership:</strong> ${event.dealership || 'N/A'}
-                            </div>
-                            ${event.order_type ? `<div class="detail-row"><strong>Order Type:</strong> ${event.order_type}</div>` : ''}
-                            ${event.price ? `<div class="detail-row"><strong>Price:</strong> $${parseFloat(event.price).toLocaleString()}</div>` : ''}
-                            ${event.notes ? `<div class="detail-row"><strong>Notes:</strong> ${event.notes}</div>` : ''}
-                        </div>
+                    <div class="scrape-details">
+                        <span class="detail-item">Stock: ${scrape.stock || 'N/A'}</span>
+                        <span class="detail-item">Type: ${scrape.vehicle_type || 'N/A'}</span>
+                        <span class="detail-item">Mileage: ${scrape.mileage_formatted || 'N/A'}</span>
+                        <span class="detail-item">Color: ${scrape.exterior_color || 'N/A'}</span>
                     </div>
                 </div>
             `;
         }).join('');
         
-        timelineContainer.innerHTML = `
-            <div class="timeline">
-                ${timelineHTML}
+        scraperContainer.innerHTML = `
+            <div class="scrapes-summary">
+                <div class="summary-stats">
+                    <span class="stat-item"><strong>Total Scrapes:</strong> ${totalScrapes}</span>
+                    <span class="stat-item"><strong>First Scraped:</strong> ${firstScrapedDate}</span>
+                    <span class="stat-item"><strong>Dealerships:</strong> ${dealerships.length}</span>
+                </div>
+            </div>
+            <div class="scrapes-list">
+                ${scrapesHTML}
             </div>
         `;
     }
@@ -3601,7 +3858,7 @@ class MinisFornumApp {
                         </th>
                         <th class="filterable-header" data-field="time_scraped">
                             <div class="header-content">
-                                <span>Time Scraped</span>
+                                <span>Last Scraped</span>
                                 <div class="filter-dropdown" id="timeScrapedFilter">
                                     <select class="header-filter" data-field="time_scraped">
                                         <option value="">All Times</option>
@@ -3609,6 +3866,7 @@ class MinisFornumApp {
                                 </div>
                             </div>
                         </th>
+                        <th class="sortable" onclick="app.sortBy('first_scraped')">First Scraped</th>
                         <th class="sortable" onclick="app.sortBy('scrape_count')">Scrapes</th>
                         <th class="toggle-header">Raw/Norm</th>
                         <th>Data Source</th>
@@ -3629,6 +3887,16 @@ class MinisFornumApp {
         const timeField = vehicle.time_scraped || vehicle.import_timestamp;
         const scrapedTime = timeField ? 
             new Date(timeField).toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            }) : 'N/A';
+        
+        // Format the first scraped time
+        const firstScrapedTime = vehicle.first_scraped ? 
+            new Date(vehicle.first_scraped).toLocaleString('en-US', {
                 year: 'numeric',
                 month: 'short',
                 day: 'numeric',
@@ -3657,6 +3925,7 @@ class MinisFornumApp {
                 <td>${vehicle.mileage_formatted || 'N/A'}</td>
                 <td>${vehicle.vehicle_type || 'N/A'}</td>
                 <td class="date-cell">${scrapedTime}</td>
+                <td class="date-cell">${firstScrapedTime}</td>
                 <td class="scrape-count-cell">${vehicle.scrape_count || 1}</td>
                 <td class="toggle-cell" onclick="event.stopPropagation();">
                     <label class="data-toggle-switch">

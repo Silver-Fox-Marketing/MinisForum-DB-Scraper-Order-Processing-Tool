@@ -98,22 +98,59 @@ class ScraperProgressReporter:
                 'progress_percent': progress_percent_start
             })
     
-    def update_scraper_progress(self, scraper_name: str, status: str, details: str = ""):
-        """Update progress during scraping"""
+    def update_scraper_progress(self, scraper_name: str, status: str, details: str = "", 
+                               vehicles_processed: int = 0, current_page: int = 0, total_pages: int = 0, 
+                               errors: int = 0):
+        """Update progress during scraping with detailed metrics"""
         current_time = datetime.now().strftime('%H:%M:%S')
         
-        # Terminal output
+        # Terminal output (matching scraper 18 style)
         print(f"   [{current_time}] {status}")
         if details:
             print(f"   └── {details}")
         
-        # WebSocket update
+        # Calculate real-time progress within current scraper
+        scraper_progress = 0
+        if total_pages > 0:
+            scraper_progress = (current_page / total_pages) * 100
+        
+        # Calculate overall session progress
+        overall_progress = 0
+        if self.total_scrapers > 0:
+            # Progress from completed scrapers
+            completed_progress = (self.completed_scrapers + self.failed_scrapers) / self.total_scrapers
+            # Progress from current scraper (partial)
+            current_scraper_progress = (scraper_progress / 100) / self.total_scrapers
+            overall_progress = (completed_progress + current_scraper_progress) * 100
+        
+        # WebSocket update with detailed progress data
         if self.socketio:
             self.socketio.emit('scraper_progress', {
                 'scraper_name': scraper_name,
                 'status': status,
                 'details': details,
-                'timestamp': current_time
+                'timestamp': current_time,
+                'vehicles_processed': vehicles_processed,
+                'current_page': current_page,
+                'total_pages': total_pages,
+                'scraper_progress': scraper_progress,
+                'overall_progress': overall_progress,
+                'completed_scrapers': self.completed_scrapers,
+                'failed_scrapers': self.failed_scrapers,
+                'total_scrapers': self.total_scrapers,
+                'errors': errors
+            })
+        
+        # Progress callback with real-time data
+        if self.progress_callback:
+            self.progress_callback({
+                'type': 'scraper_progress_update',
+                'scraper_name': scraper_name,
+                'vehicles_processed': vehicles_processed,
+                'progress_percent': overall_progress,
+                'current_page': current_page,
+                'total_pages': total_pages,
+                'errors': errors
             })
     
     def complete_scraper(self, scraper_name: str, result: Dict[str, Any]):

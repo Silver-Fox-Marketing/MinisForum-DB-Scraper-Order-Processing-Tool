@@ -44,13 +44,13 @@ try:
     from real_scraper_integration import RealScraperIntegration
     print("OK RealScraperIntegration imported successfully")
     
-    print("Attempting to import ScraperManager...")
+    print("Attempting to import Scraper18Controller...")
     try:
-        from scraper_manager import scraper_manager
-        print("OK ScraperManager imported successfully")
+        from scraper18_controller import Scraper18WebController
+        print("OK Scraper18Controller imported successfully")
     except Exception as e:
-        print(f"Warning: ScraperManager import failed: {e}")
-        scraper_manager = None
+        print(f"Warning: Scraper18Controller import failed: {e}")
+        Scraper18WebController = None
     print("OK All backend modules imported successfully")
     
     # Check if database is available
@@ -69,7 +69,18 @@ except ImportError as e:
 # Flask app setup
 app = Flask(__name__)
 app.secret_key = 'silver_fox_marketing_minisforum_2025'
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, 
+                   cors_allowed_origins="*", 
+                   async_mode='threading',
+                   logger=True, 
+                   engineio_logger=False,
+                   transports=['websocket', 'polling'])
+
+# Initialize scraper18_controller with socketio after socketio is created
+scraper18_controller = None
+if not DEMO_MODE and Scraper18WebController is not None:
+    scraper18_controller = Scraper18WebController(socketio=socketio)
+    print("OK Scraper18Controller configured with SocketIO")
 
 # Configure logging
 logging.basicConfig(
@@ -90,7 +101,7 @@ class ScraperController:
         self.order_processor = OrderProcessingIntegrator()
         self.qr_generator = QRCodeGenerator()
         self.data_exporter = DataExporter()
-        self.real_scraper_integration = RealScraperIntegration(socketio)
+        # Using scraper18_controller instead of RealScraperIntegration
         self.socketio = socketio
         self.scraper_running = False
         self.last_scrape_time = None
@@ -376,6 +387,11 @@ queue_manager = OrderQueueManager()
 def index():
     """Main dashboard page"""
     return render_template('index.html')
+
+@app.route('/websocket-test')
+def websocket_test():
+    """WebSocket connection test page"""
+    return render_template('websocket_test.html')
 
 @app.route('/api/dealerships')
 def get_dealerships():
@@ -996,11 +1012,12 @@ def search_vehicle_data():
                         r.trim, r.ext_color as exterior_color, r.price, r.type as vehicle_type,
                         r.import_timestamp, 'raw' as data_source,
                         COUNT(*) OVER (PARTITION BY r.vin) as scrape_count,
+                        MIN(r.import_timestamp) OVER (PARTITION BY r.vin) as first_scraped,
                         ROW_NUMBER() OVER (PARTITION BY r.vin ORDER BY r.import_timestamp DESC, r.id DESC) as rn
                     FROM raw_vehicle_data r
                 )
                 SELECT vin, stock, location, year, make, model, trim, 
-                       exterior_color, price, vehicle_type, import_timestamp, data_source, scrape_count
+                       exterior_color, price, vehicle_type, import_timestamp, data_source, scrape_count, first_scraped
                 FROM ranked_vehicles
                 WHERE rn = 1
             """
@@ -1012,12 +1029,13 @@ def search_vehicle_data():
                         n.trim, '' as exterior_color, n.price, n.vehicle_condition as vehicle_type,
                         r.import_timestamp, 'normalized' as data_source,
                         COUNT(*) OVER (PARTITION BY n.vin) as scrape_count,
+                        MIN(r.import_timestamp) OVER (PARTITION BY n.vin) as first_scraped,
                         ROW_NUMBER() OVER (PARTITION BY n.vin ORDER BY r.import_timestamp DESC, n.id DESC) as rn
                     FROM normalized_vehicle_data n
                     JOIN raw_vehicle_data r ON n.raw_data_id = r.id
                 )
                 SELECT vin, stock, location, year, make, model, trim, 
-                       exterior_color, price, vehicle_type, import_timestamp, data_source, scrape_count
+                       exterior_color, price, vehicle_type, import_timestamp, data_source, scrape_count, first_scraped
                 FROM ranked_vehicles 
                 WHERE rn = 1
             """
@@ -1042,11 +1060,12 @@ def search_vehicle_data():
                         vin, stock, location, year, make, model, trim, 
                         exterior_color, price, vehicle_type, import_timestamp, data_source,
                         COUNT(*) OVER (PARTITION BY vin) as scrape_count,
+                        MIN(import_timestamp) OVER (PARTITION BY vin) as first_scraped,
                         ROW_NUMBER() OVER (PARTITION BY vin ORDER BY import_timestamp DESC, id DESC) as rn
                     FROM all_vehicles
                 )
                 SELECT vin, stock, location, year, make, model, trim, 
-                       exterior_color, price, vehicle_type, import_timestamp, data_source, scrape_count
+                       exterior_color, price, vehicle_type, import_timestamp, data_source, scrape_count, first_scraped
                 FROM ranked_vehicles
                 WHERE rn = 1
             """
@@ -1433,23 +1452,23 @@ def get_vin_history():
 
 @app.route('/api/data/vehicle-history/<vin>')
 def get_vehicle_history(vin):
-    """Get complete history for a specific VIN including scrapes, VIN logs, and orders"""
+    """Get simple scrape history for a specific VIN - all raw scrapes in chronological order"""
     try:
         if not vin:
             return jsonify({'error': 'VIN is required'}), 400
         
-        history = []
-        
-        # Get all scrape history for this VIN
+        # Get all scrape history for this VIN - simple list, no complex processing
         scrape_query = """
             SELECT 
-                r.import_timestamp as date,
+                r.id,
+                r.import_timestamp,
                 r.location as dealership,
                 r.price,
                 r.year, r.make, r.model, r.trim,
                 r.type as vehicle_type,
                 r.ext_color as exterior_color,
-                'scrape' as event_type
+                r.stock,
+                r.mileage
             FROM raw_vehicle_data r
             WHERE r.vin = %s
             ORDER BY r.import_timestamp DESC
@@ -1457,120 +1476,46 @@ def get_vehicle_history(vin):
         
         scrape_results = db_manager.execute_query(scrape_query, [vin])
         
-        # Process scrape history
-        previous_location = None
-        previous_price = None
-        
+        # Format scrapes as simple list
+        scrapes = []
         for scrape in scrape_results:
-            event_date = scrape['date']
-            dealership = scrape['dealership']
-            price = scrape['price']
-            
-            # Create scrape event
-            scrape_event = {
-                'date': event_date.isoformat() if event_date else None,
-                'time': event_date.isoformat() if event_date else None,
-                'title': 'Vehicle Scraped',
-                'type': 'scrape',
-                'dealership': dealership,
-                'price': str(price) if price else None,
-                'notes': f"Found at {dealership}" + (f" - {scrape['vehicle_type']}" if scrape['vehicle_type'] else "")
+            scrape_data = {
+                'id': scrape['id'],
+                'date': scrape['import_timestamp'].isoformat() if scrape['import_timestamp'] else None,
+                'dealership': scrape['dealership'],
+                'price': float(scrape['price']) if scrape['price'] else None,
+                'price_formatted': f"${scrape['price']:,.2f}" if scrape['price'] else 'N/A',
+                'year': scrape['year'],
+                'make': scrape['make'],
+                'model': scrape['model'],
+                'trim': scrape['trim'],
+                'vehicle_type': scrape['vehicle_type'],
+                'exterior_color': scrape['exterior_color'],
+                'stock': scrape['stock'],
+                'mileage': scrape['mileage'],
+                'mileage_formatted': f"{scrape['mileage']:,} mi" if scrape['mileage'] else 'N/A'
             }
-            history.append(scrape_event)
-            
-            # Check for location change
-            if previous_location and previous_location != dealership:
-                dealer_change_event = {
-                    'date': event_date.isoformat() if event_date else None,
-                    'time': event_date.isoformat() if event_date else None,
-                    'title': 'Dealership Change',
-                    'type': 'dealer_change',
-                    'dealership': dealership,
-                    'notes': f"Moved from {previous_location} to {dealership}"
-                }
-                history.append(dealer_change_event)
-            
-            # Check for price change
-            if previous_price and price and abs(float(previous_price) - float(price)) > 100:
-                price_diff = float(price) - float(previous_price)
-                price_change_event = {
-                    'date': event_date.isoformat() if event_date else None,
-                    'time': event_date.isoformat() if event_date else None,
-                    'title': 'Price Change',
-                    'type': 'price_change',
-                    'dealership': dealership,
-                    'price': str(price),
-                    'notes': f"Price {'increased' if price_diff > 0 else 'decreased'} by ${abs(price_diff):,.2f} (was ${previous_price})"
-                }
-                history.append(price_change_event)
-            
-            previous_location = dealership
-            previous_price = price
+            scrapes.append(scrape_data)
         
-        # Get VIN log history
-        vin_log_query = """
-            SELECT 
-                vh.order_date as date,
-                vh.dealership_name as dealership,
-                'vin_log' as event_type
-            FROM vin_history vh
-            WHERE vh.vin = %s
-            ORDER BY vh.order_date DESC
-        """
-        
-        vin_log_results = db_manager.execute_query(vin_log_query, [vin])
-        
-        for log_entry in vin_log_results:
-            vin_event = {
-                'date': log_entry['date'].isoformat() if log_entry['date'] else None,
-                'time': log_entry['date'].isoformat() if log_entry['date'] else None,
-                'title': 'VIN Log Entry',
-                'type': 'vin_log',
-                'dealership': log_entry['dealership'],
-                'notes': f"Vehicle recorded in VIN logs at {log_entry['dealership']}"
-            }
-            history.append(vin_event)
-        
-        # Get order processing history
-        order_query = """
-            SELECT 
-                opj.created_at as date,
-                opj.dealership_name as dealership,
-                opj.job_type as order_type,
-                opj.status,
-                'order' as event_type
-            FROM order_processing_jobs opj
-            JOIN qr_file_tracking qft ON opj.id = qft.job_id
-            WHERE qft.vin = %s
-            ORDER BY opj.created_at DESC
-        """
-        
-        order_results = db_manager.execute_query(order_query, [vin])
-        
-        for order in order_results:
-            order_event = {
-                'date': order['date'].isoformat() if order['date'] else None,
-                'time': order['date'].isoformat() if order['date'] else None,
-                'title': f"Order Processed - {order['order_type'].title()}",
-                'type': 'order',
-                'dealership': order['dealership'],
-                'order_type': order['order_type'],
-                'notes': f"Order status: {order['status']}"
-            }
-            history.append(order_event)
-        
-        # Sort all history by date (most recent first)
-        history.sort(key=lambda x: x['date'] if x['date'] else '1900-01-01', reverse=True)
+        # Get first and last scrape timestamps
+        first_scraped = None
+        last_scraped = None
+        if scrapes:
+            # Since ordered DESC, first result is most recent, last is oldest
+            last_scraped = scrapes[0]['date']
+            first_scraped = scrapes[-1]['date']
         
         return jsonify({
             'success': True,
             'vin': vin,
-            'history': history,
-            'total_events': len(history)
+            'scrapes': scrapes,
+            'total_scrapes': len(scrapes),
+            'first_scraped': first_scraped,
+            'last_scraped': last_scraped
         })
         
     except Exception as e:
-        logger.error(f"Error getting vehicle history for VIN {vin}: {e}")
+        logger.error(f"Error getting vehicle scrapes for VIN {vin}: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/data/vehicle-single/<vin>')
@@ -1933,47 +1878,101 @@ def regenerate_qr_codes_with_urls():
 def scraper_output_callback(output_msg):
     """Callback function to broadcast scraper output via WebSocket"""
     try:
-        socketio.emit('scraper_output', output_msg, broadcast=True)
+        socketio.emit('scraper_output', output_msg)
     except Exception as e:
         logger.error(f"Error broadcasting scraper output: {e}")
 
-# Add callback to scraper manager
-if not DEMO_MODE and scraper_manager is not None:
-    scraper_manager.add_output_callback(scraper_output_callback)
+# Scraper18 controller is initialized above and handles its own Socket.IO emissions
 
 @app.route('/api/scrapers/start', methods=['POST'])
 def start_scraper():
     """Start scraping for a specific dealership"""
     try:
         data = request.get_json()
+        # Support both singular and plural formats for compatibility
+        dealership_names = data.get('dealership_names', [])
         dealership_name = data.get('dealership_name')
+        
+        # If plural format is used, take the first dealership
+        if dealership_names and len(dealership_names) > 0:
+            dealership_name = dealership_names[0]
         
         if not dealership_name:
             return jsonify({'success': False, 'error': 'Dealership name required'}), 400
             
-        if DEMO_MODE or scraper_manager is None:
+        if DEMO_MODE or scraper18_controller is None:
+            # Simulate demo scraper output for testing
+            def simulate_demo_scraper():
+                import time
+                socketio.emit('scraper_output', {
+                    'message': f'🔄 DEMO: Starting scraper for {dealership_name}',
+                    'status': 'starting',
+                    'dealership': dealership_name
+                })
+                
+                time.sleep(2)
+                socketio.emit('scraper_output', {
+                    'message': f'📊 DEMO: Processing pages for {dealership_name}',
+                    'status': 'processing',
+                    'progress': 25,
+                    'vehicles_processed': 15,
+                    'dealership': dealership_name
+                })
+                
+                time.sleep(3)
+                socketio.emit('scraper_output', {
+                    'message': f'🏁 DEMO: Completed scraper for {dealership_name}',
+                    'status': 'completed',
+                    'progress': 100,
+                    'vehicles_processed': 45,
+                    'dealership': dealership_name
+                })
+            
+            # Run demo in background thread
+            demo_thread = threading.Thread(target=simulate_demo_scraper, daemon=True)
+            demo_thread.start()
+            
             return jsonify({
                 'success': True,
                 'message': f'DEMO: Started scraper for {dealership_name}',
                 'demo_mode': True
             })
-            
-        success = scraper_manager.start_scraper(dealership_name)
         
-        if success:
-            return jsonify({
-                'success': True,
-                'message': f'Started scraper for {dealership_name}',
-                'dealership': dealership_name
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': f'Failed to start scraper for {dealership_name}'
-            }), 400
+        # Start scraper in background thread
+        def run_scraper():
+            try:
+                result = scraper18_controller.run_single_scraper(dealership_name, force_run=True)
+                logger.info(f"Scraper result for {dealership_name}: {result}")
+            except Exception as e:
+                logger.error(f"Error running scraper for {dealership_name}: {e}")
+        
+        thread = threading.Thread(target=run_scraper, daemon=True)
+        thread.start()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Started scraper for {dealership_name}',
+            'dealership': dealership_name
+        })
             
     except Exception as e:
         logger.error(f"Error starting scraper: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/test-websocket', methods=['POST'])
+def test_websocket():
+    """Test WebSocket connection by sending a test message"""
+    try:
+        test_message = {
+            'message': '🧪 WebSocket test message',
+            'status': 'testing',
+            'timestamp': datetime.now().isoformat()
+        }
+        socketio.emit('scraper_output', test_message)
+        logger.info("Test WebSocket message sent")
+        return jsonify({'success': True, 'message': 'Test message sent via WebSocket'})
+    except Exception as e:
+        logger.error(f"Error sending test WebSocket message: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/scrapers/stop', methods=['POST'])
@@ -1986,26 +1985,21 @@ def stop_scraper():
         if not dealership_name:
             return jsonify({'success': False, 'error': 'Dealership name required'}), 400
             
-        if DEMO_MODE or scraper_manager is None:
+        if DEMO_MODE or scraper18_controller is None:
             return jsonify({
                 'success': True,
                 'message': f'DEMO: Stopped scraper for {dealership_name}',
                 'demo_mode': True
             })
-            
-        success = scraper_manager.stop_scraper(dealership_name)
         
-        if success:
-            return jsonify({
-                'success': True,
-                'message': f'Stopped scraper for {dealership_name}',
-                'dealership': dealership_name
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': f'No active scraper found for {dealership_name}'
-            }), 400
+        # Note: Scraper18 system doesn't support stopping individual scrapers
+        # They run to completion or fail
+        return jsonify({
+            'success': True,
+            'message': f'Scraper18 system runs to completion - cannot stop {dealership_name}',
+            'dealership': dealership_name,
+            'info': 'Scraper18 scrapers run to completion and cannot be stopped mid-execution'
+        })
             
     except Exception as e:
         logger.error(f"Error stopping scraper: {e}")
@@ -2015,7 +2009,7 @@ def stop_scraper():
 def get_scrapers_status():
     """Get status of all active scrapers"""
     try:
-        if DEMO_MODE or scraper_manager is None:
+        if DEMO_MODE or scraper18_controller is None:
             return jsonify({
                 'success': True,
                 'scrapers': {
@@ -2030,16 +2024,14 @@ def get_scrapers_status():
                 },
                 'demo_mode': True
             })
-            
-        # Cleanup completed scrapers first
-        scraper_manager.cleanup_completed_scrapers()
         
-        status = scraper_manager.get_all_scrapers_status()
-        
+        # Scraper18 system runs scrapers to completion
+        # Status is managed through Socket.IO events during execution
         return jsonify({
             'success': True,
-            'scrapers': status,
-            'active_count': len(status)
+            'scrapers': {},  # Active scrapers are tracked via Socket.IO
+            'active_count': 0,
+            'info': 'Scraper18 system tracks progress via real-time Socket.IO events'
         })
         
     except Exception as e:
@@ -2050,7 +2042,7 @@ def get_scrapers_status():
 def get_scraper_status(dealership_name):
     """Get status of specific scraper"""
     try:
-        if DEMO_MODE or scraper_manager is None:
+        if DEMO_MODE or scraper18_controller is None:
             return jsonify({
                 'success': True,
                 'scraper': {
@@ -2064,19 +2056,17 @@ def get_scraper_status(dealership_name):
                 },
                 'demo_mode': True
             })
-            
-        status = scraper_manager.get_scraper_status(dealership_name)
         
-        if status:
-            return jsonify({
-                'success': True,
-                'scraper': status
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': f'No active scraper found for {dealership_name}'
-            }), 404
+        # Scraper18 system doesn't maintain persistent status
+        # Status is provided through Socket.IO events
+        return jsonify({
+            'success': True,
+            'scraper': {
+                'dealership_name': dealership_name,
+                'status': 'idle',
+                'info': 'Scraper18 system provides status via Socket.IO events during execution'
+            }
+        })
             
     except Exception as e:
         logger.error(f"Error getting scraper status: {e}")
@@ -2129,12 +2119,13 @@ def get_scraper_output(dealership_name):
                 'demo_mode': True
             })
             
-        output = scraper_manager.get_recent_output(dealership_name, max_lines)
-        
+        # Scraper18 system outputs directly to Socket.IO during execution
+        # No persistent output storage
         return jsonify({
             'success': True,
-            'output': output,
-            'line_count': len(output)
+            'output': [],
+            'line_count': 0,
+            'info': 'Scraper18 system streams output directly via Socket.IO during execution'
         })
         
     except Exception as e:

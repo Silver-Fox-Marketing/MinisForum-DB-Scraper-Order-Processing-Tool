@@ -202,22 +202,29 @@ class CorrectOrderProcessor:
                     # Check if VIN already exists for this dealership (prevent duplicates)
                     existing = db_manager.execute_query("""
                         SELECT id FROM vin_history 
-                        WHERE vin = %s AND dealership_name = %s
+                        WHERE vin = %s AND dealership_name = %s AND order_date = CURRENT_DATE
                     """, (vin, dealership_name))
                     
                     if existing:
                         duplicates_skipped += 1
-                        logger.debug(f"VIN {vin} already logged for {dealership_name}, skipping")
+                        logger.debug(f"VIN {vin} already logged for {dealership_name} today, skipping")
                         continue
                     
-                    # Insert processed VIN into history database
+                    # Get vehicle type for enhanced tracking
+                    vehicle_type = self._normalize_vehicle_type(vehicle.get('type', 'unknown'))
+                    
+                    # Insert processed VIN into history database with enhanced data
                     db_manager.execute_query("""
-                        INSERT INTO vin_history (vin, dealership_name, order_date, source)
-                        VALUES (%s, %s, CURRENT_DATE, %s)
-                    """, (vin, dealership_name, order_type))
+                        INSERT INTO vin_history (vin, dealership_name, order_date, source, vehicle_type)
+                        VALUES (%s, %s, CURRENT_DATE, %s, %s)
+                        ON CONFLICT (dealership_name, vin, order_date) DO UPDATE SET
+                        source = EXCLUDED.source,
+                        vehicle_type = EXCLUDED.vehicle_type,
+                        created_at = CURRENT_TIMESTAMP
+                    """, (vin, dealership_name, order_type, vehicle_type))
                     
                     vins_logged += 1
-                    logger.info(f"Successfully logged processed VIN {vin} from {order_type} for {dealership_name}")
+                    logger.info(f"Successfully logged processed VIN {vin} ({vehicle_type}) from {order_type} for {dealership_name}")
                     
                 except Exception as vin_error:
                     error_msg = f"Failed to log VIN {vin}: {str(vin_error)}"
@@ -307,8 +314,18 @@ class CorrectOrderProcessor:
             return result
         except Exception as e:
             logger.error(f"Database query failed: {e}")
-            # Fallback to simple query
-            return db_manager.execute_query("SELECT * FROM raw_vehicle_data WHERE location = %s LIMIT 100", (actual_location_name,))
+            logger.error("Attempting simplified query without problematic constraints...")
+            # Try a simplified query without filtering if the main query fails
+            simplified_query = "SELECT * FROM raw_vehicle_data WHERE location = %s ORDER BY import_timestamp DESC"
+            try:
+                result = db_manager.execute_query(simplified_query, (actual_location_name,))
+                logger.info(f"Simplified query returned {len(result)} vehicles")
+                return result
+            except Exception as e2:
+                logger.error(f"Simplified query also failed: {e2}")
+                # Only as a last resort, return empty list rather than arbitrary 100 vehicles
+                logger.error("Unable to retrieve vehicle data - returning empty list")
+                return []
     
     def _find_new_vehicles(self, dealership_name: str, current_vins: List[str]) -> List[str]:
         """Compare with last order to find NEW vehicles"""
@@ -334,15 +351,26 @@ class CorrectOrderProcessor:
         return new_vins
     
     def _generate_qr_codes(self, vehicles: List[Dict], dealership_name: str, output_folder: Path) -> List[str]:
-        """Generate QR codes for vehicle URLs"""
+        """Generate QR codes for vehicle-specific information"""
         
         qr_paths = []
         clean_name = dealership_name.replace(' ', '_')
         
         for idx, vehicle in enumerate(vehicles, 1):
             try:
+                # Get vehicle details
+                vin = vehicle.get('vin', '')
+                stock = vehicle.get('stock', '')
+                year = vehicle.get('year', '')
+                make = vehicle.get('make', '')
+                model = vehicle.get('model', '')
                 url = vehicle.get('vehicle_url', '')
-                if not url:
+                
+                # Determine the best QR content to use
+                qr_content = self._get_vehicle_qr_content(vehicle, dealership_name)
+                
+                if not qr_content:
+                    logger.warning(f"No valid QR content for vehicle {vin} - {stock}, skipping")
                     continue
                 
                 # Generate QR code
@@ -352,7 +380,7 @@ class CorrectOrderProcessor:
                     box_size=10,
                     border=4,
                 )
-                qr.add_data(url)
+                qr.add_data(qr_content)
                 qr.make(fit=True)
                 
                 # Create QR image - 388x388 as per reference
@@ -366,11 +394,135 @@ class CorrectOrderProcessor:
                 
                 qr_paths.append(str(filepath))
                 
+                logger.debug(f"Generated QR for {year} {make} {model} ({stock}): {qr_content}")
+                
             except Exception as e:
                 logger.error(f"Error generating QR for {vehicle.get('vin')}: {e}")
         
         logger.info(f"Generated {len(qr_paths)} QR codes")
         return qr_paths
+    
+    def _get_vehicle_qr_content(self, vehicle: Dict, dealership_name: str) -> str:
+        """
+        Determine the best QR content for a vehicle.
+        Priority: Vehicle-specific URL > Stock-based URL > VIN > Stock number
+        """
+        
+        vin = vehicle.get('vin', '').strip()
+        stock = vehicle.get('stock', '').strip()
+        url = vehicle.get('vehicle_url', '').strip()
+        year = vehicle.get('year', '')
+        make = vehicle.get('make', '')
+        model = vehicle.get('model', '')
+        
+        # Priority 1: Check if URL is vehicle-specific (contains VIN, stock, or inventory path)
+        if url and self._is_vehicle_specific_url(url, vin, stock):
+            logger.debug(f"Using vehicle-specific URL: {url}")
+            return url
+        
+        # Priority 2: Try to construct a vehicle-specific URL based on dealership patterns
+        specific_url = self._construct_vehicle_url(dealership_name, vehicle)
+        if specific_url:
+            logger.debug(f"Constructed vehicle URL: {specific_url}")
+            return specific_url
+        
+        # Priority 3: Use VIN if available (most unique identifier)
+        if vin:
+            logger.debug(f"Using VIN as QR content: {vin}")
+            return vin
+            
+        # Priority 4: Use stock number if available
+        if stock:
+            logger.debug(f"Using stock number as QR content: {stock}")
+            return stock
+            
+        # Priority 5: Fallback to vehicle description
+        if year and make and model:
+            description = f"{year} {make} {model}"
+            logger.debug(f"Using vehicle description as QR content: {description}")
+            return description
+            
+        logger.warning("No suitable QR content found for vehicle")
+        return ""
+    
+    def _is_vehicle_specific_url(self, url: str, vin: str = "", stock: str = "") -> bool:
+        """Check if a URL appears to be vehicle-specific rather than a generic homepage"""
+        
+        url_lower = url.lower()
+        
+        # Check for vehicle-specific URL patterns
+        specific_patterns = [
+            '/inventory/',
+            '/vehicle/',
+            '/detail/',
+            '/vdp/',  # Vehicle Detail Page
+            '/listing/',
+            'vin=',
+            'stock=',
+            'id='
+        ]
+        
+        # Check if URL contains specific patterns
+        for pattern in specific_patterns:
+            if pattern in url_lower:
+                return True
+        
+        # Check if URL contains the actual VIN or stock number
+        if vin and vin.lower() in url_lower:
+            return True
+        if stock and stock.lower() in url_lower:
+            return True
+            
+        # If URL is just a domain or very short, it's likely generic
+        if len(url.replace('https://', '').replace('http://', '').replace('www.', '')) < 20:
+            return False
+            
+        return False
+    
+    def _construct_vehicle_url(self, dealership_name: str, vehicle: Dict) -> str:
+        """
+        Attempt to construct a vehicle-specific URL based on dealership patterns.
+        This is a fallback when database URLs are generic.
+        """
+        
+        vin = vehicle.get('vin', '').strip()
+        stock = vehicle.get('stock', '').strip()
+        base_url = vehicle.get('vehicle_url', '').strip()
+        
+        if not base_url:
+            return ""
+        
+        # Extract base domain from existing URL
+        if '://' in base_url:
+            try:
+                from urllib.parse import urlparse
+                parsed = urlparse(base_url)
+                base_domain = f"{parsed.scheme}://{parsed.netloc}"
+            except:
+                return ""
+        else:
+            return ""
+        
+        # Try common vehicle URL patterns based on dealership
+        dealership_lower = dealership_name.lower()
+        
+        # BMW dealerships often use VIN in URL
+        if 'bmw' in dealership_lower and vin:
+            return f"{base_domain}/inventory/used/{vin}"
+        
+        # Honda dealerships often use stock numbers
+        if 'honda' in dealership_lower and stock:
+            return f"{base_domain}/vehicle-details/{stock}"
+            
+        # Lincoln/Ford dealerships may use different patterns
+        if any(brand in dealership_lower for brand in ['lincoln', 'ford', 'sinclair']) and stock:
+            return f"{base_domain}/inventory/vehicle/{stock}"
+        
+        # Generic fallback - try stock-based URL
+        if stock:
+            return f"{base_domain}/inventory/detail/{stock}"
+            
+        return ""
     
     def _generate_adobe_csv(self, vehicles: List[Dict], dealership_name: str, template_type: str, 
                            output_folder: Path, qr_paths: List[str]) -> Path:

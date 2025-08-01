@@ -369,32 +369,74 @@ class OrderWizard {
         const csvFileList = document.getElementById('csvFileList');
         const qrFileList = document.getElementById('qrFileList');
         
-        if (csvFileList && result.csv_files) {
-            csvFileList.innerHTML = result.csv_files.map(file => `
-                <div class="file-item">
-                    <div class="file-info">
-                        <div class="file-name">${file.name}</div>
-                        <div class="file-size">${file.size || 'Unknown size'}</div>
+        // Handle CSV file display - use download_csv route if available
+        if (csvFileList) {
+            if (result.download_csv) {
+                const csvFileName = result.download_csv.split('/').pop().replace('download_csv/', '');
+                csvFileList.innerHTML = `
+                    <div class="file-item">
+                        <div class="file-info">
+                            <div class="file-name">${csvFileName}</div>
+                            <div class="file-size">${result.new_vehicles || result.vehicles_processed || 0} vehicles</div>
+                        </div>
+                        <div class="file-actions">
+                            <button class="download-btn" onclick="wizard.downloadCSV('${csvFileName}')">
+                                <i class="fas fa-download"></i> Download CSV
+                            </button>
+                            <button class="preview-btn" onclick="wizard.previewCSV('${csvFileName}')">
+                                <i class="fas fa-eye"></i> Preview
+                            </button>
+                        </div>
                     </div>
-                    <button class="download-btn" onclick="wizard.downloadFile('${file.path}')">
-                        <i class="fas fa-download"></i>
-                    </button>
-                </div>
-            `).join('');
+                `;
+            } else if (result.csv_files) {
+                csvFileList.innerHTML = result.csv_files.map(file => `
+                    <div class="file-item">
+                        <div class="file-info">
+                            <div class="file-name">${file.name}</div>
+                            <div class="file-size">${file.size || 'Unknown size'}</div>
+                        </div>
+                        <button class="download-btn" onclick="wizard.downloadFile('${file.path}')">
+                            <i class="fas fa-download"></i>
+                        </button>
+                    </div>
+                `).join('');
+            }
         }
         
-        if (qrFileList && result.qr_files) {
-            qrFileList.innerHTML = result.qr_files.map(file => `
-                <div class="file-item">
-                    <div class="file-info">
-                        <div class="file-name">${file.name}</div>
-                        <div class="file-size">${file.count || 0} QR codes</div>
+        // Handle QR files display  
+        if (qrFileList) {
+            if (result.qr_folder) {
+                const qrCount = result.qr_codes_generated || result.new_vehicles || 0;
+                qrFileList.innerHTML = `
+                    <div class="file-item">
+                        <div class="file-info">
+                            <div class="file-name">QR Code Files</div>
+                            <div class="file-size">${qrCount} QR codes generated</div>
+                        </div>
+                        <div class="file-actions">
+                            <button class="download-btn" onclick="wizard.downloadQRFolder('${result.qr_folder}')">
+                                <i class="fas fa-download"></i> Download QR Codes
+                            </button>
+                            <button class="preview-btn" onclick="wizard.previewQRFolder('${result.qr_folder}')">
+                                <i class="fas fa-eye"></i> Preview QR Codes
+                            </button>
+                        </div>
                     </div>
-                    <button class="download-btn" onclick="wizard.downloadFile('${file.path}')">
-                        <i class="fas fa-download"></i>
-                    </button>
-                </div>
-            `).join('');
+                `;
+            } else if (result.qr_files) {
+                qrFileList.innerHTML = result.qr_files.map(file => `
+                    <div class="file-item">
+                        <div class="file-info">
+                            <div class="file-name">${file.name}</div>
+                            <div class="file-size">${file.count || 0} QR codes</div>
+                        </div>
+                        <button class="download-btn" onclick="wizard.downloadFile('${file.path}')">
+                            <i class="fas fa-download"></i>
+                        </button>
+                    </div>
+                `).join('');
+            }
         }
     }
     
@@ -437,8 +479,11 @@ class OrderWizard {
             
             this.currentEditingFile = currentOrder.result.download_csv;
             
+            // Extract filename from download_csv path
+            const csvFilename = this.extractFilenameFromPath(this.currentEditingFile);
+            
             // Fetch the CSV data from the server
-            const response = await fetch(`/api/csv/get-data/${this.currentEditingFile}`);
+            const response = await fetch(`/api/csv/get-data/${csvFilename}`);
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
@@ -757,7 +802,7 @@ class OrderWizard {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    filename: this.currentEditingFile,
+                    filename: this.extractFilenameFromPath(this.currentEditingFile),
                     data: this.currentEditingData
                 })
             });
@@ -797,7 +842,7 @@ class OrderWizard {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    filename: this.currentEditingFile
+                    filename: this.extractFilenameFromPath(this.currentEditingFile)
                 })
             });
             
@@ -1153,6 +1198,66 @@ class OrderWizard {
         document.body.removeChild(link);
     }
     
+    downloadCSV(filename) {
+        // Download CSV file using the Flask route
+        const link = document.createElement('a');
+        link.href = `/download_csv/${filename}`;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+    
+    previewCSV(filename) {
+        // Preview CSV file in a new window
+        const previewWindow = window.open(`/download_csv/${filename}`, '_blank', 'width=800,height=600');
+        previewWindow.focus();
+    }
+    
+    downloadQRFolder(folderPath) {
+        // Create a ZIP download of QR codes (would need backend support)
+        // For now, show a message about individual QR downloads
+        this.showMessage('QR codes are available in the folder: ' + folderPath + '. Individual QR files can be accessed through the file system.', 'info');
+    }
+    
+    previewQRFolder(folderPath) {
+        // Preview QR codes in a gallery view
+        const previewWindow = window.open('', '_blank', 'width=900,height=700');
+        previewWindow.document.write(`
+            <html>
+                <head>
+                    <title>QR Code Preview</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 20px; }
+                        .qr-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
+                        .qr-item { text-align: center; border: 1px solid #ddd; padding: 10px; border-radius: 5px; }
+                        .qr-img { max-width: 150px; max-height: 150px; }
+                        .qr-info { margin-top: 10px; font-size: 12px; }
+                    </style>
+                </head>
+                <body>
+                    <h2>QR Code Preview</h2>
+                    <p>QR codes generated in: <code>${folderPath}</code></p>
+                    <div class="qr-gallery">
+                        <div class="qr-item">
+                            <div style="width: 150px; height: 150px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
+                                QR Code Preview<br><small>View files in folder for actual QR codes</small>
+                            </div>
+                            <div class="qr-info">Individual QR files available in the specified folder</div>
+                        </div>
+                    </div>
+                    <button onclick="window.close()" style="margin-top: 20px; padding: 10px 20px;">Close</button>
+                </body>
+            </html>
+        `);
+    }
+    
+    extractFilenameFromPath(filePath) {
+        // Extract filename from download_csv path (removes /download_csv/ prefix)
+        if (!filePath) return '';
+        return filePath.replace('/download_csv/', '').replace('download_csv/', '');
+    }
+    
     updateProgress(stepName) {
         // Update progress indicators
         document.querySelectorAll('.progress-step').forEach(step => {
@@ -1198,6 +1303,35 @@ class OrderWizard {
         document.body.appendChild(errorDiv);
     }
     
+    showMessage(message, type = 'info') {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `wizard-message wizard-${type}`;
+        
+        let icon = 'fas fa-info-circle';
+        if (type === 'success') icon = 'fas fa-check-circle';
+        if (type === 'error') icon = 'fas fa-exclamation-triangle';
+        if (type === 'warning') icon = 'fas fa-exclamation-circle';
+        
+        messageDiv.innerHTML = `
+            <div class="message-icon">
+                <i class="${icon}"></i>
+            </div>
+            <div class="message-text">${message}</div>
+            <button onclick="this.parentElement.remove()" style="margin-left: 10px; padding: 5px 10px;">Close</button>
+        `;
+        
+        // Auto-remove after 5 seconds for info messages
+        if (type === 'info') {
+            setTimeout(() => {
+                if (messageDiv.parentElement) {
+                    messageDiv.remove();
+                }
+            }, 5000);
+        }
+        
+        document.body.appendChild(messageDiv);
+    }
+
     showSuccess(message) {
         const successDiv = document.createElement('div');
         successDiv.className = 'wizard-success';

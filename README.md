@@ -1,6 +1,6 @@
-# Silver Fox Order Processing System v2.0
-**Enhanced VIN Intelligence & Complete Order Processing Pipeline**  
-Updated: 2025-07-30
+# Silver Fox Order Processing System v2.0 
+**Integrated Scraper 18 System with Enhanced Error Handling**  
+Updated: 2025-08-01
 
 ## 🚀 Quick Start
 
@@ -40,14 +40,14 @@ Updated: 2025-07-30
 
 ## 🎯 Major Version Updates
 
-### **v2.0 (July 30, 2025) - Enhanced VIN Intelligence & Complete Order Processing**
-- 🧠 **Enhanced VIN Logic**: 5-rule intelligent processing system with cross-dealership detection
-- 📊 **VIN History Database**: 28,289+ VINs imported across 36 dealerships for complete historical context
-- 🔄 **Cross-Dealership Revenue Capture**: Detects when vehicles move between dealers for new opportunities
-- 🎯 **Smart Duplicate Prevention**: Avoids reprocessing same context while capturing status changes
-- 🛡️ **CLI Backup System**: Complete command line interface for system resilience
-- ✅ **Production Ready**: Fully operational Order Processing Wizard v2.0 with all enhanced features
-- 📈 **20-30% Revenue Increase**: From previously missed cross-dealership and status change opportunities
+### **v2.0 (August 1, 2025) - Integrated Scraper 18 System**
+- 🚀 **Complete Scraper 18 Integration**: All 36 proven scrapers directly integrated into web GUI
+- 🛡️ **Enhanced Error Handling**: Individual scraper failures no longer crash entire system
+- 🔄 **Direct Database Import**: Scraped data automatically imported into PostgreSQL
+- ⚡ **Real-time Progress**: Live Socket.IO updates during scraper execution
+- 🎯 **36 Active Scrapers**: Optimized dealership list covering primary markets
+- 🔗 **Web GUI Selection**: Replaced config.csv with web interface dealership selection
+- ✅ **Production Ready**: Fully operational scraper system with proven logic preserved
 
 ### **v2.2 (July 29, 2025) - Dynamic Column Filtering**
 - 🎛️ **Dynamic Header Filters**: Column-based dropdowns with real-time options
@@ -81,12 +81,67 @@ Updated: 2025-07-30
 - **📋 Adobe CSV Export**: Variable data library compatible format
 - **⚡ Smart Filtering**: Prevents duplicate processing while capturing opportunities
 
-### **🔗 ACTIVE INTEGRATIONS**
-1. **BMW of West St. Louis** - Live scraper + enhanced VIN filtering
-2. **Columbia Honda** - Live scraper + enhanced VIN filtering  
-3. **Dave Sinclair Lincoln South** - Live scraper + enhanced VIN filtering
-4. **Test Integration Dealer** - Development and testing environment
-5. **36 VIN History Dealerships** - Complete historical context for intelligent processing
+### **🔗 ACTIVE SCRAPER INTEGRATIONS (36 Dealerships)**
+
+**Premium Automotive Brands:**
+- Auffenberg Hyundai
+- BMW of West St. Louis  
+- Bommarito Cadillac
+- Bommarito West County
+- Columbia BMW
+- Porsche St. Louis
+- Spirit Lexus
+
+**Honda/Acura Network:**
+- Columbia Honda
+- Frank Leta Honda
+- Honda of Frontenac
+- Serra Honda O'Fallon
+
+**Ford Network:**
+- Pundmann Ford
+- Suntrup Ford Kirkwood
+- Suntrup Ford West
+- Thoroughbred Ford
+
+**General Motors Network:**
+- Rusty Drewing Cadillac
+- Rusty Drewing Chevrolet Buick GMC
+- Suntrup Buick GMC
+- Weber Chevrolet
+
+**Hyundai/Kia Network:**
+- HW Kia
+- Kia of Columbia
+- Suntrup Hyundai South
+- Suntrup Kia South
+
+**Chrysler/Dodge/Jeep Network:**
+- Glendale Chrysler Jeep
+- South County Autos
+
+**Lincoln Network:**
+- Dave Sinclair Lincoln
+- Dave Sinclair Lincoln South
+- Dave Sinclair Lincoln St. Peters
+
+**Toyota/Lexus Network:**
+- Pappas Toyota
+
+**Nissan Network:**
+- Joe Machens Nissan
+
+**CDJR Network:**
+- Joe Machens CDJR
+
+**Specialty Imports:**
+- Land Rover Ranch Mirage
+- Mini of St. Louis
+- West County Volvo Cars
+
+**Multi-Brand:**
+- Joe Machens Hyundai
+- Joe Machens Toyota
 
 ## 📋 What's Included
 
@@ -115,7 +170,7 @@ Updated: 2025-07-30
 - ✅ **Queue-Based Workflow** - Daily order management
 - ✅ **Wizard Processing** - Guided order completion
 - ✅ **Real-Time Monitoring** - Integrated system console
-- ✅ **40+ Dealership Support** - Pre-configured scrapers
+- ✅ **36 Dealership Support** - Production-ready scrapers with enhanced error handling
 - ✅ **Template System** - Multiple export formats
 - ✅ **QR Integration** - Automatic QR generation
 - ✅ **Comprehensive Testing** - Stress test framework

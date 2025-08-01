@@ -123,42 +123,90 @@ class CompleteCSVImporter:
         return True, None
     
     def normalize_condition(self, condition_value: str) -> str:
-        """Normalize vehicle condition from scraper data"""
+        """Normalize vehicle condition from scraper data to match database constraint"""
         if pd.isna(condition_value) or condition_value == '':
-            return 'used'  # Default
+            return 'po'  # Default to 'po' (pre-owned) as safest default
         
         condition_str = str(condition_value).lower().strip()
         
-        # Map conditions from complete_data.csv
+        # Map conditions to exact database constraint values:
+        # Allowed: 'new', 'po', 'cpo', 'offlot', 'onlot'
         condition_map = {
             'new': 'new',
-            'used': 'used',
-            'certified': 'certified',
-            'cpo': 'certified',
+            'used': 'po',  # Map 'used' to 'po' (pre-owned)
+            'pre-owned': 'po',
+            'preowned': 'po',
+            'po': 'po',
+            'certified': 'cpo',  # Map 'certified' to 'cpo'
+            'cpo': 'cpo',
+            'certified pre-owned': 'cpo',
+            'certified-pre-owned': 'cpo',
             'off-lot': 'offlot',
-            'offlot': 'offlot'
+            'offlot': 'offlot',
+            'off lot': 'offlot',
+            'on-lot': 'onlot',
+            'onlot': 'onlot',
+            'on lot': 'onlot'
         }
         
-        return condition_map.get(condition_str, 'used')
+        return condition_map.get(condition_str, 'po')  # Default to 'po' if unknown
+    
+    def get_column_value(self, row: Dict, field_mappings: List[str], default_value='') -> str:
+        """Get column value using flexible column name matching"""
+        row_columns = {k.lower(): k for k in row.keys()}
+        
+        for possible_name in field_mappings:
+            if possible_name.lower() in row_columns:
+                actual_column = row_columns[possible_name.lower()]
+                value = row.get(actual_column, default_value)
+                if not pd.isna(value):
+                    return str(value).strip()
+        
+        return default_value
     
     def validate_row(self, row: Dict) -> Tuple[bool, Optional[str]]:
         """Validate a single row of data"""
-        # Check required fields for complete_data.csv format
-        required_fields = ['vin', 'stock_number', 'dealer_name']
+        # Create case-insensitive column mapping
+        row_columns = {k.lower(): k for k in row.keys()}
         
-        for field in required_fields:
-            if field not in row or pd.isna(row[field]) or str(row[field]).strip() == '':
-                return False, f"Missing required field: {field}"
+        # Check required fields with flexible column name matching
+        required_mappings = {
+            'vin': ['vin', 'vehicle_vin', 'vehiclevin'],
+            'stock': ['stock', 'stock_number', 'stocknumber', 'stock_no'],
+            'dealer_name': ['dealer_name', 'dealership_name', 'dealer', 'location']
+        }
         
-        # Validate VIN
-        vin = str(row['vin']).strip().upper()
-        if len(vin) != 17:
-            return False, f"Invalid VIN length: {len(vin)} (should be 17)"
+        for field, possible_names in required_mappings.items():
+            found_column = None
+            for possible_name in possible_names:
+                if possible_name.lower() in row_columns:
+                    found_column = row_columns[possible_name.lower()]
+                    break
+            
+            if not found_column:
+                available_columns = list(row.keys())[:10]  # Show first 10 columns for debugging
+                return False, f"Missing required field: {field}. Available columns: {available_columns}"
+            
+            # Check if the found column has a value
+            if pd.isna(row[found_column]) or str(row[found_column]).strip() == '':
+                return False, f"Empty required field: {field} (column: {found_column})"
         
-        # Skip mock data if needed (optional)
-        if vin.startswith('MOCK'):
-            # You can choose to skip mock data or import it
-            pass  # Currently allowing mock data for testing
+        # Validate VIN (find the VIN column again)
+        vin_column = None
+        for possible_name in required_mappings['vin']:
+            if possible_name.lower() in row_columns:
+                vin_column = row_columns[possible_name.lower()]
+                break
+        
+        if vin_column:
+            vin = str(row[vin_column]).strip().upper()
+            if len(vin) != 17:
+                return False, f"Invalid VIN length: {len(vin)} (should be 17)"
+            
+            # Skip mock data if needed (optional)
+            if vin.startswith('MOCK'):
+                # You can choose to skip mock data or import it
+                pass  # Currently allowing mock data for testing
         
         # Validate year
         if 'year' in row and not pd.isna(row['year']):
@@ -275,21 +323,25 @@ class CompleteCSVImporter:
                         )
                         continue
                     
-                    # Prepare raw data tuple (mapping complete_data.csv to database schema)
+                    # Prepare raw data tuple using flexible column mapping
+                    vin = self.get_column_value(row, ['vin', 'vehicle_vin', 'vehiclevin']).upper()
+                    stock = self.get_column_value(row, ['stock', 'stock_number', 'stocknumber', 'stock_no'])
+                    year_str = self.get_column_value(row, ['year'])
+                    
                     raw_tuple = (
-                        str(row['vin']).strip().upper(),
-                        str(row['stock_number']).strip(),
+                        vin,
+                        stock,
                         'Vehicle',  # type (generic)
-                        int(row['year']) if row.get('year') and str(row['year']).isdigit() else None,
-                        row.get('make', ''),
-                        row.get('model', ''),
-                        row.get('trim', ''),
-                        row.get('exterior_color', ''),
-                        row.get('condition', ''),
-                        self.clean_numeric(row.get('price')),
+                        int(year_str) if year_str and year_str.isdigit() else None,
+                        self.get_column_value(row, ['make']),
+                        self.get_column_value(row, ['model']),
+                        self.get_column_value(row, ['trim']),
+                        self.get_column_value(row, ['exterior_color', 'ext_color', 'color']),
+                        self.normalize_condition(self.get_column_value(row, ['condition', 'vehicle_condition', 'status'])),
+                        self.clean_numeric(self.get_column_value(row, ['price'])),
                         '',  # body_style (not in complete_data.csv)
-                        row.get('fuel_type', ''),
-                        self.clean_numeric(row.get('msrp')),
+                        self.get_column_value(row, ['fuel_type', 'fuel']),
+                        self.clean_numeric(self.get_column_value(row, ['msrp'])),
                         None,  # date_in_stock (not in complete_data.csv)
                         '',  # street_address
                         '',  # locality
@@ -353,12 +405,11 @@ class CompleteCSVImporter:
                         )
                         normalized_data.append(normalized_tuple)
                         
-                        # VIN history entry
+                        # VIN history entry (no raw_data_id column in vin_history table)
                         vin_history_data.append((
+                            record['location'],  # dealership_name
                             record['vin'],
-                            record['location'],
-                            today,
-                            record['id']
+                            today  # order_date
                         ))
                     
                     # Upsert normalized data
@@ -378,12 +429,14 @@ class CompleteCSVImporter:
                                           'status', 'last_seen_date', 'updated_at']
                         )
                     
-                    # Insert VIN history
+                    # Insert VIN history (handle duplicates gracefully)
                     if vin_history_data:
-                        self.db.execute_batch_insert(
+                        self.db.upsert_data(
                             'vin_history',
-                            ['vin', 'dealership_name', 'scan_date', 'raw_data_id'],
-                            vin_history_data
+                            ['dealership_name', 'vin', 'order_date'],
+                            vin_history_data,
+                            conflict_columns=['dealership_name', 'vin', 'order_date'],
+                            update_columns=[]  # Don't update on conflict, just ignore
                         )
                 
                 logger.info(f"Imported {dealership_name}: "
@@ -409,7 +462,7 @@ class CompleteCSVImporter:
         query = """
             UPDATE normalized_vehicle_data n
             SET vin_scan_count = (
-                SELECT COUNT(DISTINCT scan_date)
+                SELECT COUNT(DISTINCT order_date)
                 FROM vin_history v
                 WHERE v.vin = n.vin AND v.dealership_name = n.location
             )
