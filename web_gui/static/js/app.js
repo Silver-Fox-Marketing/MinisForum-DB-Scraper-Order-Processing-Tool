@@ -2628,10 +2628,18 @@ class MinisFornumApp {
         
         // Update control buttons visibility
         const exportSearchBtn = document.getElementById('exportSearchResults');
-        if (subtabName === 'vehicle-search') {
-            exportSearchBtn.style.display = 'inline-flex';
+        if (subtabName === 'scraper-view') {
+            exportSearchBtn.style.display = 'none';
         } else {
             exportSearchBtn.style.display = 'none';
+        }
+        
+        // Load content for specific sub-tabs
+        if (subtabName === 'vin-history') {
+            this.loadDealershipVinLogs();
+        } else if (subtabName === 'scraper-view') {
+            this.loadScraperHistory();
+            this.setupCsvImport();
         }
     }
     
@@ -4094,6 +4102,787 @@ class MinisFornumApp {
         }
         
         console.log(`[${type.toUpperCase()}] ${message}`);
+    }
+
+    // =============================================================================
+    // DEALERSHIP VIN LOG FUNCTIONALITY
+    // =============================================================================
+    
+    async loadDealershipVinLogs() {
+        try {
+            const response = await fetch('/api/dealership-vin-logs');
+            const data = await response.json();
+            
+            if (data.success) {
+                this.renderDealershipCards(data.vin_logs);
+            } else {
+                console.error('Failed to load dealership VIN logs:', data.error);
+                this.showError('Failed to load dealership VIN logs');
+            }
+        } catch (error) {
+            console.error('Error loading dealership VIN logs:', error);
+            this.showError('Error loading dealership VIN logs');
+        }
+    }
+    
+    renderDealershipCards(dealerships) {
+        const container = document.getElementById('dealershipCardsGrid');
+        
+        if (!dealerships || dealerships.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-database"></i>
+                    <h3>No VIN Log Data Found</h3>
+                    <p>No dealership VIN logs are available.</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = dealerships.map(dealer => `
+            <div class="dealership-card" data-dealer="${dealer.dealership_name}">
+                <div class="dealership-card-header">
+                    <h3 class="dealership-name">${this.formatDealershipName(dealer.dealership_name)}</h3>
+                    <i class="fas fa-building dealership-icon"></i>
+                </div>
+                
+                <div class="dealership-stats">
+                    <div class="stat-item">
+                        <div class="stat-value">${dealer.vin_count || 0}</div>
+                        <div class="stat-label">Total VINs</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">-</div>
+                        <div class="stat-label">Baseline Data</div>
+                    </div>
+                </div>
+                
+                <div class="table-info">
+                    <div class="table-name">
+                        <i class="fas fa-database"></i>
+                        <span>${dealer.table_name}</span>
+                    </div>
+                </div>
+                
+                <div class="dealership-actions">
+                    <button class="btn-view-vin-log" onclick="app.openVinLogModal('${dealer.dealership_name}')">
+                        <i class="fas fa-eye"></i>
+                        View VIN Log
+                    </button>
+                </div>
+            </div>
+        `).join('');
+
+        // Setup search functionality
+        this.setupDealershipSearch(dealerships);
+    }
+    
+    setupDealershipSearch(dealerships) {
+        const searchInput = document.getElementById('dealershipSearchInput');
+        const searchBtn = document.getElementById('searchDealershipsBtn');
+        
+        if (!searchInput) return;
+        
+        const performSearch = () => {
+            const query = searchInput.value.toLowerCase().trim();
+            
+            if (!query) {
+                this.renderDealershipCards(dealerships);
+                return;
+            }
+            
+            const filtered = dealerships.filter(dealer => 
+                dealer.dealership_name.toLowerCase().includes(query)
+            );
+            
+            this.renderDealershipCards(filtered);
+        };
+        
+        searchInput.addEventListener('input', performSearch);
+        if (searchBtn) {
+            searchBtn.addEventListener('click', performSearch);
+        }
+    }
+    
+    async openVinLogModal(dealershipName) {
+        const modal = document.getElementById('vinLogModal');
+        const modalTitle = document.getElementById('vinLogModalTitle');
+        
+        if (!modal || !modalTitle) return;
+        
+        modalTitle.textContent = `${this.formatDealershipName(dealershipName)} - VIN History`;
+        modal.style.display = 'flex';
+        
+        // Initialize modal state
+        this.currentVinLogData = null;
+        this.currentFilteredData = null;
+        this.currentOrderFilter = null;
+        this.currentDealership = dealershipName;
+        
+        // Setup modal event listeners
+        this.setupVinLogModalEvents();
+        
+        // Load VIN data for this dealership
+        await this.loadVinLogData(dealershipName);
+    }
+    
+    setupVinLogModalEvents() {
+        const closeBtn = document.getElementById('closeVinLogModal');
+        const closeBtn2 = document.getElementById('closeVinLogModalBtn');
+        const modal = document.getElementById('vinLogModal');
+        const searchInput = document.getElementById('vinLogSearch');
+        const searchBtn = document.getElementById('vinLogSearchBtn');
+        
+        if (closeBtn && !closeBtn.hasEventListener) {
+            closeBtn.addEventListener('click', () => this.closeVinLogModal());
+            closeBtn.hasEventListener = true;
+        }
+        
+        if (closeBtn2 && !closeBtn2.hasEventListener) {
+            closeBtn2.addEventListener('click', () => this.closeVinLogModal());
+            closeBtn2.hasEventListener = true;
+        }
+        
+        if (modal && !modal.hasEventListener) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    this.closeVinLogModal();
+                }
+            });
+            modal.hasEventListener = true;
+        }
+        
+        // Setup search functionality
+        if (searchInput && !searchInput.hasEventListener) {
+            searchInput.addEventListener('input', () => this.filterVinLogData());
+            searchInput.hasEventListener = true;
+        }
+        
+        if (searchBtn && !searchBtn.hasEventListener) {
+            searchBtn.addEventListener('click', () => this.filterVinLogData());
+            searchBtn.hasEventListener = true;
+        }
+    }
+    
+    closeVinLogModal() {
+        const modal = document.getElementById('vinLogModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+    
+    async loadVinLogData(dealershipName) {
+        try {
+            const response = await fetch(`/api/dealership-vin-logs/${encodeURIComponent(dealershipName)}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                // Store the full data for filtering
+                this.currentVinLogData = data;
+                this.currentFilteredData = data.history || [];
+                this.currentOrderFilter = null;
+                
+                // Clear search input
+                const searchInput = document.getElementById('vinLogSearch');
+                if (searchInput) searchInput.value = '';
+                
+                this.renderVinLogModal(data);
+            } else {
+                console.error('Failed to load VIN log data:', data.error);
+                this.showVinLogError('Failed to load VIN log data');
+            }
+        } catch (error) {
+            console.error('Error loading VIN log data:', error);
+            this.showVinLogError('Error loading VIN log data');
+        }
+    }
+    
+    renderVinLogModal(data = null) {
+        // Use stored filtered data if no data provided
+        const displayData = data || this.currentVinLogData;
+        const historyData = this.currentFilteredData || displayData?.history || [];
+        
+        // Update stats based on filtered data
+        const totalVins = document.getElementById('modalTotalVins');
+        const orderNumbers = document.getElementById('modalOrderNumbers');
+        const dateRange = document.getElementById('modalDateRange');
+        
+        if (totalVins) totalVins.textContent = historyData.length;
+        
+        // Calculate unique orders from filtered data
+        const uniqueOrders = [...new Set(historyData.map(record => record.order_number).filter(Boolean))];
+        if (orderNumbers) orderNumbers.textContent = uniqueOrders.length;
+        
+        if (dateRange && historyData.length > 0) {
+            const dates = historyData.map(record => record.processed_date).filter(Boolean);
+            if (dates.length > 0) {
+                const sortedDates = dates.sort();
+                dateRange.textContent = `${this.formatDate(sortedDates[0])} - ${this.formatDate(sortedDates[sortedDates.length - 1])}`;
+            } else {
+                dateRange.textContent = 'No date range';
+            }
+        }
+        
+        // Update modal title to show filter status
+        const modalTitle = document.getElementById('vinLogModalTitle');
+        if (modalTitle && this.currentDealership) {
+            let title = `${this.formatDealershipName(this.currentDealership)} - VIN History`;
+            if (this.currentOrderFilter) {
+                title += ` - Order: ${this.currentOrderFilter}`;
+            }
+            modalTitle.textContent = title;
+        }
+        
+        // Render table
+        const tableContainer = document.getElementById('vinLogTableContainer');
+        if (!tableContainer) return;
+        
+        if (!historyData || historyData.length === 0) {
+            tableContainer.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-search"></i>
+                    <h3>No VIN History Found</h3>
+                    <p>No VIN records match your current filter criteria.</p>
+                    ${this.currentOrderFilter ? `
+                        <button class="btn btn-secondary" onclick="app.clearOrderFilter()">
+                            <i class="fas fa-times"></i>
+                            Clear Filter
+                        </button>
+                    ` : ''}
+                </div>
+            `;
+            return;
+        }
+        
+        tableContainer.innerHTML = `
+            <table class="vin-log-table">
+                <thead>
+                    <tr>
+                        <th>VIN</th>
+                        <th>Order Number</th>
+                        <th>Processed Date</th>
+                        <th>Order Type</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${historyData.map(record => `
+                        <tr>
+                            <td><span class="vin-number">${record.vin}</span></td>
+                            <td>
+                                <span class="order-number clickable ${record.order_type?.toLowerCase() === 'baseline' ? 'baseline' : ''}" 
+                                      onclick="app.filterByOrder('${record.order_number || ''}')">
+                                    ${record.order_number || 'N/A'}
+                                </span>
+                            </td>
+                            <td>${record.processed_date ? this.formatDate(record.processed_date) : 'N/A'}</td>
+                            <td>${record.order_type || 'N/A'}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+    
+    showVinLogError(message) {
+        const tableContainer = document.getElementById('vinLogTableContainer');
+        if (tableContainer) {
+            tableContainer.innerHTML = `
+                <div class="error-state">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Error Loading Data</h3>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+    }
+    
+    getDateClass(dateString) {
+        if (!dateString) return '';
+        
+        const date = new Date(dateString);
+        const now = new Date();
+        const daysDiff = (now - date) / (1000 * 60 * 60 * 24);
+        
+        if (daysDiff < 7) return 'recent';
+        if (daysDiff > 30) return 'old';
+        return '';
+    }
+    
+    formatDate(dateString) {
+        if (!dateString) return 'N/A';
+        
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        } catch (error) {
+            return dateString;
+        }
+    }
+    
+    formatDealershipName(name) {
+        if (!name) return 'Unknown Dealership';
+        
+        // Convert from lowercase with spaces to title case
+        return name.split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+    }
+    
+    // VIN Log Filtering Functions
+    filterVinLogData() {
+        if (!this.currentVinLogData || !this.currentVinLogData.history) return;
+        
+        const searchInput = document.getElementById('vinLogSearch');
+        const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+        
+        let filteredData = this.currentVinLogData.history;
+        
+        // Apply order filter if active
+        if (this.currentOrderFilter) {
+            filteredData = filteredData.filter(record => 
+                record.order_number === this.currentOrderFilter
+            );
+        }
+        
+        // Apply search filter
+        if (searchTerm) {
+            filteredData = filteredData.filter(record => {
+                const vin = (record.vin || '').toLowerCase();
+                const orderNumber = (record.order_number || '').toLowerCase();
+                const orderType = (record.order_type || '').toLowerCase();
+                
+                return vin.includes(searchTerm) || 
+                       orderNumber.includes(searchTerm) || 
+                       orderType.includes(searchTerm);
+            });
+        }
+        
+        this.currentFilteredData = filteredData;
+        this.renderVinLogModal();
+    }
+    
+    filterByOrder(orderNumber) {
+        if (!orderNumber || orderNumber === 'N/A') return;
+        
+        this.currentOrderFilter = orderNumber;
+        
+        // Clear search input when filtering by order
+        const searchInput = document.getElementById('vinLogSearch');
+        if (searchInput) searchInput.value = '';
+        
+        this.filterVinLogData();
+    }
+    
+    clearOrderFilter() {
+        this.currentOrderFilter = null;
+        this.filterVinLogData();
+    }
+
+    // =============================================================================
+    // SCRAPER VIEW FUNCTIONALITY
+    // =============================================================================
+    
+    async loadScraperHistory() {
+        try {
+            const response = await fetch('/api/scraper-imports');
+            const data = await response.json();
+            
+            if (data.success) {
+                this.renderScraperHistoryTable(data.imports);
+            } else {
+                console.error('Failed to load scraper history:', data.error);
+                this.showScraperHistoryError('Failed to load scraper history');
+            }
+        } catch (error) {
+            console.error('Error loading scraper history:', error);
+            this.showScraperHistoryError('Error loading scraper history');
+        }
+    }
+    
+    renderScraperHistoryTable(imports) {
+        const container = document.getElementById('scraperTableContainer');
+        
+        if (!imports || imports.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-database"></i>
+                    <h3>No Import History Found</h3>
+                    <p>No scraper imports are available.</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = `
+            <table class="scraper-history-table">
+                <thead>
+                    <tr>
+                        <th>Import ID</th>
+                        <th>Date</th>
+                        <th>Source</th>
+                        <th>Vehicles</th>
+                        <th>Dealerships</th>
+                        <th>Status</th>
+                        <th>File</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${imports.map(import_ => `
+                        <tr onclick="app.openScraperDataModal(${import_.import_id})" data-import-id="${import_.import_id}">
+                            <td><strong>#${import_.import_id}</strong></td>
+                            <td>${this.formatDate(import_.import_date)}</td>
+                            <td>${import_.import_source || 'Unknown'}</td>
+                            <td>${import_.total_vehicles || import_.actual_vehicles || 0}</td>
+                            <td>
+                                <span class="dealership-count">${import_.dealerships_count || import_.actual_dealerships || 0}</span>
+                            </td>
+                            <td>
+                                <span class="import-status-badge ${import_.status || 'unknown'}">${import_.status || 'Unknown'}</span>
+                            </td>
+                            <td>${import_.file_name || '-'}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+
+        // Setup refresh button
+        const refreshBtn = document.getElementById('refreshScraperHistory');
+        if (refreshBtn && !refreshBtn.hasEventListener) {
+            refreshBtn.addEventListener('click', () => this.loadScraperHistory());
+            refreshBtn.hasEventListener = true;
+        }
+    }
+    
+    showScraperHistoryError(message) {
+        const container = document.getElementById('scraperTableContainer');
+        container.innerHTML = `
+            <div class="error-state">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>Error Loading Data</h3>
+                <p>${message}</p>
+                <button class="btn btn-secondary" onclick="app.loadScraperHistory()">
+                    <i class="fas fa-sync"></i>
+                    Try Again
+                </button>
+            </div>
+        `;
+    }
+    
+    async openScraperDataModal(importId) {
+        const modal = document.getElementById('scraperDataModal');
+        const modalTitle = document.getElementById('scraperDataModalTitle');
+        
+        if (!modal || !modalTitle) return;
+        
+        modalTitle.textContent = `Scraper Data - Import #${importId}`;
+        modal.style.display = 'flex';
+        
+        // Initialize modal state
+        this.currentScraperData = null;
+        this.currentFilteredScraperData = null;
+        this.currentImportId = importId;
+        
+        // Setup modal event listeners
+        this.setupScraperDataModalEvents();
+        
+        // Load vehicle data for this import
+        await this.loadScraperData(importId);
+    }
+    
+    setupScraperDataModalEvents() {
+        const closeBtn = document.getElementById('closeScraperDataModal');
+        const closeBtn2 = document.getElementById('closeScraperDataModalBtn');
+        const modal = document.getElementById('scraperDataModal');
+        const searchInput = document.getElementById('scraperDataSearch');
+        const searchBtn = document.getElementById('scraperDataSearchBtn');
+        
+        if (closeBtn && !closeBtn.hasEventListener) {
+            closeBtn.addEventListener('click', () => this.closeScraperDataModal());
+            closeBtn.hasEventListener = true;
+        }
+        
+        if (closeBtn2 && !closeBtn2.hasEventListener) {
+            closeBtn2.addEventListener('click', () => this.closeScraperDataModal());
+            closeBtn2.hasEventListener = true;
+        }
+        
+        if (modal && !modal.hasEventListener) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    this.closeScraperDataModal();
+                }
+            });
+            modal.hasEventListener = true;
+        }
+        
+        // Setup search functionality
+        if (searchInput && !searchInput.hasEventListener) {
+            searchInput.addEventListener('input', () => this.filterScraperData());
+            searchInput.hasEventListener = true;
+        }
+        
+        if (searchBtn && !searchBtn.hasEventListener) {
+            searchBtn.addEventListener('click', () => this.filterScraperData());
+            searchBtn.hasEventListener = true;
+        }
+    }
+    
+    closeScraperDataModal() {
+        const modal = document.getElementById('scraperDataModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+    
+    async loadScraperData(importId) {
+        try {
+            const response = await fetch(`/api/scraper-imports/${importId}/vehicles`);
+            const data = await response.json();
+            
+            if (data.success) {
+                // Store the full data for filtering
+                this.currentScraperData = data;
+                this.currentFilteredScraperData = data.vehicles || [];
+                
+                // Clear search input
+                const searchInput = document.getElementById('scraperDataSearch');
+                if (searchInput) searchInput.value = '';
+                
+                this.renderScraperDataModal(data);
+            } else {
+                console.error('Failed to load scraper data:', data.error);
+                this.showScraperDataError('Failed to load scraper data');
+            }
+        } catch (error) {
+            console.error('Error loading scraper data:', error);
+            this.showScraperDataError('Error loading scraper data');
+        }
+    }
+    
+    renderScraperDataModal(data = null) {
+        const displayData = data || this.currentScraperData;
+        const vehicleData = this.currentFilteredScraperData || displayData?.vehicles || [];
+        
+        // Update import info
+        const importId = document.getElementById('modalImportId');
+        const importDate = document.getElementById('modalImportDate');
+        const importSource = document.getElementById('modalImportSource');
+        const totalVehicles = document.getElementById('modalTotalVehicles');
+        
+        if (importId) importId.textContent = `#${this.currentImportId}`;
+        if (importDate) importDate.textContent = displayData?.import_info?.import_date ? 
+            this.formatDate(displayData.import_info.import_date) : 'Unknown';
+        if (importSource) importSource.textContent = displayData?.import_info?.import_source || 'Unknown';
+        if (totalVehicles) totalVehicles.textContent = vehicleData.length;
+        
+        // Render vehicle table
+        const tableContainer = document.getElementById('scraperDataTableContainer');
+        if (!tableContainer) return;
+        
+        if (!vehicleData || vehicleData.length === 0) {
+            tableContainer.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-search"></i>
+                    <h3>No Vehicle Data Found</h3>
+                    <p>No vehicles found in this import.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Get column headers from first vehicle
+        const firstVehicle = vehicleData[0];
+        const headers = Object.keys(firstVehicle);
+        
+        tableContainer.innerHTML = `
+            <table class="scraper-data-table">
+                <thead>
+                    <tr>
+                        ${headers.map(header => `<th>${this.formatColumnHeader(header)}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+                    ${vehicleData.map(vehicle => `
+                        <tr>
+                            ${headers.map(header => `
+                                <td>${this.formatCellValue(vehicle[header], header)}</td>
+                            `).join('')}
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+    
+    showScraperDataError(message) {
+        const tableContainer = document.getElementById('scraperDataTableContainer');
+        if (tableContainer) {
+            tableContainer.innerHTML = `
+                <div class="error-state">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Error Loading Data</h3>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+    }
+    
+    filterScraperData() {
+        if (!this.currentScraperData || !this.currentScraperData.vehicles) return;
+        
+        const searchInput = document.getElementById('scraperDataSearch');
+        const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+        
+        let filteredData = this.currentScraperData.vehicles;
+        
+        // Apply search filter
+        if (searchTerm) {
+            filteredData = filteredData.filter(vehicle => {
+                return Object.values(vehicle).some(value => {
+                    if (value === null || value === undefined) return false;
+                    return String(value).toLowerCase().includes(searchTerm);
+                });
+            });
+        }
+        
+        this.currentFilteredScraperData = filteredData;
+        this.renderScraperDataModal();
+    }
+    
+    formatColumnHeader(header) {
+        return header.replace(/_/g, ' ')
+                    .replace(/\b\w/g, l => l.toUpperCase());
+    }
+    
+    formatCellValue(value, header) {
+        if (value === null || value === undefined) return '-';
+        
+        // Format specific columns
+        if (header === 'price' && typeof value === 'number') {
+            return `$${value.toLocaleString()}`;
+        }
+        
+        if (header === 'year' && value) {
+            return value;
+        }
+        
+        if (header === 'vin' && value) {
+            return `<span class="vin-number">${value}</span>`;
+        }
+        
+        // Truncate long text
+        const text = String(value);
+        if (text.length > 50) {
+            return `<span title="${text}">${text.substring(0, 47)}...</span>`;
+        }
+        
+        return text;
+    }
+
+    // CSV Import Functionality
+    setupCsvImport() {
+        const selectBtn = document.getElementById('selectCsvBtn');
+        const importBtn = document.getElementById('importCsvBtn');
+        const fileInput = document.getElementById('csvFileInput');
+        
+        if (selectBtn && !selectBtn.hasEventListener) {
+            selectBtn.addEventListener('click', () => {
+                fileInput.click();
+            });
+            selectBtn.hasEventListener = true;
+        }
+        
+        if (fileInput && !fileInput.hasEventListener) {
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    importBtn.disabled = false;
+                    importBtn.innerHTML = `<i class="fas fa-download"></i> Import ${file.name}`;
+                } else {
+                    importBtn.disabled = true;
+                    importBtn.innerHTML = `<i class="fas fa-download"></i> Import Data`;
+                }
+            });
+            fileInput.hasEventListener = true;
+        }
+        
+        if (importBtn && !importBtn.hasEventListener) {
+            importBtn.addEventListener('click', () => {
+                const file = fileInput.files[0];
+                if (file) {
+                    this.importCsvFile(file);
+                }
+            });
+            importBtn.hasEventListener = true;
+        }
+    }
+    
+    async importCsvFile(file) {
+        const statusDiv = document.getElementById('importStatus');
+        const statusMessage = document.getElementById('importStatusMessage');
+        const progressBar = document.getElementById('importProgressBar');
+        const progressFill = document.getElementById('importProgressFill');
+        const importBtn = document.getElementById('importCsvBtn');
+        
+        // Show status
+        statusDiv.style.display = 'block';
+        progressBar.style.display = 'block';
+        statusMessage.textContent = 'Uploading file...';
+        progressFill.style.width = '10%';
+        importBtn.disabled = true;
+        
+        try {
+            const formData = new FormData();
+            formData.append('csv_file', file);
+            
+            statusMessage.textContent = 'Processing CSV data...';
+            progressFill.style.width = '50%';
+            
+            const response = await fetch('/api/import-csv', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                statusMessage.textContent = `Successfully imported ${result.vehicle_count} vehicles!`;
+                statusMessage.style.color = '#155724';
+                progressFill.style.width = '100%';
+                
+                // Refresh the scraper history
+                setTimeout(() => {
+                    this.loadScraperHistory();
+                    statusDiv.style.display = 'none';
+                    progressBar.style.display = 'none';
+                    
+                    // Reset file input
+                    const fileInput = document.getElementById('csvFileInput');
+                    fileInput.value = '';
+                    importBtn.innerHTML = `<i class="fas fa-download"></i> Import Data`;
+                    importBtn.disabled = true;
+                }, 2000);
+                
+            } else {
+                statusMessage.textContent = `Import failed: ${result.error}`;
+                statusMessage.style.color = '#721c24';
+                progressFill.style.width = '100%';
+                progressFill.style.background = '#dc3545';
+            }
+            
+        } catch (error) {
+            statusMessage.textContent = `Import error: ${error.message}`;
+            statusMessage.style.color = '#721c24';
+            progressFill.style.width = '100%';
+            progressFill.style.background = '#dc3545';
+        }
+        
+        importBtn.disabled = false;
     }
 }
 

@@ -817,6 +817,11 @@
                 <span>Review</span>
             </div>
             <i class="fas fa-chevron-right progress-arrow"></i>
+            <div class="progress-step" id="step-order-number">
+                <i class="fas fa-hashtag"></i>
+                <span>Order #</span>
+            </div>
+            <i class="fas fa-chevron-right progress-arrow"></i>
             <div class="progress-step" id="step-complete">
                 <i class="fas fa-check"></i>
                 <span>Complete</span>
@@ -856,6 +861,20 @@
                     <!-- Will show CAO processing progress -->
                 </div>
                 
+                <!-- Testing Mode Option for CAO -->
+                <div class="testing-mode-option" style="margin: 20px 0; padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px;">
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                        <input type="checkbox" id="skipVinLoggingCAO" style="margin-right: 10px; width: 18px; height: 18px;">
+                        <span style="font-weight: 500; color: #856404;">
+                            <i class="fas fa-flask" style="margin-right: 5px;"></i>
+                            Testing Mode - Skip VIN History Logging
+                        </span>
+                    </label>
+                    <p style="margin: 8px 0 0 28px; color: #856404; font-size: 13px;">
+                        When enabled, processed VINs will NOT be added to the dealership's VIN history. Use this for testing with sample data to avoid affecting future CAO comparisons.
+                    </p>
+                </div>
+                
                 <div class="wizard-actions">
                     <button class="btn-wizard secondary" onclick="wizard.skipCAO()">
                         <i class="fas fa-forward"></i>
@@ -891,6 +910,20 @@
                             <li>VINs will be automatically validated</li>
                             <li>Invalid VINs will be highlighted for correction</li>
                         </ul>
+                    </div>
+                    
+                    <!-- Testing Mode Option -->
+                    <div class="testing-mode-option" style="margin-top: 20px; padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px;">
+                        <label style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" id="skipVinLogging" style="margin-right: 10px; width: 18px; height: 18px;">
+                            <span style="font-weight: 500; color: #856404;">
+                                <i class="fas fa-flask" style="margin-right: 5px;"></i>
+                                Testing Mode - Skip VIN History Logging
+                            </span>
+                        </label>
+                        <p style="margin: 8px 0 0 28px; color: #856404; font-size: 13px;">
+                            When enabled, processed VINs will NOT be added to the dealership's VIN history. Use this for testing with sample data to avoid affecting future CAO comparisons.
+                        </p>
                     </div>
                 </div>
                 
@@ -1043,7 +1076,67 @@
                 </div>
             </div>
             
-            <!-- Step 5: Completion -->
+            <!-- Step 5: Order Number Entry -->
+            <div class="wizard-step" id="orderNumberStep">
+                <div class="step-header">
+                    <h2 class="step-title">Order Number Assignment</h2>
+                    <p class="step-description">Enter order number for <span id="orderDealershipName">dealership</span> VINs</p>
+                </div>
+                
+                <div class="dealership-card" id="orderNumberDealershipCard">
+                    <h3 id="orderNumberDealershipDisplay">Loading...</h3>
+                    <span class="dealership-type">ORDER NUMBER REQUIRED</span>
+                    <div style="margin-top: 15px; color: #666; font-size: 14px;">
+                        <i class="fas fa-info-circle"></i>
+                        This order number will be applied to all <span id="orderVinCount">0</span> processed VINs
+                    </div>
+                </div>
+                
+                <div class="order-number-input-section" style="margin-top: 30px;">
+                    <label for="orderNumberInput" style="display: block; margin-bottom: 10px; font-weight: 600; color: #333;">
+                        <i class="fas fa-hashtag" style="margin-right: 8px;"></i>
+                        Order Number:
+                    </label>
+                    <input type="text" 
+                           id="orderNumberInput" 
+                           placeholder="Enter order number (e.g., BMW_CAO_20250818_001)" 
+                           style="width: 100%; padding: 15px; font-size: 16px; border: 2px solid #e1e5e9; border-radius: 8px; font-family: 'Courier New', monospace; letter-spacing: 1px;"
+                           maxlength="50">
+                    
+                    <div style="margin-top: 15px; padding: 15px; background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 8px;">
+                        <strong><i class="fas fa-lightbulb" style="color: #0ea5e9;"></i> Order Number Guidelines:</strong>
+                        <ul style="margin: 10px 0 0 20px; color: #666;">
+                            <li>Use a unique identifier for this order batch</li>
+                            <li>Format: DEALERSHIP_TYPE_DATE_SEQUENCE (recommended)</li>
+                            <li>Example: BMW_CAO_20250818_001</li>
+                            <li>This will be recorded with each VIN for tracking purposes</li>
+                        </ul>
+                    </div>
+                    
+                    <div id="orderNumberPreview" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; display: none;">
+                        <h4 style="margin: 0 0 10px 0; color: #333;">
+                            <i class="fas fa-eye" style="color: #28a745;"></i> 
+                            Preview: VINs to be updated
+                        </h4>
+                        <div id="vinPreviewList" style="max-height: 200px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 12px; color: #666;">
+                            <!-- VIN list will be populated here -->
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="wizard-actions">
+                    <button class="btn-wizard secondary" onclick="wizard.backToDataEditor()">
+                        <i class="fas fa-arrow-left"></i>
+                        Back to Editor
+                    </button>
+                    <button class="btn-wizard primary" id="applyOrderNumberBtn" onclick="wizard.applyOrderNumber()" disabled>
+                        <i class="fas fa-check"></i>
+                        Apply Order Number
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Step 6: Completion -->
             <div class="wizard-step" id="completeStep">
                 <div class="completion-summary">
                     <div class="completion-icon">

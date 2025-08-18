@@ -2,25 +2,36 @@
 
 ## Daily Operations
 
-### Import Complete CSV
+### Start Web Interface
 ```cmd
-cd C:\minisforum_database_transfer
-python scripts\csv_importer_complete.py "C:\data_imports\complete_data.csv"
+cd web_gui
+python app.py
+# Access: http://127.0.0.1:5000
 ```
 
-### Export All Data
-```cmd
-python scripts\data_exporter.py --all --output "C:\exports\all_vehicles_%DATE%.csv"
+### CSV Import Testing (v2.1)
+```
+1. Navigate to Order Queue Management tab
+2. Use CSV Import section
+3. ✅ Check "Keep data" for testing (skips VIN logging)
+4. ❌ Uncheck "Keep data" for production (logs VINs)
+5. Process and validate results
 ```
 
-### Export Single Dealership
+### Process CAO Order
 ```cmd
-python scripts\data_exporter.py --dealership "BMW of West St. Louis" --output "C:\exports\bmw_west.csv"
+python order_processing_cli.py --cao "BMW of West St. Louis" --template shortcut_pack
 ```
 
-### Check Database Status
+### Process LIST Order  
 ```cmd
-psql -d minisforum_dealership_db -c "SELECT COUNT(*) FROM normalized_vehicle_data;"
+python order_processing_cli.py --list "Columbia Honda" --vins "VIN1,VIN2,VIN3"
+```
+
+### Check VIN Log Status
+```sql
+-- Check recent VIN activity for dealership
+SELECT COUNT(*) FROM vin_log_bmw_of_west_st_louis WHERE order_date = CURRENT_DATE;
 ```
 
 ## Emergency Recovery

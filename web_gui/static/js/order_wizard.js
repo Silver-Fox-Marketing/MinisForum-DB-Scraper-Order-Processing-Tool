@@ -8,12 +8,14 @@
 class OrderWizard {
     constructor() {
         this.currentStep = 0;
-        this.steps = ['initialize', 'cao', 'list', 'review', 'complete'];
+        this.steps = ['initialize', 'cao', 'list', 'review', 'order-number', 'complete'];
         this.queueData = [];
         this.caoOrders = [];
         this.listOrders = [];
         this.currentListIndex = 0;
         this.processedOrders = [];
+        this.currentOrderVins = [];
+        this.currentOrderDealership = null;
         this.processingResults = {
             totalDealerships: 0,
             caoProcessed: 0,
@@ -217,8 +219,9 @@ class OrderWizard {
     }
     
     async processCaoOrder(dealershipName) {
-        // Simulate CAO order processing
-        // In real implementation, this would call the backend API
+        // Get testing mode checkbox state
+        const skipVinLogging = document.getElementById('skipVinLoggingCAO')?.checked || false;
+        
         const response = await fetch('/api/orders/process-cao', {
             method: 'POST',
             headers: {
@@ -226,7 +229,8 @@ class OrderWizard {
             },
             body: JSON.stringify({
                 dealerships: [dealershipName],
-                vehicle_types: ['new', 'cpo', 'used']
+                vehicle_types: ['new', 'cpo', 'used'],
+                skip_vin_logging: skipVinLogging
             })
         });
         
@@ -333,6 +337,9 @@ class OrderWizard {
     }
     
     async processListOrder(dealershipName, vins) {
+        // Get testing mode checkbox state
+        const skipVinLogging = document.getElementById('skipVinLogging')?.checked || false;
+        
         const response = await fetch('/api/orders/process-list', {
             method: 'POST',
             headers: {
@@ -340,7 +347,8 @@ class OrderWizard {
             },
             body: JSON.stringify({
                 dealership: dealershipName,
-                vins: vins
+                vins: vins,
+                skip_vin_logging: skipVinLogging
             })
         });
         
@@ -441,17 +449,24 @@ class OrderWizard {
     }
     
     approveOutput() {
-        // Move to next dealership or complete
-        this.currentListIndex++;
-        
-        if (this.currentListIndex < this.listOrders.length) {
-            // Show next dealership
-            this.updateProgress('list');
-            this.showStep('listStep');
-            this.showCurrentListOrder();
+        // Check if we need order number for current dealership
+        if (this.processedOrders.length > 0) {
+            // Get the last processed order
+            const lastOrder = this.processedOrders[this.processedOrders.length - 1];
+            this.showOrderNumberStep(lastOrder.dealership, lastOrder.result);
         } else {
-            // All list orders complete
-            this.completeProcessing();
+            // Move to next dealership or complete
+            this.currentListIndex++;
+            
+            if (this.currentListIndex < this.listOrders.length) {
+                // Show next dealership
+                this.updateProgress('list');
+                this.showStep('listStep');
+                this.showCurrentListOrder();
+            } else {
+                // All list orders complete
+                this.completeProcessing();
+            }
         }
     }
     
@@ -868,11 +883,17 @@ class OrderWizard {
             }
         }
         
-        // Go back to review step
-        this.backToReview();
-        
-        // Show success message
-        this.showSuccess('Data changes applied successfully');
+        // Check if we need order number for current dealership
+        if (this.processedOrders.length > 0) {
+            const lastOrder = this.processedOrders[this.processedOrders.length - 1];
+            this.showOrderNumberStep(lastOrder.dealership, lastOrder.result);
+        } else {
+            // Go back to review step
+            this.backToReview();
+            
+            // Show success message
+            this.showSuccess('Data changes applied successfully');
+        }
     }
     
     backToReview() {
@@ -1290,6 +1311,181 @@ class OrderWizard {
         }
     }
     
+    // ========== ORDER NUMBER STEP METHODS ==========
+    
+    showOrderNumberStep(dealershipName, orderResult) {
+        console.log('Showing order number step for:', dealershipName);
+        
+        // Update progress
+        this.updateProgress('order-number');
+        this.showStep('orderNumberStep');
+        
+        // Store current order info
+        this.currentOrderDealership = dealershipName;
+        this.currentOrderVins = orderResult.processed_vins || [];
+        
+        // Update UI elements
+        const dealershipDisplay = document.getElementById('orderNumberDealershipDisplay');
+        const orderDealershipName = document.getElementById('orderDealershipName');
+        const vinCountDisplay = document.getElementById('orderVinCount');
+        const orderNumberInput = document.getElementById('orderNumberInput');
+        const applyOrderNumberBtn = document.getElementById('applyOrderNumberBtn');
+        const vinPreviewList = document.getElementById('vinPreviewList');
+        
+        if (dealershipDisplay) {
+            dealershipDisplay.textContent = dealershipName;
+        }
+        
+        if (orderDealershipName) {
+            orderDealershipName.textContent = dealershipName;
+        }
+        
+        if (vinCountDisplay) {
+            vinCountDisplay.textContent = this.currentOrderVins.length;
+        }
+        
+        // Generate suggested order number
+        const currentDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const dealershipSlug = dealershipName.toUpperCase().replace(/[^A-Z0-9]/g, '_').replace(/_{2,}/g, '_').replace(/^_|_$/g, '');
+        const orderType = orderResult.order_type || 'CAO';
+        const suggestedOrderNumber = `${dealershipSlug}_${orderType}_${currentDate}_001`;
+        
+        if (orderNumberInput) {
+            orderNumberInput.value = suggestedOrderNumber;
+            orderNumberInput.addEventListener('input', () => {
+                const hasValue = orderNumberInput.value.trim().length > 0;
+                applyOrderNumberBtn.disabled = !hasValue;
+                
+                if (hasValue) {
+                    this.showVinPreview();
+                } else {
+                    document.getElementById('orderNumberPreview').style.display = 'none';
+                }
+            });
+            
+            // Trigger initial preview
+            if (suggestedOrderNumber) {
+                this.showVinPreview();
+                applyOrderNumberBtn.disabled = false;
+            }
+        }
+    }
+    
+    showVinPreview() {
+        const orderNumberInput = document.getElementById('orderNumberInput');
+        const orderNumberPreview = document.getElementById('orderNumberPreview');
+        const vinPreviewList = document.getElementById('vinPreviewList');
+        
+        if (!orderNumberInput?.value.trim()) {
+            orderNumberPreview.style.display = 'none';
+            return;
+        }
+        
+        // Show VIN preview
+        if (this.currentOrderVins.length > 0) {
+            vinPreviewList.innerHTML = this.currentOrderVins
+                .slice(0, 10) // Show first 10 VINs
+                .map(vin => `<div style="padding: 2px 0;">${vin}</div>`)
+                .join('');
+            
+            if (this.currentOrderVins.length > 10) {
+                vinPreviewList.innerHTML += `<div style="color: #999; padding: 5px 0; font-style: italic;">... and ${this.currentOrderVins.length - 10} more VINs</div>`;
+            }
+            
+            orderNumberPreview.style.display = 'block';
+        } else {
+            vinPreviewList.innerHTML = '<div style="color: #999; font-style: italic;">No VINs to update</div>';
+            orderNumberPreview.style.display = 'block';
+        }
+    }
+    
+    async applyOrderNumber() {
+        const orderNumberInput = document.getElementById('orderNumberInput');
+        const applyOrderNumberBtn = document.getElementById('applyOrderNumberBtn');
+        
+        const orderNumber = orderNumberInput?.value.trim();
+        if (!orderNumber) {
+            this.showMessage('Please enter an order number', 'error');
+            return;
+        }
+        
+        if (!this.currentOrderDealership || this.currentOrderVins.length === 0) {
+            this.showMessage('No order data found to update', 'error');
+            return;
+        }
+        
+        // Disable button during processing
+        applyOrderNumberBtn.disabled = true;
+        applyOrderNumberBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Applying...';
+        
+        try {
+            console.log('Applying order number:', orderNumber, 'to', this.currentOrderVins.length, 'VINs for', this.currentOrderDealership);
+            
+            // Call backend to apply order number to VIN log
+            const response = await fetch('/api/orders/apply-order-number', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    dealership_name: this.currentOrderDealership,
+                    order_number: orderNumber,
+                    vins: this.currentOrderVins
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Failed to apply order number: ${response.statusText}`);
+            }
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showMessage(`Order number ${orderNumber} applied to ${result.updated_vins || this.currentOrderVins.length} VINs`, 'success');
+                
+                // Continue to next dealership or completion
+                this.continueAfterOrderNumber();
+            } else {
+                throw new Error(result.error || 'Unknown error applying order number');
+            }
+            
+        } catch (error) {
+            console.error('Error applying order number:', error);
+            this.showMessage('Error applying order number: ' + error.message, 'error');
+            
+            // Re-enable button
+            applyOrderNumberBtn.disabled = false;
+            applyOrderNumberBtn.innerHTML = '<i class="fas fa-check"></i> Apply Order Number';
+        }
+    }
+    
+    continueAfterOrderNumber() {
+        // Clear current order data
+        this.currentOrderDealership = null;
+        this.currentOrderVins = [];
+        
+        // Remove the processed order from the array since it's complete
+        this.processedOrders.pop();
+        
+        // Move to next dealership or complete
+        this.currentListIndex++;
+        
+        if (this.currentListIndex < this.listOrders.length) {
+            // Show next dealership
+            this.updateProgress('list');
+            this.showStep('listStep');
+            this.showCurrentListOrder();
+        } else {
+            // All list orders complete
+            this.completeProcessing();
+        }
+    }
+    
+    backToDataEditor() {
+        this.updateProgress('review');
+        this.showStep('dataEditorStep');
+    }
+
     showError(message) {
         const errorDiv = document.createElement('div');
         errorDiv.className = 'wizard-error';

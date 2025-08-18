@@ -40,10 +40,36 @@ class CorrectOrderProcessor:
             'Dave Sinclair Lincoln South': ['Dave Sinclair Lincoln South', 'Dave Sinclair Lincoln'],
             'Dave Sinclair Lincoln': ['Dave Sinclair Lincoln South', 'Dave Sinclair Lincoln'],
             'BMW of West St. Louis': ['BMW of West St. Louis'],
-            'Columbia Honda': ['Columbia Honda']
+            'Columbia Honda': ['Columbia Honda'],
+            'Bommarito West County': ['Bommarito West County'],
+            'Bommarito Cadillac': ['Bommarito Cadillac']
         }
     
-    def process_cao_order(self, dealership_name: str, template_type: str = "shortcut_pack") -> Dict[str, Any]:
+    def _get_dealership_vin_log_table(self, dealership_name: str) -> str:
+        """
+        Generate the correct dealership-specific VIN log table name.
+        
+        Args:
+            dealership_name: The dealership name from dealership_configs
+            
+        Returns:
+            The PostgreSQL table name for this dealership's VIN log
+        """
+        # Create slug from dealership name
+        slug = dealership_name.lower()
+        slug = slug.replace(' ', '_')
+        slug = slug.replace('&', 'and')
+        slug = slug.replace('.', '')
+        slug = slug.replace(',', '')
+        slug = slug.replace('-', '_')
+        slug = slug.replace('/', '_')
+        slug = slug.replace('__', '_')
+        
+        table_name = f'vin_log_{slug}'
+        logger.debug(f"Dealership '{dealership_name}' -> table '{table_name}'")
+        return table_name
+    
+    def process_cao_order(self, dealership_name: str, template_type: str = "shortcut_pack", skip_vin_logging: bool = False) -> Dict[str, Any]:
         """
         Process CAO (Comparative Analysis Order)
         
@@ -89,8 +115,12 @@ class CorrectOrderProcessor:
             # Step 5: Generate Adobe CSV in EXACT format we need
             csv_path = self._generate_adobe_csv(new_vehicles, dealership_name, template_type, order_folder, qr_paths)
             
-            # Step 6: CRITICAL - Log processed vehicle VINs to history database
-            vin_logging_result = self._log_processed_vins_to_history(new_vehicles, dealership_name, 'CAO_ORDER')
+            # Step 6: CRITICAL - Log processed vehicle VINs to history database (unless testing)
+            if skip_vin_logging:
+                logger.info("Skipping VIN logging - test data processing")
+                vin_logging_result = {'success': True, 'vins_logged': 0, 'duplicates_skipped': 0, 'errors': []}
+            else:
+                vin_logging_result = self._log_processed_vins_to_history(new_vehicles, dealership_name, 'CAO_ORDER')
             
             return {
                 'success': True,
@@ -112,7 +142,7 @@ class CorrectOrderProcessor:
             logger.error(f"Error processing CAO order: {e}")
             return {'success': False, 'error': str(e)}
     
-    def process_list_order(self, dealership_name: str, vin_list: List[str], template_type: str = "shortcut_pack") -> Dict[str, Any]:
+    def process_list_order(self, dealership_name: str, vin_list: List[str], template_type: str = "shortcut_pack", skip_vin_logging: bool = False) -> Dict[str, Any]:
         """
         Process List Order (transcribed VINs from installers)
         """
@@ -135,8 +165,15 @@ class CorrectOrderProcessor:
             
             logger.info(f"Found {len(vehicles)} vehicles from VIN list")
             
-            if not vehicles:
-                return {'success': False, 'error': 'No vehicles found for provided VINs'}
+            # Apply dealership filtering to LIST orders as well
+            filtered_vehicles = self._apply_dealership_filters(vehicles, dealership_name)
+            logger.info(f"After filtering: {len(filtered_vehicles)} vehicles match dealership criteria")
+            
+            if not filtered_vehicles:
+                return {
+                    'success': False, 
+                    'error': f'No vehicles match dealership filtering criteria. Found {len(vehicles)} vehicles but none match the configured filters (new/used/certified).'
+                }
             
             # Create output folders
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -146,20 +183,26 @@ class CorrectOrderProcessor:
             order_folder.mkdir(parents=True, exist_ok=True)
             qr_folder.mkdir(exist_ok=True)
             
-            # Generate QR codes
-            qr_paths = self._generate_qr_codes(vehicles, dealership_name, qr_folder)
+            # Generate QR codes - use filtered vehicles
+            qr_paths = self._generate_qr_codes(filtered_vehicles, dealership_name, qr_folder)
             
-            # Generate Adobe CSV
-            csv_path = self._generate_adobe_csv(vehicles, dealership_name, template_type, order_folder, qr_paths)
+            # Generate Adobe CSV - use filtered vehicles
+            csv_path = self._generate_adobe_csv(filtered_vehicles, dealership_name, template_type, order_folder, qr_paths)
             
-            # CRITICAL: Log processed vehicle VINs to history database for future order accuracy
-            vin_logging_result = self._log_processed_vins_to_history(vehicles, dealership_name, 'LIST_ORDER')
+            # CRITICAL: Log processed vehicle VINs to history database for future order accuracy - use filtered vehicles (unless testing)
+            if skip_vin_logging:
+                logger.info("Skipping VIN logging - test data processing")
+                vin_logging_result = {'success': True, 'vins_logged': 0, 'duplicates_skipped': 0, 'errors': []}
+            else:
+                vin_logging_result = self._log_processed_vins_to_history(filtered_vehicles, dealership_name, 'LIST_ORDER')
             
             return {
                 'success': True,
                 'dealership': dealership_name,
                 'template_type': template_type,
-                'vehicles_processed': len(vehicles),
+                'vehicles_requested': len(vehicles),
+                'vehicles_processed': len(filtered_vehicles),
+                'vehicles_filtered_out': len(vehicles) - len(filtered_vehicles),
                 'qr_codes_generated': len(qr_paths),
                 'qr_folder': str(qr_folder),
                 'csv_file': str(csv_path),
@@ -199,11 +242,15 @@ class CorrectOrderProcessor:
                 vin = vin.strip().upper()
                 
                 try:
+                    # Get dealership-specific VIN log table name
+                    vin_log_table = self._get_dealership_vin_log_table(dealership_name)
+                    
                     # Check if VIN already exists for this dealership (prevent duplicates)
-                    existing = db_manager.execute_query("""
-                        SELECT id FROM vin_history 
-                        WHERE vin = %s AND dealership_name = %s AND order_date = CURRENT_DATE
-                    """, (vin, dealership_name))
+                    check_query = f"""
+                        SELECT id FROM {vin_log_table} 
+                        WHERE vin = %s AND order_date = CURRENT_DATE
+                    """
+                    existing = db_manager.execute_query(check_query, (vin,))
                     
                     if existing:
                         duplicates_skipped += 1
@@ -213,15 +260,15 @@ class CorrectOrderProcessor:
                     # Get vehicle type for enhanced tracking
                     vehicle_type = self._normalize_vehicle_type(vehicle.get('type', 'unknown'))
                     
-                    # Insert processed VIN into history database with enhanced data
-                    db_manager.execute_query("""
-                        INSERT INTO vin_history (vin, dealership_name, order_date, source, vehicle_type)
-                        VALUES (%s, %s, CURRENT_DATE, %s, %s)
-                        ON CONFLICT (dealership_name, vin, order_date) DO UPDATE SET
-                        source = EXCLUDED.source,
+                    # Insert processed VIN into dealership-specific VIN log table
+                    insert_query = f"""
+                        INSERT INTO {vin_log_table} (vin, vehicle_type, order_date)
+                        VALUES (%s, %s, CURRENT_DATE)
+                        ON CONFLICT (vin, order_date) DO UPDATE SET
                         vehicle_type = EXCLUDED.vehicle_type,
                         created_at = CURRENT_TIMESTAMP
-                    """, (vin, dealership_name, order_type, vehicle_type))
+                    """
+                    db_manager.execute_query(insert_query, (vin, vehicle_type))
                     
                     vins_logged += 1
                     logger.info(f"Successfully logged processed VIN {vin} ({vehicle_type}) from {order_type} for {dealership_name}")
@@ -326,6 +373,66 @@ class CorrectOrderProcessor:
                 # Only as a last resort, return empty list rather than arbitrary 100 vehicles
                 logger.error("Unable to retrieve vehicle data - returning empty list")
                 return []
+    
+    def _apply_dealership_filters(self, vehicles: List[Dict], dealership_name: str) -> List[Dict]:
+        """
+        Apply dealership-specific filters to a list of vehicles.
+        Used for LIST orders to ensure they follow same filtering rules as CAO orders.
+        """
+        # Get dealership config
+        config = db_manager.execute_query("""
+            SELECT filtering_rules FROM dealership_configs WHERE name = %s
+        """, (dealership_name,))
+        
+        filtering_rules = {}
+        if config:
+            filtering_rules = config[0]['filtering_rules']
+            if isinstance(filtering_rules, str):
+                filtering_rules = json.loads(filtering_rules)
+        
+        # Get allowed vehicle types
+        vehicle_types = filtering_rules.get('vehicle_types', ['new', 'used', 'certified'])
+        
+        # Filter vehicles based on type
+        filtered_vehicles = []
+        for vehicle in vehicles:
+            vehicle_type = vehicle.get('type', '').lower()
+            
+            # Check if vehicle type matches allowed types
+            type_matches = False
+            if 'all' in vehicle_types:
+                type_matches = True
+            else:
+                for allowed_type in vehicle_types:
+                    if allowed_type == 'certified':
+                        if 'certified' in vehicle_type or 'cpo' in vehicle_type:
+                            type_matches = True
+                            break
+                    elif allowed_type in vehicle_type:
+                        type_matches = True
+                        break
+            
+            if type_matches:
+                # Apply additional filters
+                # Year filter
+                min_year = filtering_rules.get('min_year')
+                if min_year and vehicle.get('year', 0) < min_year:
+                    continue
+                    
+                # Price filter
+                min_price = filtering_rules.get('min_price')
+                max_price = filtering_rules.get('max_price')
+                vehicle_price = vehicle.get('price', 0)
+                
+                if min_price and vehicle_price < min_price:
+                    continue
+                if max_price and vehicle_price > max_price:
+                    continue
+                
+                # If all filters pass, include the vehicle
+                filtered_vehicles.append(vehicle)
+        
+        return filtered_vehicles
     
     def _find_new_vehicles(self, dealership_name: str, current_vins: List[str]) -> List[str]:
         """Compare with last order to find NEW vehicles"""
@@ -627,20 +734,18 @@ class CorrectOrderProcessor:
     
     def _find_new_vehicles_enhanced(self, dealership_name: str, current_vins: List[str], current_vehicles: List[Dict]) -> List[str]:
         """
-        Enhanced VIN comparison that handles cross-dealership and relisted scenarios
+        SIMPLIFIED VIN comparison using dealership-specific VIN logs.
         
-        Logic:
-        - Different dealership: Always process 
-        - Same dealership + different vehicle type: Always process
-        - Same dealership + same type: Check time window (7 days)
-        - Same dealership + any type within 1 day: Skip (too recent)
+        NEW v2.1 Logic:
+        - Check ONLY against this dealership's historical VIN log
+        - Simple comparison: current inventory vs dealership-specific VIN history
+        - Skip if VIN exists in dealership's log within time window
+        - Process if VIN is new to this dealership or outside time window
         """
         
-        # Get all possible name variations for this dealership
-        dealership_variations = self.vin_history_name_variations.get(dealership_name, [dealership_name])
-        actual_location_name = self.dealership_name_mapping.get(dealership_name, dealership_name)
-        
-        logger.info(f"Checking VIN history for dealership variations: {dealership_variations}")
+        # Get the dealership-specific VIN log table
+        vin_log_table = self._get_dealership_vin_log_table(dealership_name)
+        logger.info(f"Using dealership-specific VIN log table: {vin_log_table}")
         
         new_vins = []
         
@@ -651,59 +756,51 @@ class CorrectOrderProcessor:
             if not vin:
                 continue
                 
-            # Check VIN history with enhanced logic
-            history = db_manager.execute_query("""
-                SELECT dealership_name, vehicle_type, order_date,
+            # Check this dealership's VIN log ONLY
+            history_query = f"""
+                SELECT vehicle_type, order_date,
                        (CURRENT_DATE - order_date) as days_ago
-                FROM vin_history 
+                FROM {vin_log_table}
                 WHERE vin = %s 
                 ORDER BY order_date DESC 
-                LIMIT 10
-            """, (vin,))
+                LIMIT 5
+            """
+            
+            history = db_manager.execute_query(history_query, (vin,))
             
             should_process = True
             
             if history:
-                for record in history:
-                    prev_dealership = record['dealership_name']
-                    prev_type = record['vehicle_type'] or 'unknown'
-                    days_ago = record['days_ago']
-                    
-                    # Check if this is the same dealership (using all variations)
-                    is_same_dealership = prev_dealership in dealership_variations
-                    
-                    if is_same_dealership:
-                        # Rule 1: Skip if same dealership, any type, processed within 1 day
-                        if days_ago <= 1:
-                            logger.info(f"Skipping {vin}: Same dealership ({prev_dealership}) processed {days_ago} days ago")
-                            should_process = False
-                            break
-                        
-                        # Rule 2: Skip if same dealership, same type, processed within 7 days  
-                        elif prev_type == current_type and days_ago <= 7:
-                            logger.info(f"Skipping {vin}: Same dealership+type ({prev_dealership}, {prev_type}) processed {days_ago} days ago")
-                            should_process = False
-                            break
-                            
-                        # Rule 4: Process if same dealership but different type (status change)
-                        elif prev_type != current_type:
-                            logger.info(f"Processing {vin}: Status change at {prev_dealership} ({prev_type} -> {current_type})")
-                            should_process = True
-                            break
+                # VIN exists in this dealership's history
+                most_recent = history[0]
+                prev_type = most_recent['vehicle_type'] or 'unknown'
+                days_ago = most_recent['days_ago']
+                
+                # Simple time-based logic
+                if days_ago <= 2:
+                    # Very recent processing - skip
+                    logger.info(f"Skipping {vin}: Processed {days_ago} days ago")
+                    should_process = False
+                elif prev_type == current_type and days_ago <= 14:
+                    # Same type within 2 weeks - skip
+                    logger.info(f"Skipping {vin}: Same type ({prev_type}) processed {days_ago} days ago")
+                    should_process = False
+                else:
+                    # Either different type or long time ago - process
+                    if prev_type != current_type:
+                        logger.info(f"Processing {vin}: Type change ({prev_type} -> {current_type})")
                     else:
-                        # Rule 3: Process if different dealership (cross-dealership opportunity)
-                        logger.info(f"Processing {vin}: Cross-dealership opportunity ({prev_dealership} -> {dealership_name})")
-                        should_process = True
-                        break
+                        logger.info(f"Processing {vin}: Long time since last processing ({days_ago} days)")
+                    should_process = True
             else:
-                # No history = definitely new
-                logger.info(f"Processing {vin}: No previous history")
+                # No history in this dealership's log = definitely new
+                logger.info(f"Processing {vin}: No previous history in {dealership_name}")
                 should_process = True
             
             if should_process:
                 new_vins.append(vin)
         
-        logger.info(f"Enhanced logic: {len(current_vins)} current, {len(new_vins)} need processing")
+        logger.info(f"Simplified v2.1 logic: {len(current_vins)} current, {len(new_vins)} need processing")
         return new_vins
     
     def _normalize_vehicle_type(self, vehicle_type: str) -> str:

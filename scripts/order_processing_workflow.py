@@ -191,9 +191,19 @@ class OrderProcessingWorkflow:
         except Exception as e:
             logger.error(f"Error updating scrape timestamps: {e}")
     
-    def filter_vehicles_by_type(self, dealership_name: str, vehicle_types: List[str]) -> List[Dict]:
-        """Filter vehicles based on dealership requirements (new/cpo/used)"""
+    def filter_vehicles_by_type(self, dealership_name: str, vehicle_types: List[str], import_id: int = None) -> List[Dict]:
+        """Filter vehicles based on dealership requirements (new/cpo/used) - ONLY from latest import"""
         try:
+            # CRITICAL: Only use latest active import if not specified
+            if not import_id:
+                from scraper_import_manager import import_manager
+                active_import = import_manager.get_active_import()
+                if not active_import:
+                    logger.error(f"No active import found! Cannot process CAO order.")
+                    return []
+                import_id = active_import['import_id']
+                logger.info(f"Using active import ID: {import_id} from {active_import['import_date']}")
+            
             # Build condition based on vehicle types
             type_conditions = []
             if 'new' in vehicle_types:
@@ -226,8 +236,13 @@ class OrderProcessingWorkflow:
             if filtering_rules.get('exclude_missing_price', False):
                 additional_filters.append("price IS NOT NULL AND price > 0")
             
-            # Build final query
-            where_conditions = [f"location = %s", f"({type_filter})"]
+            # Build final query - CRITICAL: Include import_id to only get latest data
+            where_conditions = [
+                f"location = %s", 
+                f"({type_filter})",
+                "import_id = %s",
+                "is_archived = FALSE"  # Extra safety - only non-archived data
+            ]
             if additional_filters:
                 where_conditions.extend(additional_filters)
             
@@ -239,7 +254,7 @@ class OrderProcessingWorkflow:
                 ORDER BY year DESC, make, model
             """
             
-            vehicles = db_manager.execute_query(query, (dealership_name,))
+            vehicles = db_manager.execute_query(query, (dealership_name, import_id))
             
             logger.info(f"[FILTER] {dealership_name}: {len(vehicles)} vehicles after filtering")
             return vehicles
@@ -249,15 +264,40 @@ class OrderProcessingWorkflow:
             return []
     
     def compare_vin_lists(self, dealership_name: str, current_vins: List[str]) -> Tuple[List[str], List[str]]:
-        """Compare current VINs with previous order to find new vehicles"""
+        """Compare current VINs with dealership-specific VIN log to find new vehicles"""
         try:
-            # Get previous VINs from last order
-            previous_vins = db_manager.execute_query("""
-                SELECT vin FROM vin_history
-                WHERE dealership_name = %s
-                ORDER BY order_date DESC
-                LIMIT 1000
-            """, (dealership_name,))
+            # Convert dealership name to table name format
+            # Example: "Porsche St. Louis" -> "porsche_st_louis_vin_log"
+            table_name = dealership_name.lower().replace(' ', '_').replace('.', '').replace("'", '') + '_vin_log'
+            
+            # Check if dealership-specific table exists
+            table_check = db_manager.execute_query("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = %s
+            """, (table_name,))
+            
+            if not table_check:
+                logger.warning(f"VIN log table {table_name} does not exist. Creating it...")
+                # Create the table if it doesn't exist
+                create_sql = f"""
+                CREATE TABLE IF NOT EXISTS {table_name} (
+                    vin VARCHAR(17) PRIMARY KEY,
+                    processed_date DATE NOT NULL DEFAULT CURRENT_DATE,
+                    order_type VARCHAR(20),
+                    template_type VARCHAR(50),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                """
+                db_manager.execute_query(create_sql)
+                logger.info(f"Created VIN log table: {table_name}")
+            
+            # Get previous VINs from dealership-specific table
+            query = f"""
+                SELECT vin FROM {table_name}
+            """
+            previous_vins = db_manager.execute_query(query)
             
             previous_vin_set = {row['vin'] for row in previous_vins}
             current_vin_set = set(current_vins)
@@ -265,13 +305,15 @@ class OrderProcessingWorkflow:
             # Find new VINs (in current but not in previous)
             new_vins = list(current_vin_set - previous_vin_set)
             
-            # Find removed VINs (in previous but not in current)
+            # Find removed VINs (in previous but not in current)  
             removed_vins = list(previous_vin_set - current_vin_set)
             
             logger.info(f"[VIN COMPARE] {dealership_name}: {len(new_vins)} new, {len(removed_vins)} removed")
+            logger.info(f"[VIN COMPARE] Using table: {table_name}")
+            logger.info(f"[VIN COMPARE] Previous VINs in log: {len(previous_vin_set)}, Current inventory: {len(current_vin_set)}")
             
-            # Update VIN history
-            self._update_vin_history(dealership_name, current_vins)
+            # Update dealership-specific VIN history
+            self._update_dealership_vin_history(dealership_name, table_name, new_vins)
             
             return new_vins, removed_vins
             
@@ -279,25 +321,53 @@ class OrderProcessingWorkflow:
             logger.error(f"Error comparing VINs for {dealership_name}: {e}")
             return current_vins, []  # Treat all as new if comparison fails
     
-    def _update_vin_history(self, dealership_name: str, vins: List[str]):
-        """Update VIN history for tracking"""
+    def _update_dealership_vin_history(self, dealership_name: str, table_name: str, new_vins: List[str], order_type: str = 'CAO', order_number: str = None):
+        """Update dealership-specific VIN history for tracking"""
         try:
-            # Clear old history (keep last 30 days)
-            db_manager.execute_query("""
-                DELETE FROM vin_history
-                WHERE dealership_name = %s AND order_date < CURRENT_DATE - INTERVAL '30 days'
-            """, (dealership_name,))
+            if not new_vins:
+                logger.info(f"No new VINs to add to {table_name}")
+                return
+                
+            # Generate order number if not provided
+            if not order_number:
+                # Extract dealership slug from table name
+                dealership_slug = table_name.replace('_vin_log', '')
+                
+                # Generate unique order number
+                order_number_query = f"""
+                    SELECT generate_order_number('{dealership_slug}', '{order_type}')
+                """
+                result = db_manager.execute_query(order_number_query)
+                order_number = result[0]['generate_order_number'] if result else f"{dealership_slug.upper()}_{order_type}_{datetime.now().strftime('%Y%m%d')}_001"
             
-            # Insert new VINs
-            for vin in vins:
-                db_manager.execute_query("""
-                    INSERT INTO vin_history (dealership_name, vin, order_date)
-                    VALUES (%s, %s, CURRENT_DATE)
-                    ON CONFLICT (dealership_name, vin, order_date) DO NOTHING
-                """, (dealership_name, vin))
+            logger.info(f"[VIN HISTORY] Using order number: {order_number}")
+                
+            # Insert new VINs into dealership-specific table with order tracking
+            for vin in new_vins:
+                insert_sql = f"""
+                    INSERT INTO {table_name} (vin, processed_date, order_type, order_number, order_date)
+                    VALUES (%s, CURRENT_DATE, %s, %s, CURRENT_DATE)
+                    ON CONFLICT (vin) DO NOTHING
+                """
+                db_manager.execute_query(insert_sql, (vin, order_type, order_number))
+            
+            logger.info(f"[VIN HISTORY] Added {len(new_vins)} new VINs to {table_name} with order {order_number}")
                 
         except Exception as e:
-            logger.error(f"Error updating VIN history: {e}")
+            logger.error(f"Error updating dealership VIN history: {e}")
+            
+            # Fallback to basic insert without order number
+            try:
+                for vin in new_vins:
+                    insert_sql = f"""
+                        INSERT INTO {table_name} (vin, processed_date, order_type)
+                        VALUES (%s, CURRENT_DATE, %s)
+                        ON CONFLICT (vin) DO NOTHING
+                    """
+                    db_manager.execute_query(insert_sql, (vin, order_type))
+                logger.info(f"[VIN HISTORY] Fallback: Added {len(new_vins)} VINs without order number")
+            except Exception as fallback_error:
+                logger.error(f"Fallback VIN history update also failed: {fallback_error}")
     
     def generate_qr_codes(self, vehicles: List[Dict], dealership_name: str, output_folder: Path) -> List[str]:
         """Generate QR codes for vehicle URLs"""
@@ -469,6 +539,7 @@ class OrderProcessingWorkflow:
                 'total_vehicles': len(vehicles),
                 'new_vehicles': len(new_vehicles),
                 'removed_vehicles': len(removed_vins),
+                'processed_vins': new_vins,  # Include processed VINs for order number tracking
                 'qr_codes_generated': len(qr_paths),
                 'qr_folder': str(qr_folder),
                 'csv_file': csv_path,
@@ -537,6 +608,7 @@ class OrderProcessingWorkflow:
                 'requested_vins': len(vin_list),
                 'found_vehicles': len(vehicles),
                 'missing_vins': len(vin_list) - len(vehicles),
+                'processed_vins': vin_list,  # Include processed VINs for order number tracking
                 'qr_codes_generated': len(qr_paths),
                 'qr_folder': str(qr_folder),
                 'csv_file': csv_path,
