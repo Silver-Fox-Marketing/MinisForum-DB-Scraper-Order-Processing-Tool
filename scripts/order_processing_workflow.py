@@ -228,12 +228,30 @@ class OrderProcessingWorkflow:
             if filtering_rules.get('exclude_missing_stock', True):
                 additional_filters.append("stock IS NOT NULL AND stock != ''")
             
-            # Filter out in-transit if configured
-            if filtering_rules.get('exclude_in_transit', False):
+            # Apply require_status filter (highest priority)
+            if filtering_rules.get('require_status'):
+                require_statuses = filtering_rules['require_status']
+                if isinstance(require_statuses, list):
+                    status_conditions = [f"status = '{status}'" for status in require_statuses]
+                    additional_filters.append(f"({' OR '.join(status_conditions)})")
+                else:
+                    additional_filters.append(f"status = '{require_statuses}'")
+            
+            # Apply exclude_status filter  
+            if filtering_rules.get('exclude_status'):
+                exclude_statuses = filtering_rules['exclude_status']
+                if isinstance(exclude_statuses, list):
+                    status_conditions = [f"status != '{status}'" for status in exclude_statuses]
+                    additional_filters.append(f"({' AND '.join(status_conditions)})")
+                else:
+                    additional_filters.append(f"status != '{exclude_statuses}'")
+            
+            # Filter out in-transit if configured (legacy support)
+            elif filtering_rules.get('exclude_in_transit', False):
                 additional_filters.append("status != 'In-Transit'")
             
             # Filter out missing prices if configured
-            if filtering_rules.get('exclude_missing_price', False):
+            if filtering_rules.get('exclude_missing_price', True):
                 additional_filters.append("price IS NOT NULL AND price > 0")
             
             # Build final query - CRITICAL: Include import_id to only get latest data
@@ -263,8 +281,14 @@ class OrderProcessingWorkflow:
             logger.error(f"Error filtering vehicles for {dealership_name}: {e}")
             return []
     
-    def compare_vin_lists(self, dealership_name: str, current_vins: List[str]) -> Tuple[List[str], List[str]]:
-        """Compare current VINs with dealership-specific VIN log to find new vehicles"""
+    def compare_vin_lists(self, dealership_name: str, current_vins: List[str], test_mode: bool = False) -> Tuple[List[str], List[str]]:
+        """Compare current VINs with dealership-specific VIN log to find new vehicles
+        
+        Args:
+            dealership_name: Name of the dealership
+            current_vins: List of current VINs from inventory
+            test_mode: If True, skip updating VIN history for repeated testing
+        """
         try:
             # Convert dealership name to table name format
             # Example: "Porsche St. Louis" -> "porsche_st_louis_vin_log"
@@ -312,8 +336,11 @@ class OrderProcessingWorkflow:
             logger.info(f"[VIN COMPARE] Using table: {table_name}")
             logger.info(f"[VIN COMPARE] Previous VINs in log: {len(previous_vin_set)}, Current inventory: {len(current_vin_set)}")
             
-            # Update dealership-specific VIN history
-            self._update_dealership_vin_history(dealership_name, table_name, new_vins)
+            # Update dealership-specific VIN history (skip in test mode)
+            if test_mode:
+                logger.info(f"[TEST MODE] Skipping VIN history update for {dealership_name}")
+            else:
+                self._update_dealership_vin_history(dealership_name, table_name, new_vins)
             
             return new_vins, removed_vins
             
@@ -479,9 +506,15 @@ class OrderProcessingWorkflow:
             logger.error(f"Error generating Adobe CSV: {e}")
             return ""
     
-    def process_cao_order(self, dealership_name: str, vehicle_types: List[str] = None) -> Dict[str, Any]:
-        """Process a Comparative Analysis Order (CAO)"""
-        logger.info(f"[CAO ORDER] Processing {dealership_name}")
+    def process_cao_order(self, dealership_name: str, vehicle_types: List[str] = None, test_mode: bool = False) -> Dict[str, Any]:
+        """Process a Comparative Analysis Order (CAO)
+        
+        Args:
+            dealership_name: Name of the dealership
+            vehicle_types: List of vehicle types to process (default: ['new', 'cpo', 'used'])
+            test_mode: If True, skip VIN logging to allow repeated testing
+        """
+        logger.info(f"[CAO ORDER] Processing {dealership_name} (Test Mode: {test_mode})")
         
         if vehicle_types is None:
             vehicle_types = ['new', 'cpo', 'used']  # Default to all types
@@ -500,7 +533,7 @@ class OrderProcessingWorkflow:
             
             # Step 2: Compare VINs to find new vehicles
             current_vins = [v['vin'] for v in vehicles]
-            new_vins, removed_vins = self.compare_vin_lists(dealership_name, current_vins)
+            new_vins, removed_vins = self.compare_vin_lists(dealership_name, current_vins, test_mode)
             
             # Filter to only new vehicles
             new_vehicles = [v for v in vehicles if v['vin'] in new_vins]

@@ -4,9 +4,62 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MinisForum Database Control - Silver Fox Marketing</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=2025081920&cache-bust={{ range(1000, 9999) | random }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/vin_log_update.css') }}?v=2025081903">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Inline CSS to force display fixes -->
+    <style>
+        .dealership-item {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+            border: 2px solid #e2e8f0 !important;
+            border-radius: 12px !important;
+            padding: 16px 20px !important;
+            margin-bottom: 8px !important;
+            cursor: pointer !important;
+            display: flex;
+            align-items: center !important;
+            justify-content: space-between !important;
+            min-height: 60px !important;
+            overflow: visible !important;
+        }
+        
+        .dealership-name {
+            font-weight: 600 !important;
+            flex: 1 !important;
+            color: #1e293b !important;
+            font-size: 1rem !important;
+            line-height: 1.4 !important;
+            padding-right: 12px !important;
+        }
+        
+        .dealership-type {
+            font-size: 0.75rem !important;
+            font-weight: 600 !important;
+            background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%) !important;
+            color: #475569 !important;
+            padding: 4px 12px !important;
+            border-radius: 20px !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.5px !important;
+            border: 1px solid #cbd5e1 !important;
+            min-width: 50px !important;
+            text-align: center !important;
+        }
+        
+        .dealership-type.cao {
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%) !important;
+            color: #1e40af !important;
+            border-color: #bfdbfe !important;
+        }
+        
+        .dealership-type.list {
+            background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%) !important;
+            color: #16a34a !important;
+            border-color: #bbf7d0 !important;
+        }
+    </style>
 </head>
 <body>
     <div class="app-container">
@@ -53,6 +106,10 @@
                     <button class="tab-button" data-tab="system-status">
                         <i class="fas fa-chart-line"></i>
                         System Status
+                    </button>
+                    <button class="tab-button" data-tab="dealership-settings">
+                        <i class="fas fa-cog"></i>
+                        Dealership Settings
                     </button>
                     <button class="tab-button" onclick="window.open('/stress-test', '_blank')">
                         <i class="fas fa-vial"></i>
@@ -261,7 +318,7 @@
                                     <div class="dealership-search-container">
                                         <input type="text" 
                                                class="search-input" 
-                                               id="dealershipSearchInput" 
+                                               id="vinHistoryDealershipSearchInput" 
                                                placeholder="Search dealerships by name...">
                                         <button class="search-btn" id="searchDealershipsBtn">
                                             <i class="fas fa-search"></i>
@@ -396,6 +453,32 @@
                         </div>
                     </div>
 
+                    <!-- Dealership Settings Tab -->
+                    <div class="tab-panel" id="dealership-settings-panel">
+                        <div class="panel-header">
+                            <h2>Dealership Settings</h2>
+                            <div class="control-buttons">
+                                <button class="btn btn-secondary" id="refreshDealershipSettings">
+                                    <i class="fas fa-sync"></i>
+                                    Refresh
+                                </button>
+                                <button class="btn btn-primary" id="saveDealershipSettings">
+                                    <i class="fas fa-save"></i>
+                                    Save All Changes
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="dealership-settings-container">
+                            <div class="settings-grid" id="dealershipSettingsGrid">
+                                <div class="loading">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                    Loading dealership settings...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Order Queue Management Tab -->
                     <div class="tab-panel" id="queue-management-panel">
                         <div class="panel-header">
@@ -445,6 +528,18 @@
                                 <!-- Individual Dealerships -->
                                 <div class="dealership-selection">
                                     <h3>Individual Dealerships</h3>
+                                    
+                                    <!-- Dealership Search -->
+                                    <div class="dealership-search">
+                                        <input type="text" id="dealershipSearchInput" placeholder="Search dealerships..." class="search-input">
+                                        <button class="search-btn" id="dealershipSearchBtn">
+                                            <i class="fas fa-search"></i>
+                                        </button>
+                                        <button class="clear-search-btn" id="clearDealershipSearchBtn" style="display: none;">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                    
                                     <div class="dealership-list" id="dealershipList">
                                         <!-- Will be populated dynamically -->
                                         <div class="loading">Loading dealerships...</div>
@@ -464,6 +559,20 @@
                                 </div>
                                 
                                 <div class="queue-actions">
+                                    <!-- Testing Mode Toggle -->
+                                    <div class="testing-mode-toggle" style="margin-bottom: 1rem; padding: 0.75rem; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px;">
+                                        <label style="display: flex; align-items: center; cursor: pointer; margin: 0;">
+                                            <input type="checkbox" id="queueTestingMode" style="margin-right: 10px; width: 18px; height: 18px; cursor: pointer;">
+                                            <span style="font-weight: 500; color: #856404;">
+                                                <i class="fas fa-flask" style="margin-right: 5px;"></i>
+                                                Testing Mode - Skip VIN History Logging
+                                            </span>
+                                        </label>
+                                        <p style="margin: 8px 0 0 28px; color: #856404; font-size: 12px; line-height: 1.3;">
+                                            When enabled, processed VINs will NOT be added to dealership VIN histories. Use for testing to avoid affecting future CAO comparisons.
+                                        </p>
+                                    </div>
+                                    
                                     <button class="btn btn-primary btn-large" id="processQueueBtn" disabled>
                                         <i class="fas fa-play"></i>
                                         Process Queue
@@ -699,9 +808,152 @@
                     <i class="fas fa-download"></i>
                     Export Data
                 </button>
+                <button class="btn btn-warning" id="updateVinLogBtn">
+                    <i class="fas fa-upload"></i>
+                    Update VIN Log
+                </button>
                 <button class="btn btn-primary" id="closeVinLogModalBtn">
                     Close
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIN Log Update Modal -->
+    <div class="modal" id="vinLogUpdateModal">
+        <div class="modal-content vin-log-update-modal">
+            <div class="modal-header">
+                <h3 id="vinLogUpdateTitle">Update VIN Log</h3>
+                <button class="modal-close" id="closeVinLogUpdateModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="update-info">
+                    <p><strong>Import Order History CSV</strong></p>
+                    <p>Upload a CSV file with VIN and order number data to update the <span id="updateDealershipName">dealership</span> VIN log.</p>
+                    
+                    <div class="csv-format-info">
+                        <h4><i class="fas fa-info-circle"></i> Required CSV Format - Grouped Order Format:</h4>
+                        <div class="format-example">
+                            <code>ORDER_NUMBER,VIN</code><br>
+                            <code>SF24001,1HGBH41JXMN109186</code><br>
+                            <code>,2FMDK3GC4DBA54321</code><br>
+                            <code>,1FTFW1ET5CFC12345</code><br>
+                            <code></code><br>
+                            <code>SF24002,3FAHP0JA4CR123456</code><br>
+                            <code>,5NPEB4AC7BH987654</code>
+                        </div>
+                        <ul class="format-requirements">
+                            <li><strong>ORDER_NUMBER:</strong> Unique order identifier in first column, first row of each group only</li>
+                            <li><strong>VIN:</strong> 17-character vehicle identification number in second column</li>
+                            <li><strong>Group Format:</strong> Order number followed by associated VINs, then empty row to separate groups</li>
+                            <li><strong>Multiple VINs:</strong> Leave order number column empty for additional VINs in same order</li>
+                        </ul>
+                        <div class="format-note">
+                            <i class="fas fa-lightbulb"></i>
+                            <strong>Note:</strong> The system automatically detects both grouped format (shown above) and standard columnar format for flexibility.
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- File Upload -->
+                <div class="file-upload-section">
+                    <div class="file-upload-area" id="vinLogFileUpload">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <p>Click to select CSV file or drag and drop</p>
+                        <input type="file" id="vinLogFileInput" accept=".csv" style="display: none;">
+                    </div>
+                    <div class="file-info" id="vinLogFileInfo" style="display: none;">
+                        <i class="fas fa-file-csv"></i>
+                        <span id="vinLogFileName">No file selected</span>
+                        <button class="remove-file" id="removeVinLogFile">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Import Options -->
+                <div class="import-options">
+                    <div class="option-group">
+                        <input type="checkbox" id="skipDuplicates" checked>
+                        <label for="skipDuplicates">Skip duplicate VINs (recommended)</label>
+                    </div>
+                    <div class="option-group">
+                        <input type="checkbox" id="updateExisting">
+                        <label for="updateExisting">Update existing VIN records with new order numbers</label>
+                    </div>
+                </div>
+                
+                <!-- Progress Section -->
+                <div class="import-progress" id="vinLogImportProgress" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="vinLogProgressFill"></div>
+                    </div>
+                    <div class="progress-text" id="vinLogProgressText">Preparing import...</div>
+                </div>
+                
+                <!-- Results Section -->
+                <div class="import-results" id="vinLogImportResults" style="display: none;">
+                    <h4>Import Results</h4>
+                    <div class="results-stats">
+                        <div class="result-stat">
+                            <span class="stat-label">Processed:</span>
+                            <span class="stat-value" id="processedCount">0</span>
+                        </div>
+                        <div class="result-stat">
+                            <span class="stat-label">Added:</span>
+                            <span class="stat-value success" id="addedCount">0</span>
+                        </div>
+                        <div class="result-stat">
+                            <span class="stat-label">Updated:</span>
+                            <span class="stat-value info" id="updatedCount">0</span>
+                        </div>
+                        <div class="result-stat">
+                            <span class="stat-label">Skipped:</span>
+                            <span class="stat-value warning" id="skippedCount">0</span>
+                        </div>
+                        <div class="result-stat">
+                            <span class="stat-label">Errors:</span>
+                            <span class="stat-value error" id="errorCount">0</span>
+                        </div>
+                    </div>
+                    <div class="results-log" id="resultsLog">
+                        <h5>Details:</h5>
+                        <div class="log-container" id="importLogContainer">
+                            <!-- Log entries will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelVinLogUpdate">
+                    Cancel
+                </button>
+                <button class="btn btn-primary" id="startVinLogImport" disabled>
+                    <i class="fas fa-upload"></i>
+                    Import CSV
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Dealerships Modal -->
+    <div class="modal" id="importDealershipsModal">
+        <div class="modal-content import-dealerships-modal">
+            <div class="modal-header">
+                <h3 id="importDealershipsTitle">Dealerships in Import</h3>
+                <button class="modal-close" id="closeImportDealershipsModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="dealerships-list" id="importDealershipsList">
+                    <div class="loading">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        Loading dealerships...
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -740,10 +992,19 @@
                 
                 <!-- Vehicle Search within Modal -->
                 <div class="modal-search">
-                    <input type="text" id="scraperDataSearch" placeholder="Search vehicles in this scrape..." class="search-input">
-                    <button class="search-btn" id="scraperDataSearchBtn">
-                        <i class="fas fa-search"></i>
-                    </button>
+                    <!-- Dealership filter tag -->
+                    <div class="filter-tags" id="scraperDataFilterTags" style="display: none;">
+                        <span class="dealership-filter-tag" id="dealershipFilterTag">
+                            Dealership: <span id="dealershipFilterName"></span>
+                            <button onclick="app.clearDealershipFilter()" title="Clear filter">×</button>
+                        </span>
+                    </div>
+                    <div class="scraper-data-search-bar">
+                        <input type="text" id="scraperDataSearch" placeholder="Search vehicles in this scrape..." class="search-input">
+                        <button class="search-btn" id="scraperDataSearchBtn">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
                 </div>
                 
                 <!-- Vehicle Data Table -->
@@ -767,6 +1028,7 @@
     </div>
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=2025081915"></script>
+    
 </body>
 </html>

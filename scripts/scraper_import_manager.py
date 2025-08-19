@@ -224,11 +224,28 @@ class ScraperImportManager:
             for table in tables:
                 try:
                     count_result = db_manager.execute_query(f"""
-                        SELECT COUNT(*) as vin_count FROM {table['table_name']}
+                        SELECT 
+                            COUNT(*) as vin_count,
+                            COUNT(DISTINCT order_number) as unique_orders,
+                            MIN(processed_date) as earliest_date,
+                            MAX(processed_date) as latest_date
+                        FROM {table['table_name']}
                     """)
-                    table['vin_count'] = count_result[0]['vin_count'] if count_result else 0
+                    if count_result:
+                        table['vin_count'] = count_result[0]['vin_count']
+                        table['unique_orders'] = count_result[0]['unique_orders'] 
+                        table['earliest_date'] = count_result[0]['earliest_date']
+                        table['latest_date'] = count_result[0]['latest_date']
+                    else:
+                        table['vin_count'] = 0
+                        table['unique_orders'] = 0
+                        table['earliest_date'] = None
+                        table['latest_date'] = None
                 except:
                     table['vin_count'] = 0
+                    table['unique_orders'] = 0
+                    table['earliest_date'] = None
+                    table['latest_date'] = None
             
             return tables
             

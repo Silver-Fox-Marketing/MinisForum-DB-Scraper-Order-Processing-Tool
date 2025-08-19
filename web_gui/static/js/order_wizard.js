@@ -54,6 +54,15 @@ class OrderWizard {
                 console.error('No queue data found');
                 this.showError('No queue data available. Please return to the main dashboard and setup your queue.');
             }
+            
+            // Load testing mode setting from localStorage
+            const testingMode = localStorage.getItem('orderWizardTestingMode') === 'true';
+            const testingCheckbox = document.getElementById('skipVinLogging');
+            if (testingCheckbox) {
+                testingCheckbox.checked = testingMode;
+                console.log('Applied testing mode setting:', testingMode);
+            }
+            
         } catch (error) {
             console.error('Error loading queue data:', error);
             this.showError('Error loading queue data: ' + error.message);
@@ -242,7 +251,7 @@ class OrderWizard {
         const result = results[0] || results; // Handle both array and single object responses
         
         // Map backend fields to frontend expected fields
-        return {
+        const mappedResult = {
             vehicles_processed: result.new_vehicles || 0,
             files_generated: result.qr_codes_generated || 0,
             success: result.success,
@@ -252,6 +261,8 @@ class OrderWizard {
             csv_file: result.csv_file,
             timestamp: result.timestamp
         };
+        
+        return mappedResult;
     }
     
     skipCAO() {
@@ -374,78 +385,14 @@ class OrderWizard {
     }
     
     renderOutputFiles(result) {
-        const csvFileList = document.getElementById('csvFileList');
-        const qrFileList = document.getElementById('qrFileList');
+        // Store the result for later use
+        this.currentOrderResult = result;
         
-        // Handle CSV file display - use download_csv route if available
-        if (csvFileList) {
-            if (result.download_csv) {
-                const csvFileName = result.download_csv.split('/').pop().replace('download_csv/', '');
-                csvFileList.innerHTML = `
-                    <div class="file-item">
-                        <div class="file-info">
-                            <div class="file-name">${csvFileName}</div>
-                            <div class="file-size">${result.new_vehicles || result.vehicles_processed || 0} vehicles</div>
-                        </div>
-                        <div class="file-actions">
-                            <button class="download-btn" onclick="wizard.downloadCSV('${csvFileName}')">
-                                <i class="fas fa-download"></i> Download CSV
-                            </button>
-                            <button class="preview-btn" onclick="wizard.previewCSV('${csvFileName}')">
-                                <i class="fas fa-eye"></i> Preview
-                            </button>
-                        </div>
-                    </div>
-                `;
-            } else if (result.csv_files) {
-                csvFileList.innerHTML = result.csv_files.map(file => `
-                    <div class="file-item">
-                        <div class="file-info">
-                            <div class="file-name">${file.name}</div>
-                            <div class="file-size">${file.size || 'Unknown size'}</div>
-                        </div>
-                        <button class="download-btn" onclick="wizard.downloadFile('${file.path}')">
-                            <i class="fas fa-download"></i>
-                        </button>
-                    </div>
-                `).join('');
-            }
-        }
+        // Load CSV data into spreadsheet view
+        this.loadCSVIntoSpreadsheet(result);
         
-        // Handle QR files display  
-        if (qrFileList) {
-            if (result.qr_folder) {
-                const qrCount = result.qr_codes_generated || result.new_vehicles || 0;
-                qrFileList.innerHTML = `
-                    <div class="file-item">
-                        <div class="file-info">
-                            <div class="file-name">QR Code Files</div>
-                            <div class="file-size">${qrCount} QR codes generated</div>
-                        </div>
-                        <div class="file-actions">
-                            <button class="download-btn" onclick="wizard.downloadQRFolder('${result.qr_folder}')">
-                                <i class="fas fa-download"></i> Download QR Codes
-                            </button>
-                            <button class="preview-btn" onclick="wizard.previewQRFolder('${result.qr_folder}')">
-                                <i class="fas fa-eye"></i> Preview QR Codes
-                            </button>
-                        </div>
-                    </div>
-                `;
-            } else if (result.qr_files) {
-                qrFileList.innerHTML = result.qr_files.map(file => `
-                    <div class="file-item">
-                        <div class="file-info">
-                            <div class="file-name">${file.name}</div>
-                            <div class="file-size">${file.count || 0} QR codes</div>
-                        </div>
-                        <button class="download-btn" onclick="wizard.downloadFile('${file.path}')">
-                            <i class="fas fa-download"></i>
-                        </button>
-                    </div>
-                `).join('');
-            }
-        }
+        // Load QR codes into preview grid
+        this.loadQRCodesIntoGrid(result);
     }
     
     approveOutput() {
@@ -1564,6 +1511,275 @@ class OrderWizard {
                 warningDiv.parentNode.removeChild(warningDiv);
             }
         }, 4000);
+    }
+    
+    // =============================================================================
+    // SPREADSHEET VIEW FUNCTIONALITY
+    // =============================================================================
+    
+    async loadCSVIntoSpreadsheet(result) {
+        const spreadsheetContainer = document.getElementById('csvSpreadsheet');
+        const placeholder = document.getElementById('csvPlaceholder');
+        const vehicleCount = document.getElementById('csvVehicleCount');
+        
+        if (!result.download_csv) {
+            // Show placeholder if no CSV available
+            if (spreadsheetContainer) spreadsheetContainer.style.display = 'none';
+            if (placeholder) placeholder.style.display = 'block';
+            if (vehicleCount) vehicleCount.textContent = '0';
+            return;
+        }
+        
+        try {
+            // Fetch CSV content
+            const response = await fetch(result.download_csv);
+            const csvText = await response.text();
+            
+            // Parse CSV
+            const lines = csvText.split('\n').filter(line => line.trim());
+            if (lines.length < 2) {
+                throw new Error('CSV file appears to be empty or invalid');
+            }
+            
+            // Parse header row
+            const headers = this.parseCSVLine(lines[0]);
+            
+            // Parse data rows
+            const rows = [];
+            for (let i = 1; i < lines.length; i++) {
+                const row = this.parseCSVLine(lines[i]);
+                if (row.length > 0) {
+                    rows.push(row);
+                }
+            }
+            
+            // Store the CSV data
+            this.currentCSVData = { headers, rows };
+            
+            // Render the spreadsheet
+            this.renderSpreadsheet(headers, rows);
+            
+            // Update vehicle count
+            if (vehicleCount) vehicleCount.textContent = rows.length.toString();
+            
+            // Show spreadsheet, hide placeholder
+            if (spreadsheetContainer) spreadsheetContainer.style.display = 'table';
+            if (placeholder) placeholder.style.display = 'none';
+            
+        } catch (error) {
+            console.error('Error loading CSV:', error);
+            this.showError('Failed to load CSV data: ' + error.message);
+            
+            // Show placeholder on error
+            if (spreadsheetContainer) spreadsheetContainer.style.display = 'none';
+            if (placeholder) placeholder.style.display = 'block';
+            if (vehicleCount) vehicleCount.textContent = '0';
+        }
+    }
+    
+    parseCSVLine(line) {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            
+            if (char === '"') {
+                inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+                result.push(current.trim());
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        
+        result.push(current.trim());
+        return result;
+    }
+    
+    renderSpreadsheet(headers, rows) {
+        const thead = document.getElementById('csvTableHead');
+        const tbody = document.getElementById('csvTableBody');
+        
+        if (!thead || !tbody) return;
+        
+        // Render headers
+        thead.innerHTML = `
+            <tr>
+                <th style="width: 80px;">Actions</th>
+                ${headers.map(header => `<th>${this.escapeHtml(header)}</th>`).join('')}
+            </tr>
+        `;
+        
+        // Render rows
+        tbody.innerHTML = rows.map((row, rowIndex) => {
+            return `
+                <tr data-row-index="${rowIndex}">
+                    <td>
+                        <div class="row-actions">
+                            <button class="row-edit-btn" onclick="wizard.editRow(${rowIndex})">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                        </div>
+                    </td>
+                    ${row.map((cell, cellIndex) => 
+                        `<td data-cell-index="${cellIndex}" title="${this.escapeHtml(cell)}">${this.escapeHtml(cell)}</td>`
+                    ).join('')}
+                </tr>
+            `;
+        }).join('');
+    }
+    
+    editRow(rowIndex) {
+        const row = document.querySelector(`tr[data-row-index="${rowIndex}"]`);
+        if (!row || row.classList.contains('editing')) return;
+        
+        // Mark as editing
+        row.classList.add('editing');
+        
+        // Store original values
+        const originalValues = [];
+        const cells = row.querySelectorAll('td[data-cell-index]');
+        
+        cells.forEach((cell, cellIndex) => {
+            const originalValue = this.currentCSVData.rows[rowIndex][cellIndex] || '';
+            originalValues.push(originalValue);
+            
+            cell.innerHTML = `
+                <input type="text" class="cell-edit-input" 
+                       value="${this.escapeHtml(originalValue)}" 
+                       data-original="${this.escapeHtml(originalValue)}">
+            `;
+        });
+        
+        // Update action buttons
+        const actionsCell = row.querySelector('td:first-child .row-actions');
+        actionsCell.innerHTML = `
+            <button class="row-save-btn" onclick="wizard.saveRow(${rowIndex})">
+                <i class="fas fa-save"></i> Save
+            </button>
+            <button class="row-cancel-btn" onclick="wizard.cancelEditRow(${rowIndex})">
+                <i class="fas fa-times"></i> Cancel
+            </button>
+        `;
+    }
+    
+    saveRow(rowIndex) {
+        const row = document.querySelector(`tr[data-row-index="${rowIndex}"]`);
+        if (!row) return;
+        
+        const cells = row.querySelectorAll('td[data-cell-index]');
+        const newValues = [];
+        
+        // Collect new values
+        cells.forEach(cell => {
+            const input = cell.querySelector('.cell-edit-input');
+            if (input) {
+                newValues.push(input.value);
+            }
+        });
+        
+        // Update the stored data
+        this.currentCSVData.rows[rowIndex] = newValues;
+        
+        // Exit edit mode
+        this.cancelEditRow(rowIndex);
+        
+        // Re-render the row with new values
+        cells.forEach((cell, cellIndex) => {
+            const newValue = newValues[cellIndex] || '';
+            cell.innerHTML = this.escapeHtml(newValue);
+            cell.title = this.escapeHtml(newValue);
+        });
+        
+        this.showSuccess(`Row ${rowIndex + 1} updated successfully`);
+    }
+    
+    cancelEditRow(rowIndex) {
+        const row = document.querySelector(`tr[data-row-index="${rowIndex}"]`);
+        if (!row) return;
+        
+        // Remove editing class
+        row.classList.remove('editing');
+        
+        // Restore original values
+        const cells = row.querySelectorAll('td[data-cell-index]');
+        cells.forEach((cell, cellIndex) => {
+            const input = cell.querySelector('.cell-edit-input');
+            if (input) {
+                const originalValue = input.dataset.original || '';
+                cell.innerHTML = this.escapeHtml(originalValue);
+                cell.title = this.escapeHtml(originalValue);
+            }
+        });
+        
+        // Restore edit button
+        const actionsCell = row.querySelector('td:first-child .row-actions');
+        actionsCell.innerHTML = `
+            <button class="row-edit-btn" onclick="wizard.editRow(${rowIndex})">
+                <i class="fas fa-edit"></i> Edit
+            </button>
+        `;
+    }
+    
+    loadQRCodesIntoGrid(result) {
+        const qrGrid = document.getElementById('qrCodeGrid');
+        if (!qrGrid) return;
+        
+        if (result.qr_folder && result.qr_codes_generated > 0) {
+            // Create QR code items (placeholder since we can't directly access folder contents)
+            const qrCount = result.qr_codes_generated;
+            const qrItems = [];
+            
+            for (let i = 0; i < Math.min(qrCount, 12); i++) { // Show max 12 for preview
+                qrItems.push(`
+                    <div class="qr-item">
+                        <div style="width: 80px; height: 80px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; border-radius: 4px;">
+                            <i class="fas fa-qrcode" style="font-size: 2rem; color: #ccc;"></i>
+                        </div>
+                        <div class="qr-label">QR ${i + 1}</div>
+                    </div>
+                `);
+            }
+            
+            if (qrCount > 12) {
+                qrItems.push(`
+                    <div class="qr-item">
+                        <div style="width: 80px; height: 80px; background: #f8f9fa; display: flex; align-items: center; justify-content: center; border-radius: 4px; border: 2px dashed #ccc;">
+                            <span style="font-size: 0.8rem; color: #666;">+${qrCount - 12} more</span>
+                        </div>
+                        <div class="qr-label">More codes...</div>
+                    </div>
+                `);
+            }
+            
+            qrGrid.innerHTML = qrItems.join('');
+        } else {
+            qrGrid.innerHTML = `
+                <div class="qr-item">
+                    <div style="width: 80px; height: 80px; background: #f8f9fa; display: flex; align-items: center; justify-content: center; border-radius: 4px;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 1.5rem; color: #ffc107;"></i>
+                    </div>
+                    <div class="qr-label">No QR codes</div>
+                </div>
+            `;
+        }
+    }
+    
+    downloadCSV() {
+        if (this.currentOrderResult && this.currentOrderResult.download_csv) {
+            window.open(this.currentOrderResult.download_csv, '_blank');
+        } else {
+            this.showError('No CSV file available for download');
+        }
+    }
+    
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 }
 

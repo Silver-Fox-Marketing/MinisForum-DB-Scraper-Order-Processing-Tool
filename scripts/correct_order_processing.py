@@ -32,7 +32,8 @@ class CorrectOrderProcessor:
         self.dealership_name_mapping = {
             'Dave Sinclair Lincoln South': 'Dave Sinclair Lincoln',
             'BMW of West St. Louis': 'BMW of West St. Louis', 
-            'Columbia Honda': 'Columbia Honda'
+            'Columbia Honda': 'Columbia Honda',
+            'South County Dodge Chrysler Jeep RAM': 'South County Dodge Chrysler Jeep RAM'
         }
         
         # Reverse mapping for VIN history lookups
@@ -65,7 +66,7 @@ class CorrectOrderProcessor:
         slug = slug.replace('/', '_')
         slug = slug.replace('__', '_')
         
-        table_name = f'vin_log_{slug}'
+        table_name = f'{slug}_vin_log'
         logger.debug(f"Dealership '{dealership_name}' -> table '{table_name}'")
         return table_name
     
@@ -344,11 +345,37 @@ class CorrectOrderProcessor:
             query += " AND year >= %s"
             params.append(min_year)
         
-        # Apply price filter (skip for now to avoid casting issues)
-        # min_price = filtering_rules.get('min_price', 0)
-        # if min_price > 0:
-        #     query += " AND CAST(REPLACE(REPLACE(price, '$', ''), ',', '') AS INTEGER) >= %s"
-        #     params.append(min_price)
+        # Apply require_status filter (highest priority)
+        require_statuses = filtering_rules.get('require_status')
+        if require_statuses:
+            if isinstance(require_statuses, list):
+                status_conditions = []
+                for status in require_statuses:
+                    status_conditions.append("status = %s")
+                    params.append(status)
+                query += f" AND ({' OR '.join(status_conditions)})"
+            else:
+                query += " AND status = %s"
+                params.append(require_statuses)
+        
+        # Apply exclude_status filter
+        exclude_statuses = filtering_rules.get('exclude_status')
+        if exclude_statuses:
+            if isinstance(exclude_statuses, list):
+                for status in exclude_statuses:
+                    query += " AND status != %s"
+                    params.append(status)
+            else:
+                query += " AND status != %s"
+                params.append(exclude_statuses)
+        
+        # Apply stock number filter
+        if filtering_rules.get('exclude_missing_stock', True):
+            query += " AND stock IS NOT NULL AND stock != ''"
+            
+        # Apply price filter  
+        if filtering_rules.get('exclude_missing_price', True):
+            query += " AND price IS NOT NULL AND price > 0"
         
         query += " ORDER BY import_timestamp DESC"
         
@@ -440,12 +467,22 @@ class CorrectOrderProcessor:
         # Map dealership config name to actual data location name
         actual_location_name = self.dealership_name_mapping.get(dealership_name, dealership_name)
         
-        # Get previous VINs from last order - check both names for compatibility
-        previous_vins = db_manager.execute_query("""
-            SELECT DISTINCT vin FROM vin_history
-            WHERE dealership_name IN (%s, %s)
-            AND order_date > CURRENT_DATE - INTERVAL '7 days'
-        """, (dealership_name, actual_location_name))
+        # Get previous VINs from dealership-specific VIN log table
+        # Format: dealership_name_vin_log (matching our working solution)
+        table_name = dealership_name.lower().replace(' ', '_').replace('.', '').replace("'", '') + '_vin_log'
+        
+        try:
+            previous_vins = db_manager.execute_query(f"""
+                SELECT DISTINCT vin FROM {table_name}
+            """)
+        except Exception as e:
+            logger.warning(f"Could not access {table_name}, falling back to general vin_history: {e}")
+            # Fallback to old system for compatibility
+            previous_vins = db_manager.execute_query("""
+                SELECT DISTINCT vin FROM vin_history
+                WHERE dealership_name IN (%s, %s)
+                AND order_date > CURRENT_DATE - INTERVAL '7 days'
+            """, (dealership_name, actual_location_name))
         
         previous_vin_set = {row['vin'] for row in previous_vins}
         current_vin_set = set(current_vins)
@@ -758,11 +795,11 @@ class CorrectOrderProcessor:
                 
             # Check this dealership's VIN log ONLY
             history_query = f"""
-                SELECT vehicle_type, order_date,
-                       (CURRENT_DATE - order_date) as days_ago
+                SELECT order_type, processed_date,
+                       (CURRENT_DATE - processed_date) as days_ago
                 FROM {vin_log_table}
                 WHERE vin = %s 
-                ORDER BY order_date DESC 
+                ORDER BY processed_date DESC 
                 LIMIT 5
             """
             
@@ -771,27 +808,14 @@ class CorrectOrderProcessor:
             should_process = True
             
             if history:
-                # VIN exists in this dealership's history
+                # VIN exists in this dealership's history - skip it (already processed)
                 most_recent = history[0]
-                prev_type = most_recent['vehicle_type'] or 'unknown'
+                prev_order_type = most_recent['order_type'] or 'unknown'
                 days_ago = most_recent['days_ago']
                 
-                # Simple time-based logic
-                if days_ago <= 2:
-                    # Very recent processing - skip
-                    logger.info(f"Skipping {vin}: Processed {days_ago} days ago")
-                    should_process = False
-                elif prev_type == current_type and days_ago <= 14:
-                    # Same type within 2 weeks - skip
-                    logger.info(f"Skipping {vin}: Same type ({prev_type}) processed {days_ago} days ago")
-                    should_process = False
-                else:
-                    # Either different type or long time ago - process
-                    if prev_type != current_type:
-                        logger.info(f"Processing {vin}: Type change ({prev_type} -> {current_type})")
-                    else:
-                        logger.info(f"Processing {vin}: Long time since last processing ({days_ago} days)")
-                    should_process = True
+                # If VIN is in the log, it's been processed before - skip it
+                logger.info(f"Skipping {vin}: Previously processed as {prev_order_type} {days_ago} days ago")
+                should_process = False
             else:
                 # No history in this dealership's log = definitely new
                 logger.info(f"Processing {vin}: No previous history in {dealership_name}")

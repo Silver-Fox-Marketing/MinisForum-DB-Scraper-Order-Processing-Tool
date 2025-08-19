@@ -37,8 +37,8 @@ try:
     print("OK Basic modules imported successfully")
     
     print("Attempting to import OrderProcessingWorkflow...")
-    from correct_order_processing import CorrectOrderProcessor
-    print("OK CorrectOrderProcessor imported successfully")
+    from order_processing_workflow import OrderProcessingWorkflow
+    print("OK OrderProcessingWorkflow imported successfully")
     
     print("Attempting to import RealScraperIntegration...")
     from real_scraper_integration import RealScraperIntegration
@@ -377,8 +377,8 @@ class ScraperController:
 # Global scraper controller
 scraper_controller = ScraperController(socketio)
 
-# Global order processor
-order_processor = CorrectOrderProcessor()
+# Global order processor - using the working workflow logic
+order_processor = OrderProcessingWorkflow()
 
 # Global queue manager
 queue_manager = OrderQueueManager()
@@ -663,7 +663,16 @@ def process_cao_orders():
         for dealership in dealerships:
             # Use shortcut_pack as default template - can be made configurable
             template_type = data.get('template_type', 'shortcut_pack')
-            result = order_processor.process_cao_order(dealership, template_type, skip_vin_logging=skip_vin_logging)
+            # Convert to vehicle_types list and use test_mode instead of skip_vin_logging
+            vehicle_types = vehicle_types if vehicle_types else ['new', 'used', 'cpo']
+            result = order_processor.process_cao_order(dealership, vehicle_types, test_mode=skip_vin_logging)
+            
+            # Transform result for web interface compatibility
+            if result.get('success') and result.get('csv_file'):
+                # Extract filename from full path for download URL
+                csv_path = Path(result['csv_file'])
+                result['download_csv'] = f"/download_csv/{csv_path.name}"
+                
             results.append(result)
         
         return jsonify(results)
@@ -696,7 +705,8 @@ def process_list_order():
             return jsonify({'error': 'VIN list required'}), 400
         
         template_type = data.get('template_type', 'shortcut_pack')
-        result = order_processor.process_list_order(dealership, vins, template_type, skip_vin_logging=skip_vin_logging)
+        # OrderProcessingWorkflow.process_list_order only takes dealership and vins
+        result = order_processor.process_list_order(dealership, vins)
         return jsonify(result)
     except Exception as e:
         logger.error(f"Error processing list order: {e}")
@@ -777,29 +787,362 @@ def apply_order_number():
         logger.error(f"Error applying order number: {e}")
         return jsonify({'error': str(e)}), 500
 
+def _process_grouped_vin_format(lines):
+    """Process grouped VIN format (order number + VINs in groups)"""
+    all_processed_vins = []
+    current_order_num = None
+    group_vins = []
+    
+    for line_idx, line in enumerate(lines):
+        try:
+            # Split CSV line and clean values
+            parts = [part.strip().strip('"') for part in line.split(',')]
+            if len(parts) < 2:
+                continue
+                
+            order_val = parts[0] if parts[0] else None
+            vin_val = parts[1] if len(parts) > 1 and parts[1] else ""
+            
+            # Check if this row starts a new order group
+            if order_val and order_val != '':
+                # Save previous group if exists
+                if current_order_num and group_vins:
+                    for group_vin in group_vins:
+                        all_processed_vins.append({
+                            'vin': group_vin,
+                            'order_number': current_order_num
+                        })
+                
+                # Start new group
+                current_order_num = str(order_val).strip()
+                group_vins = []
+                
+                # Add VIN from this row if present and valid
+                if vin_val and len(vin_val) >= 10:
+                    group_vins.append(vin_val.upper())
+                    
+            elif vin_val and len(vin_val) >= 10:
+                # This is a VIN row within current group
+                if current_order_num:
+                    group_vins.append(vin_val.upper())
+                    
+            elif not vin_val and current_order_num and group_vins:
+                # Empty row - end of current group
+                for group_vin in group_vins:
+                    all_processed_vins.append({
+                        'vin': group_vin,
+                        'order_number': current_order_num
+                    })
+                current_order_num = None
+                group_vins = []
+                
+        except Exception as e:
+            logger.warning(f"Error processing line {line_idx + 1}: {e}")
+            continue
+    
+    # Handle last group if file doesn't end with empty row
+    if current_order_num and group_vins:
+        for group_vin in group_vins:
+            all_processed_vins.append({
+                'vin': group_vin,
+                'order_number': current_order_num
+            })
+    
+    return all_processed_vins
+
+def _process_columnar_vin_format(file_content):
+    """Process standard columnar VIN format (VIN, ORDER_NUMBER, ORDER_DATE)"""
+    import csv
+    import io
+    
+    csv_reader = csv.DictReader(io.StringIO(file_content))
+    
+    # Check for required columns (case-insensitive)
+    header_map = {}
+    for field in csv_reader.fieldnames:
+        field_upper = field.upper().strip()
+        if field_upper in ['VIN', 'VINNUMBER', 'VIN_NUMBER']:
+            header_map['vin'] = field
+        elif field_upper in ['ORDER_NUMBER', 'ORDERNUMBER', 'ORDER_NUM', 'ORDER']:
+            header_map['order_number'] = field
+        elif field_upper in ['ORDER_DATE', 'ORDERDATE', 'DATE']:
+            header_map['order_date'] = field
+    
+    if 'vin' not in header_map or 'order_number' not in header_map:
+        raise ValueError(f'CSV must contain VIN and ORDER_NUMBER columns. Found columns: {list(csv_reader.fieldnames)}')
+    
+    all_processed_vins = []
+    for row in csv_reader:
+        vin = row.get(header_map['vin'], '').strip().upper()
+        order_number = row.get(header_map['order_number'], '').strip()
+        order_date = row.get(header_map.get('order_date', ''), '').strip()
+        
+        if vin and len(vin) >= 10 and order_number:
+            all_processed_vins.append({
+                'vin': vin,
+                'order_number': order_number,
+                'order_date': order_date if order_date else None
+            })
+    
+    return all_processed_vins
+
+@app.route('/api/vin-log/import', methods=['POST'])
+def import_vin_log_csv():
+    """Import VIN and order number data from CSV into dealership-specific VIN log"""
+    try:
+        # Check if file is in request
+        if 'csv_file' not in request.files:
+            return jsonify({'error': 'No CSV file provided'}), 400
+        
+        file = request.files['csv_file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        if not file.filename.endswith('.csv'):
+            return jsonify({'error': 'File must be CSV format'}), 400
+        
+        # Get form parameters
+        dealership_name = request.form.get('dealership_name')
+        skip_duplicates = request.form.get('skip_duplicates', 'false').lower() == 'true'
+        update_existing = request.form.get('update_existing', 'false').lower() == 'true'
+        
+        if not dealership_name:
+            return jsonify({'error': 'Dealership name is required'}), 400
+        
+        logger.info(f"Starting VIN log import for {dealership_name}")
+        logger.info(f"Options: skip_duplicates={skip_duplicates}, update_existing={update_existing}")
+        
+        # Get dealership-specific VIN log table name (match existing format)
+        def get_dealership_vin_log_table(dealership_name):
+            slug = dealership_name.lower()
+            slug = slug.replace(' ', '_')
+            slug = slug.replace('&', 'and')
+            slug = slug.replace('.', '')
+            slug = slug.replace(',', '')
+            slug = slug.replace('-', '_')
+            slug = slug.replace('/', '_')
+            slug = slug.replace("'", '')
+            slug = slug.replace('__', '_')
+            return f'{slug}_vin_log'  # Match format: dealership_name_vin_log
+        
+        table_name = get_dealership_vin_log_table(dealership_name)
+        logger.info(f"Using VIN log table: {table_name}")
+        
+        # Check if table exists, create if not
+        table_check = db_manager.execute_query("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = %s 
+            AND table_name = %s
+        """, ('public', table_name))
+        
+        if not table_check:
+            # Create the table (match schema used by other VIN logs)
+            create_sql = f"""
+            CREATE TABLE IF NOT EXISTS {table_name} (
+                id SERIAL PRIMARY KEY,
+                vin VARCHAR(17) NOT NULL,
+                order_number VARCHAR(50),
+                processed_date DATE NOT NULL DEFAULT CURRENT_DATE,
+                order_type VARCHAR(20) DEFAULT 'CAO',
+                template_type VARCHAR(50) DEFAULT 'Shortcut',
+                import_source VARCHAR(100) DEFAULT 'CSV Import',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+            db_manager.execute_query(create_sql)
+            logger.info(f"Created VIN log table: {table_name}")
+        
+        # Read and process CSV file
+        import csv
+        import io
+        
+        # Read the CSV content
+        file_content = file.read().decode('utf-8')
+        
+        # Try to detect format - grouped vs columnar
+        lines = file_content.strip().split('\n')
+        if len(lines) < 2:
+            return jsonify({'error': 'CSV file must have at least 2 lines'}), 400
+        
+        # Check if this is a grouped format (order number in first column, VIN in second column)
+        # vs columnar format (headers like VIN, ORDER_NUMBER)
+        first_line = lines[0].split(',')
+        is_grouped_format = False
+        
+        # Detect grouped format: if first column header is not clearly a VIN/ORDER header
+        if len(first_line) >= 2:
+            first_col = first_line[0].upper().strip().strip('"')
+            second_col = first_line[1].upper().strip().strip('"') if len(first_line) > 1 else ""
+            
+            # If it looks like "ORDER, VIN" headers or just order/vin values, it's grouped format
+            if (first_col not in ['VIN', 'VINNUMBER', 'VIN_NUMBER'] and 
+                second_col not in ['ORDER_NUMBER', 'ORDERNUMBER', 'ORDER_NUM', 'ORDER']):
+                is_grouped_format = True
+                logger.info("Detected grouped VIN log format (Excel-style)")
+            else:
+                logger.info("Detected columnar VIN log format (standard CSV)")
+        
+        if is_grouped_format:
+            # Process grouped format (like SOCO import)
+            try:
+                processed_data = _process_grouped_vin_format(lines)
+            except Exception as e:
+                return jsonify({'error': f'Error processing grouped format: {str(e)}'}), 400
+        else:
+            # Process standard columnar format
+            try:
+                processed_data = _process_columnar_vin_format(file_content)
+            except Exception as e:
+                return jsonify({'error': f'Error processing columnar format: {str(e)}'}), 400
+        
+        # Process parsed VIN data
+        processed = 0
+        added = 0
+        updated = 0
+        skipped = 0
+        errors = []
+        log_entries = []
+        
+        logger.info(f"Processing {len(processed_data)} VIN entries from {'grouped' if is_grouped_format else 'columnar'} format")
+        
+        for entry_num, entry in enumerate(processed_data, start=1):
+            try:
+                vin = entry['vin'].strip().upper()
+                order_number = entry['order_number'].strip()
+                order_date = entry.get('order_date', '').strip() if entry.get('order_date') else ''
+                
+                if not vin or len(vin) != 17:
+                    errors.append(f"Entry {entry_num}: Invalid VIN '{vin}' (must be 17 characters)")
+                    log_entries.append({'type': 'error', 'message': f"Entry {entry_num}: Invalid VIN '{vin}'"})
+                    continue
+                
+                if not order_number:
+                    errors.append(f"Entry {entry_num}: Missing order number")
+                    log_entries.append({'type': 'error', 'message': f"Entry {entry_num}: Missing order number"})
+                    continue
+                
+                # Parse order date if provided
+                parsed_order_date = None
+                if order_date:
+                    try:
+                        from datetime import datetime
+                        parsed_order_date = datetime.strptime(order_date, '%Y-%m-%d').date()
+                    except ValueError:
+                        try:
+                            # Try alternative date formats
+                            parsed_order_date = datetime.strptime(order_date, '%m/%d/%Y').date()
+                        except ValueError:
+                            log_entries.append({'type': 'warning', 'message': f"Row {row_num}: Invalid date format '{order_date}', using current date"})
+                
+                # Check if VIN already exists
+                existing_query = f"""
+                    SELECT id, order_number, processed_date 
+                    FROM {table_name} 
+                    WHERE vin = %s
+                """
+                existing = db_manager.execute_query(existing_query, (vin,))
+                
+                if existing:
+                    if skip_duplicates and not update_existing:
+                        skipped += 1
+                        log_entries.append({'type': 'info', 'message': f"Entry {entry_num}: Skipped duplicate VIN {vin}"})
+                        processed += 1
+                        continue
+                    elif update_existing:
+                        # Update existing record
+                        update_query = f"""
+                            UPDATE {table_name}
+                            SET order_number = %s, 
+                                processed_date = COALESCE(%s, processed_date),
+                                created_at = CURRENT_TIMESTAMP
+                            WHERE vin = %s
+                        """
+                        db_manager.execute_query(update_query, (order_number, parsed_order_date, vin))
+                        updated += 1
+                        log_entries.append({'type': 'success', 'message': f"Entry {entry_num}: Updated VIN {vin} with order {order_number}"})
+                    else:
+                        skipped += 1
+                        log_entries.append({'type': 'warning', 'message': f"Entry {entry_num}: VIN {vin} already exists, skipped"})
+                else:
+                    # Insert new record
+                    insert_query = f"""
+                        INSERT INTO {table_name} (vin, order_number, processed_date, order_type, template_type, import_source)
+                        VALUES (%s, %s, COALESCE(%s, CURRENT_DATE), 'CAO', 'Shortcut', 'CSV Import')
+                    """
+                    db_manager.execute_query(insert_query, (vin, order_number, parsed_order_date))
+                    added += 1
+                    log_entries.append({'type': 'success', 'message': f"Entry {entry_num}: Added VIN {vin} with order {order_number}"})
+                
+                processed += 1
+                
+            except Exception as entry_error:
+                error_msg = f"Entry {entry_num}: {str(entry_error)}"
+                errors.append(error_msg)
+                log_entries.append({'type': 'error', 'message': error_msg})
+                logger.error(f"Error processing entry {entry_num}: {entry_error}")
+                continue
+        
+        logger.info(f"VIN log import completed: {processed} processed, {added} added, {updated} updated, {skipped} skipped, {len(errors)} errors")
+        
+        return jsonify({
+            'success': True,
+            'processed': processed,
+            'added': added,
+            'updated': updated,
+            'skipped': skipped,
+            'errors': errors,
+            'log': log_entries,
+            'dealership': dealership_name,
+            'table_name': table_name
+        })
+        
+    except Exception as e:
+        logger.error(f"Error importing VIN log CSV: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/download_csv/<filename>')
 def download_csv(filename):
     """Download generated Adobe CSV files"""
     try:
+        logger.info(f"Download CSV request for: {filename}")
+        
         # Security check - only allow CSV files from orders directory
         if not filename.endswith('.csv'):
+            logger.error(f"Download CSV: Invalid file type: {filename}")
             return "Invalid file type", 400
         
         # Find the file in orders directory (check both locations)
         web_gui_orders_dir = Path(__file__).parent / "orders"
         scripts_orders_dir = Path(__file__).parent.parent / "scripts" / "orders"
         
-        # Search for the file in both locations
+        # Add the bulletproof orders directory
+        bulletproof_orders_dir = Path(__file__).parent.parent / "orders"
+        
+        logger.info(f"Download CSV: Searching for {filename} in directories:")
+        logger.info(f"  - {web_gui_orders_dir}")
+        logger.info(f"  - {scripts_orders_dir}")
+        logger.info(f"  - {bulletproof_orders_dir}")
+        
+        # Search for the file in all locations
         csv_file = None
-        for orders_dir in [web_gui_orders_dir, scripts_orders_dir]:
+        for orders_dir in [web_gui_orders_dir, scripts_orders_dir, bulletproof_orders_dir]:
+            logger.info(f"Download CSV: Checking {orders_dir} (exists: {orders_dir.exists()})")
+            if not orders_dir.exists():
+                continue
+                
             for root, dirs, files in os.walk(orders_dir):
+                logger.info(f"Download CSV: Checking {root} - files: {len(files)} files")
+                logger.info(f"Download CSV: Files in {root}: {files[:5]}")
                 if filename in files:
                     csv_file = Path(root) / filename
+                    logger.info(f"Download CSV: Found file at {csv_file}")
                     break
             if csv_file:
                 break
         
         if not csv_file or not csv_file.exists():
+            logger.error(f"Download CSV: File not found: {filename}")
             return "File not found", 404
         
         return send_file(str(csv_file), as_attachment=True, download_name=filename)
@@ -2224,11 +2567,19 @@ def process_csv_import():
             if order_type == 'cao':
                 # CAO processing - compare against VIN history
                 logger.info(f"Processing CAO order for {dealership_name} (skip_vin_logging: {skip_vin_logging})")
-                result = order_processor.process_cao_order(dealership_name, 'shortcut_pack', skip_vin_logging=skip_vin_logging)
+                # Use working vehicle types logic (new and used, matching our successful command line test)
+                result = order_processor.process_cao_order(dealership_name, ['new', 'used'], test_mode=skip_vin_logging)
             else:
                 # LIST processing - process specific VIN list
                 logger.info(f"Processing LIST order for {dealership_name} with {len(imported_vins)} VINs (skip_vin_logging: {skip_vin_logging})")
-                result = order_processor.process_list_order(dealership_name, imported_vins, 'shortcut_pack', skip_vin_logging=skip_vin_logging)
+                # OrderProcessingWorkflow.process_list_order doesn't have template_type or skip_vin_logging parameters
+                result = order_processor.process_list_order(dealership_name, imported_vins)
+            
+            # Transform result for web interface compatibility
+            if result.get('success') and result.get('csv_file'):
+                # Extract filename from full path for download URL
+                csv_path = Path(result['csv_file'])
+                result['download_csv'] = f"/download_csv/{csv_path.name}"
             
             # Add CSV-specific information to result
             result.update({
@@ -2296,22 +2647,34 @@ def get_csv_data(filename):
     try:
         # Security check - only allow CSV files from orders directory
         if not filename.endswith('.csv'):
+            logger.error(f"CSV get-data: Invalid file type requested: {filename}")
             return jsonify({'error': 'Invalid file type'}), 400
         
-        # Find the file in orders directory (check both locations)
+        logger.info(f"CSV get-data: Looking for file: {filename}")
+        
+        # Find the file in orders directory (check all locations)
         web_gui_orders_dir = Path(__file__).parent / "orders"
         scripts_orders_dir = Path(__file__).parent.parent / "scripts" / "orders"
+        bulletproof_orders_dir = Path(__file__).parent.parent / "orders"
         
         csv_file = None
-        for orders_dir in [web_gui_orders_dir, scripts_orders_dir]:
+        for orders_dir in [web_gui_orders_dir, scripts_orders_dir, bulletproof_orders_dir]:
+            logger.info(f"CSV get-data: Searching in {orders_dir}")
+            if not orders_dir.exists():
+                logger.warning(f"CSV get-data: Directory does not exist: {orders_dir}")
+                continue
+                
             for root, dirs, files in os.walk(orders_dir):
+                logger.debug(f"CSV get-data: Checking directory {root} with files: {files[:5]}...")  # Log first 5 files
                 if filename in files:
                     csv_file = Path(root) / filename
+                    logger.info(f"CSV get-data: Found file at: {csv_file}")
                     break
             if csv_file:
                 break
         
         if not csv_file or not csv_file.exists():
+            logger.error(f"CSV get-data: File not found: {filename}")
             return jsonify({'error': 'CSV file not found'}), 404
         
         # Read and parse CSV data
@@ -3006,6 +3369,62 @@ def get_scraper_imports():
         logger.error(f"Error getting scraper imports: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/scraper-imports/<int:import_id>/dealerships')
+def get_import_dealerships(import_id):
+    """Get list of dealerships in a specific import with vehicle counts"""
+    try:
+        # First check if the import exists and has data
+        count_query = """
+            SELECT COUNT(*) as total_vehicles
+            FROM raw_vehicle_data
+            WHERE import_id = %s
+        """
+        
+        logger.info(f"DEBUG: Checking count for import_id: {import_id}")
+        count_result = db_manager.execute_query(count_query, [import_id])
+        logger.info(f"DEBUG: Count result: {count_result}")
+        if not count_result or count_result[0]['total_vehicles'] == 0:
+            return jsonify({
+                'success': True,
+                'dealerships': [],
+                'total': 0,
+                'message': f'No vehicles found for import #{import_id}'
+            })
+        
+        # Query to get dealerships and their vehicle counts
+        query = """
+            SELECT 
+                location as name,
+                COUNT(*) as vehicle_count,
+                COUNT(CASE WHEN type ILIKE '%%new%%' THEN 1 END) as new_count,
+                COUNT(CASE WHEN type ILIKE '%%used%%' THEN 1 END) as used_count,
+                COUNT(CASE WHEN type ILIKE '%%certified%%' OR type ILIKE '%%cpo%%' THEN 1 END) as certified_count
+            FROM raw_vehicle_data
+            WHERE import_id = %s AND location IS NOT NULL
+            GROUP BY location
+            ORDER BY location
+        """
+        
+        logger.info(f"DEBUG: Executing query with import_id: {import_id}")
+        dealerships = db_manager.execute_query(query, [import_id])
+        logger.info(f"DEBUG: Query returned: {dealerships}")
+        
+        if not dealerships:
+            dealerships = []
+        
+        return jsonify({
+            'success': True,
+            'dealerships': dealerships,
+            'total': len(dealerships),
+            'import_id': import_id
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting import dealerships: {e}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/scraper-imports/<int:import_id>/vehicles')
 def get_import_vehicles(import_id):
     """Get vehicles from a specific import"""
@@ -3099,10 +3518,11 @@ def get_dealership_vin_history(dealership_name):
         date_from = request.args.get('date_from', '')
         date_to = request.args.get('date_to', '')
         page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 100, type=int)
+        per_page = request.args.get('per_page', 10000, type=int)  # Increase default to show all data
         
-        # Get VIN history
-        history = import_manager.get_dealership_vin_history(dealership_name, limit=1000)
+        # Get VIN history - increase limit to show more data
+        limit = request.args.get('limit', 5000, type=int)  # Default to 5000, allow override
+        history = import_manager.get_dealership_vin_history(dealership_name, limit=limit)
         
         # Filter by search term
         if search_term:
@@ -3115,8 +3535,10 @@ def get_dealership_vin_history(dealership_name):
             history = [h for h in history if str(h['processed_date']) <= date_to]
         
         # Calculate stats
+        unique_orders = list(set([h.get('order_number', '') for h in history if h.get('order_number', '')]))
         stats = {
             'total_vins': len(history),
+            'unique_orders': len(unique_orders),
             'first_date': min([h['processed_date'] for h in history]) if history else None,
             'last_date': max([h['processed_date'] for h in history]) if history else None,
             'cao_count': len([h for h in history if h.get('order_number', '').startswith('CAO') or h.get('order_number', '').find('_CAO_') > 0]),
@@ -3164,6 +3586,246 @@ def create_import_session():
         
     except Exception as e:
         logger.error(f"Error creating import session: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/scraper-imports/<int:import_id>/toggle-status', methods=['PUT'])
+def toggle_scraper_status(import_id):
+    """Toggle scraper import status between active and archived"""
+    try:
+        data = request.get_json()
+        new_status = data.get('new_status', 'archived')
+        
+        if new_status not in ['active', 'archived']:
+            return jsonify({'error': 'Invalid status. Must be "active" or "archived"'}), 400
+        
+        # If setting to active, first archive all other imports
+        if new_status == 'active':
+            # Archive all currently active imports
+            archive_query = """
+                UPDATE raw_vehicle_data 
+                SET is_archived = true 
+                WHERE is_archived = false
+            """
+            db_manager.execute_query(archive_query)
+            
+            # Set the selected import as active
+            activate_query = """
+                UPDATE raw_vehicle_data 
+                SET is_archived = false 
+                WHERE import_id = %s
+            """
+            db_manager.execute_query(activate_query, (import_id,))
+            
+            # Update scraper_imports table status
+            update_status_query = """
+                UPDATE scraper_imports 
+                SET status = 'archived' 
+                WHERE status = 'active';
+                
+                UPDATE scraper_imports 
+                SET status = 'active' 
+                WHERE import_id = %s;
+            """
+            db_manager.execute_query(update_status_query.split(';')[0])
+            db_manager.execute_query(update_status_query.split(';')[1], (import_id,))
+            
+        else:
+            # Archive the selected import
+            archive_query = """
+                UPDATE raw_vehicle_data 
+                SET is_archived = true 
+                WHERE import_id = %s
+            """
+            db_manager.execute_query(archive_query, (import_id,))
+            
+            # Update scraper_imports table status
+            update_status_query = """
+                UPDATE scraper_imports 
+                SET status = 'archived' 
+                WHERE import_id = %s
+            """
+            db_manager.execute_query(update_status_query, (import_id,))
+        
+        logger.info(f"Import #{import_id} status changed to {new_status}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Import #{import_id} status changed to {new_status}',
+            'import_id': import_id,
+            'new_status': new_status
+        })
+        
+    except Exception as e:
+        logger.error(f"Error toggling scraper status: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/vin-log/export', methods=['POST'])
+def export_vin_log_data():
+    """Export VIN log data for a specific dealership"""
+    try:
+        data = request.get_json()
+        dealership_name = data.get('dealership_name')
+        
+        if not dealership_name:
+            return jsonify({'error': 'Dealership name is required'}), 400
+            
+        # Generate dealership table name
+        clean_name = dealership_name.lower().replace(' ', '_').replace('.', '').replace('&', 'and').replace("'", '').replace('-', '_')
+        table_name = f"vin_log_{clean_name}"
+        
+        # Check if table exists first
+        check_table_query = """
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = %s
+            );
+        """
+        
+        table_exists = db_manager.execute_query(check_table_query, (table_name,))
+        
+        if not table_exists or not table_exists[0]['exists']:
+            return jsonify({'error': f'No VIN log data found for {dealership_name}'}), 404
+            
+        # Export all VIN log data for this dealership
+        export_query = f"""
+            SELECT 
+                vin,
+                order_number,
+                processed_date,
+                order_type,
+                template_type,
+                created_at
+            FROM {table_name}
+            ORDER BY created_at DESC
+        """
+        
+        results = db_manager.execute_query(export_query)
+        
+        if not results:
+            return jsonify({'error': f'No data found in VIN log for {dealership_name}'}), 404
+            
+        # Create CSV content
+        import io
+        import csv
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write headers
+        writer.writerow(['VIN', 'Order Number', 'Processed Date', 'Order Type', 'Template Type', 'Created At'])
+        
+        # Write data rows
+        for row in results:
+            writer.writerow([
+                row['vin'],
+                row.get('order_number', ''),
+                row['processed_date'].strftime('%Y-%m-%d') if row['processed_date'] else '',
+                row.get('order_type', ''),
+                row.get('template_type', ''),
+                row['created_at'].strftime('%Y-%m-%d %H:%M:%S') if row['created_at'] else ''
+            ])
+        
+        # Create response with CSV
+        csv_content = output.getvalue()
+        output.close()
+        
+        response = make_response(csv_content)
+        response.headers['Content-Type'] = 'text/csv'
+        response.headers['Content-Disposition'] = f'attachment; filename=vin_log_{dealership_name.replace(" ", "_")}.csv'
+        
+        logger.info(f"Exported VIN log data for {dealership_name}: {len(results)} records")
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error exporting VIN log data: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/scraper-data/export', methods=['POST'])
+def export_scraper_data():
+    """Export scraper data for a specific import"""
+    try:
+        data = request.get_json()
+        import_id = data.get('import_id')
+        
+        if not import_id:
+            return jsonify({'error': 'Import ID is required'}), 400
+            
+        # Export all raw vehicle data for this import
+        export_query = """
+            SELECT 
+                vin, stock_number, dealer_name as location, year, make, model,
+                trim, exterior_color, interior_color, mileage, price,
+                vehicle_type, body_style, drivetrain, engine, transmission,
+                fuel_type, vehicle_url, image_urls, features, 
+                import_timestamp, import_date
+            FROM raw_vehicle_data
+            WHERE import_id = %s
+            ORDER BY import_timestamp DESC
+        """
+        
+        results = db_manager.execute_query(export_query, (import_id,))
+        
+        if not results:
+            return jsonify({'error': f'No data found for import ID {import_id}'}), 404
+            
+        # Create CSV content
+        import io
+        import csv
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write headers
+        headers = [
+            'VIN', 'Stock Number', 'Location', 'Year', 'Make', 'Model',
+            'Trim', 'Exterior Color', 'Interior Color', 'Mileage', 'Price',
+            'Vehicle Type', 'Body Style', 'Drivetrain', 'Engine', 'Transmission',
+            'Fuel Type', 'Vehicle URL', 'Image URLs', 'Features',
+            'Import Timestamp', 'Import Date'
+        ]
+        writer.writerow(headers)
+        
+        # Write data rows
+        for row in results:
+            writer.writerow([
+                row.get('vin', ''),
+                row.get('stock_number', ''),
+                row.get('location', ''),
+                row.get('year', ''),
+                row.get('make', ''),
+                row.get('model', ''),
+                row.get('trim', ''),
+                row.get('exterior_color', ''),
+                row.get('interior_color', ''),
+                row.get('mileage', ''),
+                row.get('price', ''),
+                row.get('vehicle_type', ''),
+                row.get('body_style', ''),
+                row.get('drivetrain', ''),
+                row.get('engine', ''),
+                row.get('transmission', ''),
+                row.get('fuel_type', ''),
+                row.get('vehicle_url', ''),
+                row.get('image_urls', ''),
+                row.get('features', ''),
+                row['import_timestamp'].strftime('%Y-%m-%d %H:%M:%S') if row.get('import_timestamp') else '',
+                row['import_date'].strftime('%Y-%m-%d') if row.get('import_date') else ''
+            ])
+        
+        # Create response with CSV
+        csv_content = output.getvalue()
+        output.close()
+        
+        response = make_response(csv_content)
+        response.headers['Content-Type'] = 'text/csv'
+        response.headers['Content-Disposition'] = f'attachment; filename=scraper_data_{import_id}.csv'
+        
+        logger.info(f"Exported scraper data for import {import_id}: {len(results)} records")
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error exporting scraper data: {e}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

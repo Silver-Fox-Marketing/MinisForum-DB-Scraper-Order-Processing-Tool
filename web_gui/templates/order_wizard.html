@@ -782,17 +782,193 @@
             font-size: 0.8rem;
             color: var(--gray);
         }
+        
+        /* CSV Spreadsheet Preview Styles */
+        .csv-preview-section {
+            margin: var(--spacing-xl) 0;
+            background: var(--white);
+            border: 1px solid #e1e5e9;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+        
+        .csv-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--spacing-lg);
+            background: #f8f9fa;
+            border-bottom: 1px solid #e1e5e9;
+        }
+        
+        .csv-header h4 {
+            margin: 0;
+            color: var(--primary-red);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+        
+        .csv-controls {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-md);
+        }
+        
+        .csv-stats {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            color: var(--gray);
+            font-size: 0.9rem;
+        }
+        
+        .csv-spreadsheet-container {
+            position: relative;
+            max-height: 500px;
+            overflow: auto;
+        }
+        
+        .spreadsheet-wrapper {
+            min-width: 100%;
+        }
+        
+        .csv-spreadsheet {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        
+        .csv-spreadsheet th {
+            background: #f8f9fa;
+            color: var(--black);
+            font-weight: 600;
+            padding: var(--spacing-sm) var(--spacing-md);
+            text-align: left;
+            border-bottom: 2px solid #e1e5e9;
+            border-right: 1px solid #e1e5e9;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .csv-spreadsheet td {
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-bottom: 1px solid #f1f3f4;
+            border-right: 1px solid #f1f3f4;
+            vertical-align: top;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .csv-spreadsheet tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .csv-spreadsheet tr.editing {
+            background: #fff3cd;
+        }
+        
+        .row-actions {
+            display: flex;
+            gap: var(--spacing-xs);
+            align-items: center;
+        }
+        
+        .row-edit-btn {
+            background: var(--primary-red);
+            color: var(--white);
+            border: none;
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .row-edit-btn:hover {
+            background: var(--dark-red);
+        }
+        
+        .row-save-btn {
+            background: var(--success-green);
+            color: var(--white);
+            border: none;
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.75rem;
+        }
+        
+        .row-cancel-btn {
+            background: var(--gray);
+            color: var(--white);
+            border: none;
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.75rem;
+        }
+        
+        .cell-edit-input {
+            width: 100%;
+            padding: 2px 4px;
+            border: 1px solid var(--primary-red);
+            border-radius: 2px;
+            font-size: 0.85rem;
+            background: var(--white);
+        }
+        
+        .spreadsheet-placeholder {
+            text-align: center;
+            padding: var(--spacing-xl) var(--spacing-lg);
+            color: var(--gray);
+        }
+        
+        .spreadsheet-placeholder i {
+            font-size: 3rem;
+            margin-bottom: var(--spacing-md);
+            opacity: 0.5;
+        }
+        
+        .qr-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: var(--spacing-md);
+            padding: var(--spacing-lg);
+        }
+        
+        .qr-item {
+            text-align: center;
+            background: var(--white);
+            border: 1px solid #e1e5e9;
+            border-radius: var(--radius-sm);
+            padding: var(--spacing-sm);
+        }
+        
+        .qr-item img {
+            width: 80px;
+            height: 80px;
+            margin-bottom: var(--spacing-xs);
+        }
+        
+        .qr-label {
+            font-size: 0.75rem;
+            color: var(--gray);
+            word-break: break-all;
+        }
     </style>
 </head>
 <body>
     <div class="wizard-container">
         <!-- Wizard Header -->
         <div class="wizard-header">
-            <h1><i class="fas fa-magic"></i> Order Processing Wizard v2.0</h1>
+            <h1><i class="fas fa-magic"></i> Order Processing Wizard</h1>
             <p>Guided workflow for processing dealership orders</p>
-            <p style="color: #28a745; font-weight: bold; font-size: 1.2rem; margin-top: 10px;">
-                ✅ NEW VERSION WITH MANUAL DATA EDITOR & QR URL EDITOR
-            </p>
         </div>
         
         <!-- Progress Indicator -->
@@ -946,32 +1122,58 @@
                     <p class="step-description">Inspect generated files for <span id="reviewDealershipName">dealership</span></p>
                 </div>
                 
-                <div class="output-preview">
-                    <div class="preview-section">
-                        <h4><i class="fas fa-file-csv"></i> CSV Files</h4>
-                        <div class="file-list" id="csvFileList">
-                            <!-- Will be populated with CSV files -->
+                <!-- CSV Data Preview with Inline Editing -->
+                <div class="csv-preview-section">
+                    <div class="csv-header">
+                        <h4><i class="fas fa-table"></i> CSV Data Preview</h4>
+                        <div class="csv-controls">
+                            <span class="csv-stats">
+                                <i class="fas fa-car"></i>
+                                <span id="csvVehicleCount">0</span> vehicles
+                            </span>
+                            <button class="btn-wizard secondary" onclick="wizard.downloadCSV()">
+                                <i class="fas fa-download"></i>
+                                Download CSV
+                            </button>
                         </div>
                     </div>
                     
+                    <!-- Spreadsheet View -->
+                    <div class="csv-spreadsheet-container">
+                        <div class="spreadsheet-wrapper">
+                            <table class="csv-spreadsheet" id="csvSpreadsheet">
+                                <thead id="csvTableHead">
+                                    <!-- Column headers will be populated here -->
+                                </thead>
+                                <tbody id="csvTableBody">
+                                    <!-- Data rows will be populated here -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="spreadsheet-placeholder" id="csvPlaceholder">
+                            <i class="fas fa-table"></i>
+                            <p>No CSV data available</p>
+                            <p class="help-text">Process a dealership order to see CSV data here</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- QR Codes Preview -->
+                <div class="output-preview">
                     <div class="preview-section">
-                        <h4><i class="fas fa-qrcode"></i> QR Codes</h4>
-                        <div class="file-list" id="qrFileList">
-                            <!-- Will be populated with QR code files -->
+                        <h4><i class="fas fa-qrcode"></i> QR Codes Generated</h4>
+                        <div class="qr-grid" id="qrCodeGrid">
+                            <!-- QR codes will be displayed here -->
                         </div>
                     </div>
                 </div>
                 
                 <div class="adobe-readiness">
-                    <div class="readiness-question">Is this output ready for Adobe?</div>
+                    <div class="readiness-question">Ready to proceed to order number assignment?</div>
                     <div class="readiness-actions">
-                        <button class="btn-wizard warning" onclick="wizard.showDataEditor()">
-                            <i class="fas fa-edit"></i>
-                            Needs Editing
-                        </button>
                         <button class="btn-wizard success" onclick="wizard.approveOutput()">
                             <i class="fas fa-check"></i>
-                            Looks Good
+                            Looks Good - Continue
                         </button>
                     </div>
                 </div>

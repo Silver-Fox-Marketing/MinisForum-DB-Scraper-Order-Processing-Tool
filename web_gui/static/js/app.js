@@ -128,6 +128,15 @@ class MinisFornumApp {
             await this.loadDealerships();
             console.log(`✅ Loaded ${this.dealerships.length} dealerships`);
             console.log('Dealership names:', this.dealerships.map(d => d.name));
+            
+            // Load dealership defaults after dealerships are loaded
+            await this.loadDealershipDefaults();
+            
+            // Re-render dealership list with correct types
+            this.renderDealershipList(this.dealerships);
+            
+            // Set up search functionality after dealerships are loaded
+            this.setupDealershipSearchListeners();
         } catch (error) {
             console.error('❌ Failed to load dealerships:', error);
             this.addTerminalMessage(`Failed to load dealerships: ${error.message}`, 'error');
@@ -883,6 +892,9 @@ class MinisFornumApp {
                 break;
             case 'queue-management':
                 this.loadQueueManagement();
+                break;
+            case 'dealership-settings':
+                this.loadDealershipSettings();
                 break;
         }
     }
@@ -1769,10 +1781,168 @@ class MinisFornumApp {
         await this.loadDealershipList();
         await this.loadDealershipDefaults();
         
+        // Re-render dealership list with correct types
+        this.renderDealershipList(this.dealerships);
+        
+        // Set up search functionality when queue management tab is loaded
+        this.setupDealershipSearchListeners();
+        
         // Initialize empty queue
         this.renderQueue();
         
         this.addTerminalMessage('Queue management interface loaded', 'success');
+    }
+    
+    async loadDealershipSettings() {
+        console.log('Loading dealership settings...');
+        
+        try {
+            const response = await fetch('/api/dealerships');
+            const dealerships = await response.json();
+            
+            this.renderDealershipSettings(dealerships);
+        } catch (error) {
+            console.error('Error loading dealership settings:', error);
+            this.showDealershipSettingsError('Error loading dealership settings');
+        }
+    }
+    
+    renderDealershipSettings(dealerships) {
+        const container = document.getElementById('dealershipSettingsGrid');
+        
+        if (!dealerships || dealerships.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-cog"></i>
+                    <h3>No Dealership Configurations Found</h3>
+                    <p>No dealership settings are available.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = dealerships.map(dealer => {
+            const vehicleTypes = dealer.filtering_rules?.vehicle_types || [];
+            const vehicleTypesDisplay = vehicleTypes.length > 0 
+                ? vehicleTypes.map(type => {
+                    const typeDisplay = type.charAt(0).toUpperCase() + type.slice(1);
+                    return `<span class="vehicle-type-tag ${type}">${typeDisplay}</span>`;
+                }).join('')
+                : '<span class="no-types">No vehicle types configured</span>';
+            
+            return `
+            <div class="dealership-settings-card" data-dealer-name="${dealer.name}">
+                <div class="settings-card-header">
+                    <h3>${dealer.name}</h3>
+                    <div class="active-status">
+                        <input type="checkbox" 
+                               id="active-${dealer.name.replace(/\s+/g, '-')}" 
+                               ${dealer.is_active ? 'checked' : ''} 
+                               onchange="app.toggleDealershipActive('${dealer.name}', this.checked)">
+                        <label for="active-${dealer.name.replace(/\s+/g, '-')}">Active</label>
+                    </div>
+                </div>
+                <div class="settings-card-body">
+                    <div class="setting-group">
+                        <label>Vehicle Types to Process:</label>
+                        <div class="vehicle-types-display">
+                            ${vehicleTypesDisplay}
+                        </div>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <label>Configuration:</label>
+                        <div class="config-details">
+                            <span class="config-item">
+                                <i class="fas fa-car"></i>
+                                ${vehicleTypes.length} vehicle type(s) configured
+                            </span>
+                            <span class="config-item">
+                                <i class="fas fa-calendar"></i>
+                                Updated: ${dealer.updated_at ? new Date(dealer.updated_at).toLocaleDateString() : 'Never'}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="app.editDealershipSettings('${dealer.name}')">
+                            <i class="fas fa-edit"></i>
+                            Edit Settings
+                        </button>
+                    </div>
+                </div>
+            </div>
+            `;
+        }).join('');
+        
+        // Setup save button
+        const saveBtn = document.getElementById('saveDealershipSettings');
+        if (saveBtn && !saveBtn.hasEventListener) {
+            saveBtn.addEventListener('click', () => this.saveDealershipSettings());
+            saveBtn.hasEventListener = true;
+        }
+        
+        // Setup refresh button
+        const refreshBtn = document.getElementById('refreshDealershipSettings');
+        if (refreshBtn && !refreshBtn.hasEventListener) {
+            refreshBtn.addEventListener('click', () => this.loadDealershipSettings());
+            refreshBtn.hasEventListener = true;
+        }
+    }
+    
+    showDealershipSettingsError(message) {
+        const container = document.getElementById('dealershipSettingsGrid');
+        container.innerHTML = `
+            <div class="error-state">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>Error Loading Settings</h3>
+                <p>${message}</p>
+                <button class="btn btn-secondary" onclick="app.loadDealershipSettings()">
+                    <i class="fas fa-sync"></i>
+                    Try Again
+                </button>
+            </div>
+        `;
+    }
+    
+    async toggleDealershipActive(dealershipName, isActive) {
+        try {
+            const response = await fetch(`/api/dealerships/${encodeURIComponent(dealershipName)}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    is_active: isActive
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.addTerminalMessage(`${dealershipName} ${isActive ? 'activated' : 'deactivated'}`, 'success');
+            } else {
+                this.addTerminalMessage(`Failed to update ${dealershipName}: ${result.error}`, 'error');
+                // Reload settings to reset checkbox state
+                this.loadDealershipSettings();
+            }
+        } catch (error) {
+            console.error('Error toggling dealership active state:', error);
+            this.addTerminalMessage(`Error updating ${dealershipName}`, 'error');
+            // Reload settings to reset checkbox state
+            this.loadDealershipSettings();
+        }
+    }
+    
+    async editDealershipSettings(dealershipName) {
+        console.log(`Editing settings for: ${dealershipName}`);
+        this.addTerminalMessage('Dealership settings editor - Coming soon!', 'info');
+    }
+    
+    async saveDealershipSettings() {
+        console.log('Saving dealership settings...');
+        // Implementation for saving settings
+        this.addTerminalMessage('Dealership settings saved', 'success');
     }
     
     setupNewQueueEventListeners() {
@@ -1829,20 +1999,42 @@ class MinisFornumApp {
     }
     
     renderDealershipList(dealerships) {
+        console.log('🏢 Rendering dealership list...', {
+            dealerships: dealerships ? dealerships.length : 0,
+            hasDefaults: this.dealershipDefaults ? this.dealershipDefaults.size : 0
+        });
+        
         const dealershipList = document.getElementById('dealershipList');
-        if (!dealershipList) return;
+        if (!dealershipList) {
+            console.error('❌ dealershipList element not found');
+            return;
+        }
         
         if (!dealerships || dealerships.length === 0) {
+            console.log('⚠️ No dealerships to render');
             dealershipList.innerHTML = '<div class="loading">No dealerships available</div>';
             return;
         }
         
-        dealershipList.innerHTML = dealerships.map(dealership => `
-            <div class="dealership-item" data-dealership="${dealership.name}">
-                <div class="dealership-name">${dealership.name}</div>
-                <div class="dealership-type">${this.getDealershipDefault(dealership.name)}</div>
-            </div>
-        `).join('');
+        try {
+            const html = dealerships.map(dealership => {
+                const dealershipType = this.getDealershipDefault(dealership.name);
+                const typeClass = dealershipType.toLowerCase(); // 'cao' or 'list'
+                console.log(`🏢 Dealership: ${dealership.name} -> Type: ${dealershipType} -> Class: ${typeClass}`);
+                return `
+                    <div class="dealership-item" data-dealership="${dealership.name}">
+                        <div class="dealership-name">${dealership.name}</div>
+                        <div class="dealership-type ${typeClass}">${dealershipType}</div>
+                    </div>
+                `;
+            }).join('');
+            
+            dealershipList.innerHTML = html;
+            console.log('✅ Dealership list rendered successfully');
+        } catch (error) {
+            console.error('❌ Error rendering dealership list:', error);
+            dealershipList.innerHTML = '<div class="loading error">Error loading dealerships</div>';
+        }
         
         // Set up event delegation for dealership items
         this.setupDealershipEventListeners();
@@ -1868,6 +2060,181 @@ class MinisFornumApp {
         
         // Add event listener using delegation
         dealershipList.addEventListener('click', this.dealershipClickHandler);
+    }
+    
+    setupDealershipSearchListeners() {
+        console.log('🔍 Setting up dealership search listeners...');
+        
+        // Wait a bit for DOM to be ready
+        setTimeout(() => {
+            const searchInput = document.getElementById('dealershipSearchInput');
+            const searchBtn = document.getElementById('dealershipSearchBtn');
+            const clearBtn = document.getElementById('clearDealershipSearchBtn');
+            
+            console.log('Search elements found:', {
+                searchInput: !!searchInput,
+                searchBtn: !!searchBtn,
+                clearBtn: !!clearBtn
+            });
+            
+            if (searchInput) {
+                console.log('✅ Search input found, adding listeners');
+                
+                // Add fresh listeners (don't try to remove since we don't have references)
+                searchInput.addEventListener('input', () => {
+                    console.log('🔍 Search input changed:', searchInput.value);
+                    this.filterDealershipList();
+                });
+                searchInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        console.log('🔍 Enter key pressed in search');
+                        this.filterDealershipList();
+                    }
+                });
+                console.log('✅ Search input listeners added');
+                
+                // Clear any existing value and ensure all items are visible
+                console.log('🧪 Clearing search input...');
+                searchInput.value = '';
+                this.filterDealershipList(); // Show all dealerships
+            } else {
+                console.error('❌ Search input not found!');
+            }
+            
+            if (searchBtn) {
+                searchBtn.addEventListener('click', () => {
+                    console.log('🔍 Search button clicked');
+                    this.filterDealershipList();
+                });
+                console.log('✅ Search button listener added');
+            }
+            
+            if (clearBtn) {
+                clearBtn.addEventListener('click', () => {
+                    console.log('🔍 Clear button clicked');
+                    this.clearDealershipSearch();
+                });
+                console.log('✅ Clear button listener added');
+            }
+        }, 100);
+    }
+    
+    filterDealershipList() {
+        console.log('🔍 Filtering dealership list...');
+        const searchInput = document.getElementById('dealershipSearchInput');
+        const clearBtn = document.getElementById('clearDealershipSearchBtn');
+        const dealershipList = document.getElementById('dealershipList');
+        
+        if (!searchInput || !dealershipList) {
+            console.log('❌ Missing search elements:', {
+                searchInput: !!searchInput,
+                dealershipList: !!dealershipList
+            });
+            return;
+        }
+        
+        const searchTerm = searchInput.value.toLowerCase().trim();
+        const dealershipItems = dealershipList.querySelectorAll('.dealership-item');
+        
+        console.log('🔍 Search details:', {
+            searchTerm,
+            itemCount: dealershipItems.length
+        });
+        
+        // Show/hide clear button
+        if (clearBtn) {
+            clearBtn.style.display = searchTerm ? 'inline-block' : 'none';
+        }
+        
+        let visibleCount = 0;
+        dealershipItems.forEach((item, index) => {
+            const dealershipName = item.querySelector('.dealership-name');
+            if (dealershipName) {
+                const name = dealershipName.textContent.toLowerCase();
+                const matches = !searchTerm || name.includes(searchTerm);
+                item.style.display = matches ? 'flex' : 'none';
+                if (matches) visibleCount++;
+                
+                if (index < 3) { // Log first 3 items for debugging
+                    console.log(`Item ${index}: "${name}" matches "${searchTerm}": ${matches}`);
+                }
+            }
+        });
+        
+        console.log(`🔍 Filter results: ${visibleCount}/${dealershipItems.length} visible`);
+        
+        // Show "no results" message if needed
+        this.updateDealershipSearchResults(visibleCount, searchTerm);
+    }
+    
+    clearDealershipSearch() {
+        const searchInput = document.getElementById('dealershipSearchInput');
+        const clearBtn = document.getElementById('clearDealershipSearchBtn');
+        
+        if (searchInput) {
+            searchInput.value = '';
+        }
+        if (clearBtn) {
+            clearBtn.style.display = 'none';
+        }
+        
+        this.filterDealershipList();
+    }
+    
+    updateDealershipSearchResults(visibleCount, searchTerm) {
+        const dealershipList = document.getElementById('dealershipList');
+        if (!dealershipList) return;
+        
+        // Remove any existing "no results" message
+        const existingNoResults = dealershipList.querySelector('.no-search-results');
+        if (existingNoResults) {
+            existingNoResults.remove();
+        }
+        
+        // Add "no results" message if search term exists but no matches
+        if (searchTerm && visibleCount === 0) {
+            const noResultsDiv = document.createElement('div');
+            noResultsDiv.className = 'no-search-results';
+            noResultsDiv.innerHTML = `
+                <div style="text-align: center; padding: 20px; color: #666;">
+                    <i class="fas fa-search"></i>
+                    <p>No dealerships found matching "${searchTerm}"</p>
+                    <button class="btn btn-secondary btn-small" onclick="window.appController.clearDealershipSearch()">
+                        Clear Search
+                    </button>
+                </div>
+            `;
+            dealershipList.appendChild(noResultsDiv);
+        }
+    }
+    
+    // Test function that can be called from browser console
+    testDealershipSearch() {
+        console.log('🧪 Testing dealership search functionality...');
+        
+        const searchInput = document.getElementById('dealershipSearchInput');
+        const dealershipList = document.getElementById('dealershipList');
+        const items = dealershipList ? dealershipList.querySelectorAll('.dealership-item') : [];
+        
+        console.log('Test results:', {
+            searchInput: !!searchInput,
+            dealershipList: !!dealershipList,
+            itemCount: items.length
+        });
+        
+        if (searchInput && items.length > 0) {
+            console.log('Manual search test with "bmw":');
+            searchInput.value = 'bmw';
+            this.filterDealershipList();
+        } else {
+            console.error('Missing elements for search test');
+        }
+        
+        return {
+            searchInput: !!searchInput,
+            dealershipList: !!dealershipList,
+            itemCount: items.length
+        };
     }
     
     async loadDealershipDefaults() {
@@ -1896,7 +2263,12 @@ class MinisFornumApp {
     }
     
     getDealershipDefault(dealershipName) {
-        return this.dealershipDefaults.get(dealershipName) || 'CAO';
+        if (!this.dealershipDefaults) {
+            console.warn('⚠️ dealershipDefaults not initialized, using CAO default');
+            return 'CAO';
+        }
+        const defaultType = this.dealershipDefaults.get(dealershipName) || 'CAO';
+        return defaultType;
     }
     
     addDayToQueue(day) {
@@ -2068,6 +2440,10 @@ class MinisFornumApp {
             const queueData = Array.from(this.processingQueue.values());
             localStorage.setItem('orderWizardQueue', JSON.stringify(queueData));
             
+            // Store testing mode setting
+            const testingMode = document.getElementById('queueTestingMode')?.checked || false;
+            localStorage.setItem('orderWizardTestingMode', testingMode.toString());
+            
             this.addTerminalMessage('Opening Order Processing Wizard...', 'info');
             
             // Open wizard in new tab with cache-busting parameter
@@ -2097,7 +2473,12 @@ class MinisFornumApp {
     async processQueueDirectly() {
         try {
             const queueArray = Array.from(this.processingQueue.values());
+            const testingMode = document.getElementById('queueTestingMode')?.checked || false;
+            
             this.addTerminalMessage(`Processing ${queueArray.length} dealerships directly...`, 'info');
+            if (testingMode) {
+                this.addTerminalMessage('Testing Mode: VIN logging disabled', 'warning');
+            }
             
             // Process each dealership
             for (const dealership of queueArray) {
@@ -2110,7 +2491,8 @@ class MinisFornumApp {
                     },
                     body: JSON.stringify({
                         dealerships: [dealership.name],
-                        template_type: 'shortcut_pack'
+                        template_type: 'shortcut_pack',
+                        skip_vin_logging: testingMode
                     })
                 });
                 
@@ -2594,6 +2976,13 @@ class MinisFornumApp {
         
         // Initialize VIN history viewer
         this.initVinHistory();
+        
+        // Load scraper history for the default scraper-view tab
+        const activeSubTab = document.querySelector('.sub-tab-button.active');
+        if (activeSubTab && activeSubTab.dataset.subtab === 'scraper-view') {
+            this.loadScraperHistory();
+            this.setupCsvImport();
+        }
         
         console.log('Data search interface initialized');
     }
@@ -4221,6 +4610,7 @@ class MinisFornumApp {
         
         // Setup modal event listeners
         this.setupVinLogModalEvents();
+        this.setupExportHandlers();
         
         // Load VIN data for this dealership
         await this.loadVinLogData(dealershipName);
@@ -4262,6 +4652,13 @@ class MinisFornumApp {
             searchBtn.addEventListener('click', () => this.filterVinLogData());
             searchBtn.hasEventListener = true;
         }
+        
+        // Update VIN Log button
+        const updateVinLogBtn = document.getElementById('updateVinLogBtn');
+        if (updateVinLogBtn && !updateVinLogBtn.hasEventListener) {
+            updateVinLogBtn.addEventListener('click', () => this.openVinLogUpdateModal());
+            updateVinLogBtn.hasEventListener = true;
+        }
     }
     
     closeVinLogModal() {
@@ -4273,8 +4670,15 @@ class MinisFornumApp {
     
     async loadVinLogData(dealershipName) {
         try {
-            const response = await fetch(`/api/dealership-vin-logs/${encodeURIComponent(dealershipName)}`);
+            console.log('Loading VIN data for:', dealershipName);
+            const response = await fetch(`/api/dealership-vin-logs/${encodeURIComponent(dealershipName)}?limit=10000`);
             const data = await response.json();
+            console.log('API Response:', { 
+                success: data.success, 
+                historyCount: data.history?.length || 0,
+                statsTotal: data.stats?.total_vins || 0,
+                firstFewDates: data.history?.slice(0, 5).map(h => h.processed_date) || []
+            });
             
             if (data.success) {
                 // Store the full data for filtering
@@ -4538,10 +4942,20 @@ class MinisFornumApp {
                             <td>${import_.import_source || 'Unknown'}</td>
                             <td>${import_.total_vehicles || import_.actual_vehicles || 0}</td>
                             <td>
-                                <span class="dealership-count">${import_.dealerships_count || import_.actual_dealerships || 0}</span>
+                                <span class="dealership-count clickable" 
+                                      onclick="event.stopPropagation(); app.showImportDealerships(${import_.import_id})"
+                                      style="cursor: pointer; color: var(--primary-blue); text-decoration: underline;"
+                                      title="Click to view dealerships">
+                                    ${import_.dealerships_count || import_.actual_dealerships || 0}
+                                </span>
                             </td>
                             <td>
-                                <span class="import-status-badge ${import_.status || 'unknown'}">${import_.status || 'Unknown'}</span>
+                                <span class="import-status-badge ${import_.status || 'unknown'}" 
+                                      onclick="event.stopPropagation(); app.toggleScraperStatus(${import_.import_id}, '${import_.status || 'archived'}')"
+                                      style="cursor: pointer;" 
+                                      title="Click to toggle status">
+                                    ${import_.status || 'Unknown'}
+                                </span>
                             </td>
                             <td>${import_.file_name || '-'}</td>
                         </tr>
@@ -4571,6 +4985,203 @@ class MinisFornumApp {
                 </button>
             </div>
         `;
+    }
+    
+    async toggleScraperStatus(importId, currentStatus) {
+        const newStatus = currentStatus === 'active' ? 'archived' : 'active';
+        
+        // Show confirmation dialog
+        const message = newStatus === 'active' 
+            ? 'This will set this import as the active dataset for order processing. The currently active dataset will be archived. Continue?'
+            : 'This will archive this import. Continue?';
+            
+        if (!confirm(message)) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/scraper-imports/${importId}/toggle-status`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    new_status: newStatus
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.addTerminalMessage(`Import #${importId} status changed to ${newStatus}`, 'success');
+                // Reload the scraper history to show updated status
+                this.loadScraperHistory();
+            } else {
+                this.addTerminalMessage(`Failed to change status: ${result.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error toggling scraper status:', error);
+            this.addTerminalMessage(`Error changing status: ${error.message}`, 'error');
+        }
+    }
+    
+    async showImportDealerships(importId) {
+        const modal = document.getElementById('importDealershipsModal');
+        const modalTitle = document.getElementById('importDealershipsTitle');
+        const listContainer = document.getElementById('importDealershipsList');
+        
+        if (!modal || !modalTitle) return;
+        
+        // Show modal
+        modal.style.display = 'flex';
+        modalTitle.textContent = `Dealerships in Import #${importId}`;
+        
+        // Show loading
+        listContainer.innerHTML = `
+            <div class="loading">
+                <i class="fas fa-spinner fa-spin"></i>
+                Loading dealerships...
+            </div>
+        `;
+        
+        try {
+            // Fetch dealerships for this import
+            const response = await fetch(`/api/scraper-imports/${importId}/dealerships`);
+            const data = await response.json();
+            
+            if (data.success && data.dealerships) {
+                this.renderImportDealerships(data.dealerships, importId);
+            } else {
+                listContainer.innerHTML = `
+                    <div class="error-state">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>Failed to load dealerships</p>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Error loading dealerships:', error);
+            listContainer.innerHTML = `
+                <div class="error-state">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Error loading dealerships</p>
+                </div>
+            `;
+        }
+        
+        // Setup close handlers
+        this.setupImportDealershipsModalEvents();
+    }
+    
+    renderImportDealerships(dealerships, importId) {
+        const container = document.getElementById('importDealershipsList');
+        
+        if (!dealerships || dealerships.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-building"></i>
+                    <p>No dealerships found in this import</p>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = `
+            <div class="dealerships-grid">
+                ${dealerships.map(dealer => `
+                    <div class="dealership-card" 
+                         onclick="app.showDealershipVehicles(${importId}, '${dealer.name}')"
+                         title="Click to view vehicles">
+                        <div class="dealership-card-header">
+                            <i class="fas fa-building"></i>
+                            <h4>${dealer.name}</h4>
+                        </div>
+                        <div class="dealership-card-stats">
+                            <div class="stat">
+                                <span class="stat-value">${dealer.vehicle_count || 0}</span>
+                                <span class="stat-label">Vehicles</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">${dealer.new_count || 0}</span>
+                                <span class="stat-label">New</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">${dealer.used_count || 0}</span>
+                                <span class="stat-label">Used</span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+    
+    setupImportDealershipsModalEvents() {
+        const modal = document.getElementById('importDealershipsModal');
+        const closeBtn = document.getElementById('closeImportDealershipsModal');
+        
+        if (closeBtn && !closeBtn.hasEventListener) {
+            closeBtn.addEventListener('click', () => {
+                modal.style.display = 'none';
+            });
+            closeBtn.hasEventListener = true;
+        }
+        
+        if (modal && !modal.hasModalEventListener) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.style.display = 'none';
+                }
+            });
+            modal.hasModalEventListener = true;
+        }
+    }
+    
+    async showDealershipVehicles(importId, dealershipName) {
+        // Close the dealerships modal
+        document.getElementById('importDealershipsModal').style.display = 'none';
+        
+        // Open the scraper data modal with dealership filter
+        await this.openScraperDataModal(importId);
+        
+        // Apply dealership filter
+        setTimeout(() => {
+            this.setDealershipFilter(dealershipName);
+        }, 500);
+    }
+    
+    setDealershipFilter(dealershipName) {
+        // Show filter tag
+        const filterTags = document.getElementById('scraperDataFilterTags');
+        const filterNameSpan = document.getElementById('dealershipFilterName');
+        const searchInput = document.getElementById('scraperDataSearch');
+        
+        if (filterTags && filterNameSpan) {
+            filterTags.style.display = 'block';
+            filterNameSpan.textContent = dealershipName;
+        }
+        
+        // Apply search filter
+        if (searchInput) {
+            searchInput.value = dealershipName;
+            this.filterScraperData();
+        }
+    }
+    
+    clearDealershipFilter() {
+        // Hide filter tag
+        const filterTags = document.getElementById('scraperDataFilterTags');
+        const searchInput = document.getElementById('scraperDataSearch');
+        
+        if (filterTags) {
+            filterTags.style.display = 'none';
+        }
+        
+        // Clear search
+        if (searchInput) {
+            searchInput.value = '';
+            this.filterScraperData();
+        }
     }
     
     async openScraperDataModal(importId) {
@@ -4843,7 +5454,7 @@ class MinisFornumApp {
             statusMessage.textContent = 'Processing CSV data...';
             progressFill.style.width = '50%';
             
-            const response = await fetch('/api/import-csv', {
+            const response = await fetch('/api/csv-import', {
                 method: 'POST',
                 body: formData
             });
@@ -4883,6 +5494,404 @@ class MinisFornumApp {
         }
         
         importBtn.disabled = false;
+    }
+    
+    // =============================================================================
+    // VIN LOG UPDATE FUNCTIONALITY
+    // =============================================================================
+    
+    openVinLogUpdateModal() {
+        if (!this.currentDealership) {
+            this.addTerminalMessage('No dealership selected for VIN log update', 'error');
+            return;
+        }
+        
+        // Update modal title and dealership name
+        const updateTitle = document.getElementById('vinLogUpdateTitle');
+        const dealershipName = document.getElementById('updateDealershipName');
+        
+        if (updateTitle) {
+            updateTitle.textContent = `Update VIN Log - ${this.formatDealershipName(this.currentDealership)}`;
+        }
+        
+        if (dealershipName) {
+            dealershipName.textContent = this.formatDealershipName(this.currentDealership);
+        }
+        
+        // Reset modal state
+        this.resetVinLogUpdateModal();
+        
+        // Setup event listeners for this modal
+        this.setupVinLogUpdateEvents();
+        
+        // Show the modal
+        const modal = document.getElementById('vinLogUpdateModal');
+        if (modal) {
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+    }
+    
+    setupVinLogUpdateEvents() {
+        // File upload events
+        const fileUploadArea = document.getElementById('vinLogFileUpload');
+        const fileInput = document.getElementById('vinLogFileInput');
+        const removeFileBtn = document.getElementById('removeVinLogFile');
+        
+        if (fileUploadArea && !fileUploadArea.hasVinLogEvents) {
+            fileUploadArea.addEventListener('click', () => {
+                fileInput.click();
+            });
+            
+            fileUploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                fileUploadArea.classList.add('dragover');
+            });
+            
+            fileUploadArea.addEventListener('dragleave', () => {
+                fileUploadArea.classList.remove('dragover');
+            });
+            
+            fileUploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                fileUploadArea.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0 && files[0].name.endsWith('.csv')) {
+                    this.handleVinLogFileSelect(files[0]);
+                }
+            });
+            
+            fileUploadArea.hasVinLogEvents = true;
+        }
+        
+        if (fileInput && !fileInput.hasVinLogEvents) {
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    this.handleVinLogFileSelect(e.target.files[0]);
+                }
+            });
+            fileInput.hasVinLogEvents = true;
+        }
+        
+        if (removeFileBtn && !removeFileBtn.hasVinLogEvents) {
+            removeFileBtn.addEventListener('click', () => {
+                this.clearVinLogFile();
+            });
+            removeFileBtn.hasVinLogEvents = true;
+        }
+        
+        // Modal close events
+        const closeBtn = document.getElementById('closeVinLogUpdateModal');
+        const cancelBtn = document.getElementById('cancelVinLogUpdate');
+        const modal = document.getElementById('vinLogUpdateModal');
+        
+        if (closeBtn && !closeBtn.hasVinLogEvents) {
+            closeBtn.addEventListener('click', () => this.closeVinLogUpdateModal());
+            closeBtn.hasVinLogEvents = true;
+        }
+        
+        if (cancelBtn && !cancelBtn.hasVinLogEvents) {
+            cancelBtn.addEventListener('click', () => this.closeVinLogUpdateModal());
+            cancelBtn.hasVinLogEvents = true;
+        }
+        
+        if (modal && !modal.hasVinLogEvents) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    this.closeVinLogUpdateModal();
+                }
+            });
+            modal.hasVinLogEvents = true;
+        }
+        
+        // Import button
+        const importBtn = document.getElementById('startVinLogImport');
+        if (importBtn && !importBtn.hasVinLogEvents) {
+            importBtn.addEventListener('click', () => this.startVinLogImport());
+            importBtn.hasVinLogEvents = true;
+        }
+    }
+    
+    resetVinLogUpdateModal() {
+        // Clear file selection
+        this.clearVinLogFile();
+        
+        // Reset checkboxes
+        const skipDuplicates = document.getElementById('skipDuplicates');
+        const updateExisting = document.getElementById('updateExisting');
+        
+        if (skipDuplicates) skipDuplicates.checked = true;
+        if (updateExisting) updateExisting.checked = false;
+        
+        // Hide progress and results
+        const progress = document.getElementById('vinLogImportProgress');
+        const results = document.getElementById('vinLogImportResults');
+        
+        if (progress) progress.style.display = 'none';
+        if (results) results.style.display = 'none';
+        
+        // Reset import button
+        const importBtn = document.getElementById('startVinLogImport');
+        if (importBtn) {
+            importBtn.disabled = true;
+            importBtn.innerHTML = '<i class="fas fa-upload"></i> Import CSV';
+        }
+        
+        this.selectedVinLogFile = null;
+    }
+    
+    handleVinLogFileSelect(file) {
+        if (!file.name.endsWith('.csv')) {
+            this.addTerminalMessage('Please select a CSV file', 'error');
+            return;
+        }
+        
+        this.selectedVinLogFile = file;
+        
+        // Update UI
+        const uploadArea = document.getElementById('vinLogFileUpload');
+        const fileInfo = document.getElementById('vinLogFileInfo');
+        const fileName = document.getElementById('vinLogFileName');
+        const importBtn = document.getElementById('startVinLogImport');
+        
+        if (uploadArea) uploadArea.style.display = 'none';
+        if (fileInfo) fileInfo.style.display = 'flex';
+        if (fileName) fileName.textContent = file.name;
+        if (importBtn) importBtn.disabled = false;
+        
+        this.addTerminalMessage(`CSV file selected: ${file.name}`, 'success');
+    }
+    
+    clearVinLogFile() {
+        this.selectedVinLogFile = null;
+        
+        // Reset UI
+        const uploadArea = document.getElementById('vinLogFileUpload');
+        const fileInfo = document.getElementById('vinLogFileInfo');
+        const fileInput = document.getElementById('vinLogFileInput');
+        const importBtn = document.getElementById('startVinLogImport');
+        
+        if (uploadArea) uploadArea.style.display = 'block';
+        if (fileInfo) fileInfo.style.display = 'none';
+        if (fileInput) fileInput.value = '';
+        if (importBtn) importBtn.disabled = true;
+    }
+    
+    async startVinLogImport() {
+        if (!this.selectedVinLogFile || !this.currentDealership) {
+            this.addTerminalMessage('Missing file or dealership selection', 'error');
+            return;
+        }
+        
+        const skipDuplicates = document.getElementById('skipDuplicates')?.checked || false;
+        const updateExisting = document.getElementById('updateExisting')?.checked || false;
+        
+        // Show progress section
+        const progress = document.getElementById('vinLogImportProgress');
+        const results = document.getElementById('vinLogImportResults');
+        
+        if (progress) progress.style.display = 'block';
+        if (results) results.style.display = 'none';
+        
+        this.updateVinLogProgress('Uploading CSV file...', 0);
+        
+        try {
+            // Create form data
+            const formData = new FormData();
+            formData.append('csv_file', this.selectedVinLogFile);
+            formData.append('dealership_name', this.currentDealership);
+            formData.append('skip_duplicates', skipDuplicates);
+            formData.append('update_existing', updateExisting);
+            
+            // Upload and process
+            const response = await fetch('/api/vin-log/import', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.updateVinLogProgress('Import completed successfully!', 100);
+                this.showVinLogImportResults(result);
+                this.addTerminalMessage(`VIN log updated: ${result.processed} records processed`, 'success');
+                
+                // Refresh VIN log data in background
+                setTimeout(() => {
+                    if (this.currentDealership) {
+                        this.loadVinLogData(this.currentDealership);
+                    }
+                }, 1000);
+            } else {
+                this.updateVinLogProgress(`Import failed: ${result.error}`, 100);
+                this.addTerminalMessage(`VIN log import failed: ${result.error}`, 'error');
+            }
+            
+        } catch (error) {
+            console.error('VIN log import error:', error);
+            this.updateVinLogProgress(`Import error: ${error.message}`, 100);
+            this.addTerminalMessage(`VIN log import error: ${error.message}`, 'error');
+        }
+    }
+    
+    updateVinLogProgress(text, percent) {
+        const progressText = document.getElementById('vinLogProgressText');
+        const progressFill = document.getElementById('vinLogProgressFill');
+        
+        if (progressText) progressText.textContent = text;
+        if (progressFill) progressFill.style.width = `${percent}%`;
+    }
+    
+    showVinLogImportResults(result) {
+        const resultsSection = document.getElementById('vinLogImportResults');
+        if (!resultsSection) return;
+        
+        // Update result statistics
+        const processedCount = document.getElementById('processedCount');
+        const addedCount = document.getElementById('addedCount');
+        const updatedCount = document.getElementById('updatedCount');
+        const skippedCount = document.getElementById('skippedCount');
+        const errorCount = document.getElementById('errorCount');
+        
+        if (processedCount) processedCount.textContent = result.processed || 0;
+        if (addedCount) addedCount.textContent = result.added || 0;
+        if (updatedCount) updatedCount.textContent = result.updated || 0;
+        if (skippedCount) skippedCount.textContent = result.skipped || 0;
+        if (errorCount) errorCount.textContent = result.errors ? result.errors.length : 0;
+        
+        // Update log container
+        const logContainer = document.getElementById('importLogContainer');
+        if (logContainer && result.log) {
+            logContainer.innerHTML = result.log.map(entry => 
+                `<div class="log-entry ${entry.type}">${entry.message}</div>`
+            ).join('');
+        }
+        
+        // Show results section
+        resultsSection.style.display = 'block';
+    }
+    
+    closeVinLogUpdateModal() {
+        const modal = document.getElementById('vinLogUpdateModal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+    }
+    
+    setupExportHandlers() {
+        // VIN Log Export Handler
+        const vinLogExportBtn = document.getElementById('exportVinLogData');
+        if (vinLogExportBtn) {
+            vinLogExportBtn.addEventListener('click', () => this.exportVinLogData());
+        }
+        
+        // Scraper Data Export Handler
+        const scraperDataExportBtn = document.getElementById('exportScraperData');
+        if (scraperDataExportBtn) {
+            scraperDataExportBtn.addEventListener('click', () => this.exportScraperData());
+        }
+    }
+    
+    async exportVinLogData() {
+        try {
+            const dealershipName = document.getElementById('vinLogModalTitle').textContent.replace('VIN History - ', '');
+            
+            // Show loading state
+            const exportBtn = document.getElementById('exportVinLogData');
+            const originalText = exportBtn.innerHTML;
+            exportBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exporting...';
+            exportBtn.disabled = true;
+            
+            const response = await fetch('/api/vin-log/export', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    dealership_name: dealershipName
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Export failed: ${response.statusText}`);
+            }
+            
+            // Get the blob and create download
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `vin_log_${dealershipName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            this.showNotification('VIN log data exported successfully!', 'success');
+            
+        } catch (error) {
+            console.error('Export error:', error);
+            this.showNotification(`Export failed: ${error.message}`, 'error');
+        } finally {
+            // Restore button state
+            const exportBtn = document.getElementById('exportVinLogData');
+            exportBtn.innerHTML = originalText;
+            exportBtn.disabled = false;
+        }
+    }
+    
+    async exportScraperData() {
+        try {
+            const importId = document.getElementById('modalImportId').textContent;
+            
+            if (!importId || importId === '-') {
+                this.showNotification('No import data to export', 'warning');
+                return;
+            }
+            
+            // Show loading state
+            const exportBtn = document.getElementById('exportScraperData');
+            const originalText = exportBtn.innerHTML;
+            exportBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exporting...';
+            exportBtn.disabled = true;
+            
+            const response = await fetch('/api/scraper-data/export', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    import_id: importId
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Export failed: ${response.statusText}`);
+            }
+            
+            // Get the blob and create download
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `scraper_data_${importId}_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            this.showNotification('Scraper data exported successfully!', 'success');
+            
+        } catch (error) {
+            console.error('Export error:', error);
+            this.showNotification(`Export failed: ${error.message}`, 'error');
+        } finally {
+            // Restore button state
+            const exportBtn = document.getElementById('exportScraperData');
+            exportBtn.innerHTML = originalText;
+            exportBtn.disabled = false;
+        }
     }
 }
 
