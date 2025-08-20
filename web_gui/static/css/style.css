@@ -1333,6 +1333,176 @@ body {
     color: var(--primary-red);
 }
 
+.progress-section {
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 24px;
+    margin: 24px 0;
+}
+
+.progress-section h3 {
+    color: var(--primary-red);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.progress-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+/* CSV Preview Card Styling */
+.csv-preview-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    margin: 20px 0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.csv-preview-card .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+    border-radius: 8px 8px 0 0;
+}
+
+.csv-preview-card .header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #e74c3c;
+    font-weight: 600;
+}
+
+.csv-preview-card .header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.vehicle-badge {
+    background: #e2e8f0;
+    color: #64748b;
+    padding: 4px 12px;
+    border-radius: 16px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.csv-table-container {
+    max-height: 400px;
+    overflow: auto;
+    border-radius: 0 0 8px 8px;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    background: white;
+}
+
+.data-table th {
+    background: #f8fafc;
+    padding: 12px 8px;
+    text-align: left;
+    border-bottom: 2px solid #e2e8f0;
+    font-weight: 600;
+    color: #374151;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.data-table td {
+    padding: 10px 8px;
+    border-bottom: 1px solid #f1f5f9;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.data-table tr:hover {
+    background: #f8fafc;
+}
+
+.data-table .row-actions button {
+    padding: 4px 8px;
+    font-size: 12px;
+    border-radius: 4px;
+    border: 1px solid #e2e8f0;
+    background: white;
+    color: #e74c3c;
+    cursor: pointer;
+}
+
+.data-table .row-actions button:hover {
+    background: #fee2e2;
+}
+
+/* Wizard Progress Tracker - Horizontal Design */
+.wizard-progress {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 20px 0;
+    padding: 0 20px;
+}
+
+.wizard-progress .progress-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    min-width: 120px;
+    justify-content: center;
+}
+
+.wizard-progress .progress-step.completed {
+    background: #10b981;
+    color: white;
+}
+
+.wizard-progress .progress-step.active {
+    background: #e74c3c;
+    color: white;
+}
+
+.wizard-progress .progress-step:not(.completed):not(.active) {
+    background: #f1f5f9;
+    color: #64748b;
+}
+
+.wizard-progress .progress-arrow {
+    color: #cbd5e1;
+    font-size: 12px;
+    margin: 0 4px;
+}
+
+.wizard-progress .progress-step i {
+    font-size: 14px;
+}
+
+.wizard-progress .progress-step span {
+    font-weight: 500;
+}
+
 /* =============================================================================
    NEW QUEUE MANAGEMENT LAYOUT
    ============================================================================= */

@@ -401,25 +401,118 @@ class OrderWizard {
     
     showReviewStep(dealershipName, result) {
         this.updateProgress('review');
-        this.showStep('reviewStep');
         
-        // Update dealership name
-        const reviewDealershipEl = document.getElementById('reviewDealershipName');
-        if (reviewDealershipEl) {
-            reviewDealershipEl.textContent = dealershipName;
-        }
-        
-        // Show generated files
-        this.renderOutputFiles(result);
-    }
-    
-    renderOutputFiles(result) {
         // Store the result for later use
         this.currentOrderResult = result;
         
-        // Load CSV data into spreadsheet view
+        // Get container and create review step HTML with progress tracker
+        let container = document.getElementById('wizardContent') || 
+                       document.getElementById('app') || 
+                       document.querySelector('.wizard-container') ||
+                       document.body;
+        
+        container.innerHTML = `
+            <!-- Progress Tracker -->
+            <div class="wizard-header">
+                <h1 class="wizard-title">
+                    <i class="fas fa-edit"></i>
+                    Order Processing Wizard
+                </h1>
+                <p class="wizard-subtitle">Guided workflow for processing dealership orders</p>
+            </div>
+            
+            <div class="wizard-progress">
+                <div class="progress-step completed">
+                    <i class="fas fa-play"></i>
+                    <span>Initialize</span>
+                </div>
+                <i class="fas fa-chevron-right progress-arrow"></i>
+                <div class="progress-step completed">
+                    <i class="fas fa-cog"></i>
+                    <span>Auto Process</span>
+                </div>
+                <i class="fas fa-chevron-right progress-arrow"></i>
+                <div class="progress-step completed">
+                    <i class="fas fa-list"></i>
+                    <span>VIN Entry</span>
+                </div>
+                <i class="fas fa-chevron-right progress-arrow"></i>
+                <div class="progress-step active">
+                    <i class="fas fa-eye"></i>
+                    <span>Review</span>
+                </div>
+                <i class="fas fa-chevron-right progress-arrow"></i>
+                <div class="progress-step">
+                    <i class="fas fa-qrcode"></i>
+                    <span>QR Codes</span>
+                </div>
+                <i class="fas fa-chevron-right progress-arrow"></i>
+                <div class="progress-step">
+                    <i class="fas fa-hashtag"></i>
+                    <span>Order #</span>
+                </div>
+                <i class="fas fa-chevron-right progress-arrow"></i>
+                <div class="progress-step">
+                    <i class="fas fa-check"></i>
+                    <span>Complete</span>
+                </div>
+            </div>
+            
+            <div class="wizard-step active" id="reviewStep">
+                <div class="step-header">
+                    <h2 class="step-title"><i class="fas fa-eye"></i> Review Output</h2>
+                    <p class="step-description">Inspect generated files for ${dealershipName}</p>
+                </div>
+                
+                <div class="review-section">
+                    <div class="csv-preview-card">
+                        <div class="card-header">
+                            <div class="header-left">
+                                <i class="fas fa-table"></i>
+                                <span class="header-title">CSV Data Preview</span>
+                            </div>
+                            <div class="header-right">
+                                <span class="vehicle-badge"><span id="csvVehicleCount">0</span> vehicles</span>
+                                <button class="btn btn-secondary" onclick="wizard.downloadCSV()">
+                                    <i class="fas fa-download"></i>
+                                    Download CSV
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="csv-table-container">
+                            <table class="data-table" id="csvSpreadsheet" style="display: none;">
+                                <thead id="csvTableHead">
+                                    <!-- Will be populated by renderSpreadsheet -->
+                                </thead>
+                                <tbody id="csvTableBody">
+                                    <!-- Will be populated by renderSpreadsheet -->
+                                </tbody>
+                            </table>
+                            <div class="csv-placeholder" id="csvPlaceholder" style="display: block;">
+                                <i class="fas fa-file-csv"></i>
+                                <p>Loading CSV data...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="review-actions">
+                    <p>Ready to proceed to QR code generation?</p>
+                    <div class="action-buttons">
+                        <button class="btn-wizard primary" onclick="wizard.proceedToQRGeneration()">
+                            <i class="fas fa-arrow-right"></i>
+                            Looks Good - Continue
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Load CSV data into the table
         this.loadCSVIntoSpreadsheet(result);
     }
+    
     
     // Navigate from CSV review to QR generation
     proceedToQRGeneration() {
@@ -472,6 +565,52 @@ class OrderWizard {
         
         // COMPLETELY RECREATE THE QR GENERATION HTML - NO DATA EDITOR BUTTON
         container.innerHTML = `
+            <!-- Progress Tracker -->
+            <div class="wizard-header">
+                <h1 class="wizard-title">
+                    <i class="fas fa-edit"></i>
+                    Order Processing Wizard
+                </h1>
+                <p class="wizard-subtitle">Guided workflow for processing dealership orders</p>
+            </div>
+            
+            <div class="wizard-progress">
+                <div class="progress-step completed">
+                    <i class="fas fa-play"></i>
+                    <span>Initialize</span>
+                </div>
+                <i class="fas fa-chevron-right progress-arrow"></i>
+                <div class="progress-step completed">
+                    <i class="fas fa-cog"></i>
+                    <span>Auto Process</span>
+                </div>
+                <i class="fas fa-chevron-right progress-arrow"></i>
+                <div class="progress-step completed">
+                    <i class="fas fa-list"></i>
+                    <span>VIN Entry</span>
+                </div>
+                <i class="fas fa-chevron-right progress-arrow"></i>
+                <div class="progress-step completed">
+                    <i class="fas fa-eye"></i>
+                    <span>Review</span>
+                </div>
+                <i class="fas fa-chevron-right progress-arrow"></i>
+                <div class="progress-step active">
+                    <i class="fas fa-qrcode"></i>
+                    <span>QR Codes</span>
+                </div>
+                <i class="fas fa-chevron-right progress-arrow"></i>
+                <div class="progress-step">
+                    <i class="fas fa-hashtag"></i>
+                    <span>Order #</span>
+                </div>
+                <i class="fas fa-chevron-right progress-arrow"></i>
+                <div class="progress-step">
+                    <i class="fas fa-check"></i>
+                    <span>Complete</span>
+                </div>
+            </div>
+            
             <div class="wizard-step active" id="qrGenerationStep">
                 <div class="step-header">
                     <h2 class="step-title"><i class="fas fa-qrcode"></i> QR Code Generation</h2>
@@ -486,6 +625,20 @@ class OrderWizard {
                     <div class="status-details">
                         <p>CSV File: ${result.download_csv ? result.download_csv.split('/').pop() : 'Available'}</p>
                         <p>Dealership: ${dealershipName}</p>
+                    </div>
+                </div>
+                
+                <!-- Progress Section -->
+                <div class="progress-section" id="qrProgressSection" style="display: none;">
+                    <div class="progress-header">
+                        <h3><i class="fas fa-spinner fa-spin"></i> Generating QR Codes...</h3>
+                        <p id="qrProgressText">Initializing QR code generation...</p>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="qrProgressBar" style="width: 0%"></div>
+                        </div>
+                        <span class="progress-percentage" id="qrProgressPercentage">0%</span>
                     </div>
                 </div>
                 
@@ -584,12 +737,17 @@ class OrderWizard {
         const generateQRBtn = document.getElementById('generateQRBtn');
         const qrProceedBtn = document.getElementById('qrProceedBtn');
         const qrResults = document.getElementById('qrResults');
+        const qrProgressSection = document.getElementById('qrProgressSection');
+        const qrProgressBar = document.getElementById('qrProgressBar');
+        const qrProgressPercentage = document.getElementById('qrProgressPercentage');
+        const qrProgressText = document.getElementById('qrProgressText');
         
         try {
             // Show progress and disable button
             generateQRBtn.disabled = true;
             generateQRBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
             qrResults.style.display = 'none';
+            qrProgressSection.style.display = 'block';
             
             // Extract CSV filename from the result
             let csvFilename = '';
@@ -604,6 +762,11 @@ class OrderWizard {
             }
             
             console.log('[QR GENERATION] Starting with CSV file:', csvFilename);
+            
+            // Update progress
+            qrProgressText.textContent = 'Preparing QR code generation...';
+            qrProgressBar.style.width = '10%';
+            qrProgressPercentage.textContent = '10%';
             
             // Call the QR generation API
             const response = await fetch('/api/qr/generate-from-csv', {
@@ -626,25 +789,30 @@ class OrderWizard {
             const result = await response.json();
             console.log('[QR GENERATION] Success:', result);
             
-            // IMMEDIATELY CREATE ORDER NUMBER BUTTON - NO WAITING
-            const container = generateQRBtn.parentElement;
-            let orderBtn = document.getElementById('qrProceedBtn');
-            if (!orderBtn) {
-                orderBtn = document.createElement('button');
-                orderBtn.id = 'qrProceedBtn';
-                orderBtn.className = 'btn-wizard primary';
-                orderBtn.style.marginLeft = '20px';
-                orderBtn.onclick = () => this.proceedToOrderNumber();
-                orderBtn.innerHTML = '<i class="fas fa-hashtag"></i> Enter Order Number';
-                container.appendChild(orderBtn);
-                console.log('✅ FORCE CREATED Order Number button after QR success');
-            }
+            // Update progress to completion
+            qrProgressText.textContent = 'QR codes generated successfully!';
+            qrProgressBar.style.width = '100%';
+            qrProgressPercentage.textContent = '100%';
             
-            // Reset generate button
-            generateQRBtn.disabled = false;
-            const billingText = result.billing_csv_generated ? ' + Billing CSV' : '';
-            generateQRBtn.innerHTML = `<i class="fas fa-check"></i> QR Codes Generated${billingText}`;
-            generateQRBtn.style.background = '#28a745';
+            // Wait for progress animation to complete
+            setTimeout(() => {
+                // Hide progress and show success
+                qrProgressSection.style.display = 'none';
+                qrResults.style.display = 'block';
+                
+                // Show proceed button
+                qrProceedBtn.style.display = 'inline-flex';
+                
+                // Update generate button to show success
+                generateQRBtn.disabled = false;
+                const billingText = result.billing_csv_generated ? ' + Billing CSV' : '';
+                generateQRBtn.innerHTML = `<i class="fas fa-check"></i> QR Codes Generated${billingText}`;
+                generateQRBtn.style.background = '#28a745';
+                
+                // Store result for order number step
+                this.currentQRResult = result;
+                
+            }, 1000);
             
             // FORCE SHOW THE BUTTON - MULTIPLE METHODS
             setTimeout(() => {
@@ -783,21 +951,17 @@ class OrderWizard {
             
         } catch (error) {
             console.error('[QR GENERATION] Error:', error);
-            alert(`QR Generation Error: ${error.message}`);
             
-            // Reset generate button and CREATE ORDER NUMBER BUTTON
+            // Hide progress and show error
+            qrProgressSection.style.display = 'none';
+            
+            // Reset generate button
             generateQRBtn.disabled = false;
             generateQRBtn.innerHTML = '<i class="fas fa-qrcode"></i> Generate QR Codes';
+            generateQRBtn.style.background = '';
             
-            // FORCE CREATE THE ORDER NUMBER BUTTON - BYPASS ALL TEMPLATE ISSUES
-            const container = generateQRBtn.parentElement;
-            const orderBtn = document.createElement('button');
-            orderBtn.className = 'btn-wizard primary';
-            orderBtn.style.marginLeft = '20px';
-            orderBtn.onclick = () => this.proceedToOrderNumber();
-            orderBtn.innerHTML = '<i class="fas fa-hashtag"></i> Enter Order Number';
-            container.appendChild(orderBtn);
-            console.log('🚨 EMERGENCY: Created Order Number button after error');
+            // Show error message
+            this.showMessage(`QR Generation Error: ${error.message}`, 'error');
         }
     }
     
@@ -1775,6 +1939,52 @@ class OrderWizard {
         
         // CREATE ORDER NUMBER STEP HTML
         container.innerHTML = `
+            <!-- Progress Tracker -->
+            <div class="wizard-header">
+                <h1 class="wizard-title">
+                    <i class="fas fa-edit"></i>
+                    Order Processing Wizard
+                </h1>
+                <p class="wizard-subtitle">Guided workflow for processing dealership orders</p>
+            </div>
+            
+            <div class="wizard-progress">
+                <div class="progress-step completed">
+                    <i class="fas fa-play"></i>
+                    <span>Initialize</span>
+                </div>
+                <i class="fas fa-chevron-right progress-arrow"></i>
+                <div class="progress-step completed">
+                    <i class="fas fa-cog"></i>
+                    <span>Auto Process</span>
+                </div>
+                <i class="fas fa-chevron-right progress-arrow"></i>
+                <div class="progress-step completed">
+                    <i class="fas fa-list"></i>
+                    <span>VIN Entry</span>
+                </div>
+                <i class="fas fa-chevron-right progress-arrow"></i>
+                <div class="progress-step completed">
+                    <i class="fas fa-eye"></i>
+                    <span>Review</span>
+                </div>
+                <i class="fas fa-chevron-right progress-arrow"></i>
+                <div class="progress-step completed">
+                    <i class="fas fa-qrcode"></i>
+                    <span>QR Codes</span>
+                </div>
+                <i class="fas fa-chevron-right progress-arrow"></i>
+                <div class="progress-step active">
+                    <i class="fas fa-hashtag"></i>
+                    <span>Order #</span>
+                </div>
+                <i class="fas fa-chevron-right progress-arrow"></i>
+                <div class="progress-step">
+                    <i class="fas fa-check"></i>
+                    <span>Complete</span>
+                </div>
+            </div>
+            
             <div class="wizard-step active" id="orderNumberStep">
                 <div class="step-header">
                     <h2 class="step-title">📝 Enter Order Number</h2>
@@ -1933,9 +2143,6 @@ class OrderWizard {
                 
                 // Show comprehensive completion screen instead of simple message
                 this.showOrderCompletionScreen(orderNumber, actualCount, this.currentOrderDealership);
-                
-                // Continue to next dealership or completion
-                this.continueAfterOrderNumber();
             } else {
                 throw new Error(result.error || 'Unknown error applying order number');
             }
@@ -2111,6 +2318,40 @@ class OrderWizard {
                 </div>
             </div>
         `;
+    }
+
+    viewOrderFolder() {
+        // Try to open the order folder
+        if (this.currentQRResult?.output_folder) {
+            // For now, just show an alert with the folder path
+            alert(`Order files saved to:\n${this.currentQRResult.output_folder}`);
+        } else {
+            alert('Order folder path not available');
+        }
+    }
+
+    startNewOrder() {
+        // Check if there are more orders to process
+        if (this.currentListIndex < this.listOrders.length - 1) {
+            // Continue to next dealership
+            this.continueAfterOrderNumber();
+        } else {
+            // Start fresh
+            location.reload();
+        }
+    }
+
+    finishSession() {
+        // Complete the session
+        if (this.currentListIndex < this.listOrders.length - 1) {
+            // There are more orders, but user wants to finish
+            if (confirm('There are more orders to process. Are you sure you want to finish?')) {
+                this.completeProcessing();
+            }
+        } else {
+            // All orders complete
+            this.completeProcessing();
+        }
     }
 
     showMessage(message, type = 'info') {
