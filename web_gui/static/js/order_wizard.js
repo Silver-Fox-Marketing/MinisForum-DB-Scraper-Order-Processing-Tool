@@ -419,9 +419,6 @@ class OrderWizard {
         
         // Load CSV data into spreadsheet view
         this.loadCSVIntoSpreadsheet(result);
-        
-        // Load QR codes into preview grid (if they exist)
-        this.loadQRCodesIntoGrid(result);
     }
     
     // Navigate from CSV review to QR generation
@@ -1724,6 +1721,9 @@ class OrderWizard {
     showOrderNumberStep(dealershipName, orderResult) {
         console.log('🎯 SHOWING ORDER NUMBER STEP for:', dealershipName);
         
+        // Update progress tracker
+        this.updateProgress('order-number');
+        
         // Store current order info
         this.currentOrderDealership = dealershipName;
         this.currentOrderVins = orderResult.processed_vins || [];
@@ -1930,7 +1930,9 @@ class OrderWizard {
             if (result.success) {
                 // Use backend result first, then fall back to QR generation count, never use currentOrderVins.length for EXTRACT_FROM_CSV case
                 const actualCount = result.updated_vins || this.currentQRResult?.qr_codes_generated || this.currentQRResult?.vehicles_processed || 'unknown number of';
-                this.showMessage(`Order number ${orderNumber} applied to ${actualCount} VINs`, 'success');
+                
+                // Show comprehensive completion screen instead of simple message
+                this.showOrderCompletionScreen(orderNumber, actualCount, this.currentOrderDealership);
                 
                 // Continue to next dealership or completion
                 this.continueAfterOrderNumber();
@@ -1990,6 +1992,127 @@ class OrderWizard {
         document.body.appendChild(errorDiv);
     }
     
+    showOrderCompletionScreen(orderNumber, vinCount, dealershipName) {
+        // Update progress to completion
+        this.updateProgress('complete');
+        
+        // Get current timestamp
+        const now = new Date();
+        const timestamp = now.toLocaleString();
+        
+        // Calculate file outputs
+        const qrCodes = this.currentQRResult?.qr_codes_generated || 0;
+        const csvGenerated = this.currentQRResult?.csv_file ? 1 : 0;
+        const billingGenerated = this.currentQRResult?.billing_csv_generated ? 1 : 0;
+        
+        // Find container and create completion screen
+        let container = document.getElementById('wizardContent') || 
+                       document.getElementById('app') || 
+                       document.querySelector('.wizard-container') ||
+                       document.body;
+        
+        container.innerHTML = `
+            <div class="wizard-step active" id="orderCompletionStep">
+                <div class="completion-header">
+                    <div class="completion-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <h1 class="completion-title">Order Processing Complete!</h1>
+                    <p class="completion-subtitle">Order ${orderNumber} successfully processed for ${dealershipName}</p>
+                </div>
+                
+                <div class="completion-details">
+                    <div class="detail-card primary">
+                        <div class="detail-icon">
+                            <i class="fas fa-hashtag"></i>
+                        </div>
+                        <div class="detail-content">
+                            <h3>Order Number Applied</h3>
+                            <p class="detail-value">${orderNumber}</p>
+                            <p class="detail-description">Applied to ${vinCount} vehicles</p>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-card">
+                        <div class="detail-icon">
+                            <i class="fas fa-building"></i>
+                        </div>
+                        <div class="detail-content">
+                            <h3>Dealership</h3>
+                            <p class="detail-value">${dealershipName}</p>
+                            <p class="detail-description">Processing completed at ${timestamp}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-card">
+                        <div class="detail-icon">
+                            <i class="fas fa-qrcode"></i>
+                        </div>
+                        <div class="detail-content">
+                            <h3>QR Codes Generated</h3>
+                            <p class="detail-value">${qrCodes}</p>
+                            <p class="detail-description">High-resolution PNG files (388x388)</p>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-card">
+                        <div class="detail-icon">
+                            <i class="fas fa-file-csv"></i>
+                        </div>
+                        <div class="detail-content">
+                            <h3>Files Generated</h3>
+                            <p class="detail-value">${csvGenerated + billingGenerated} CSV + ${qrCodes} QR</p>
+                            <p class="detail-description">Adobe VDP CSV${billingGenerated ? ' + Billing CSV' : ''} + QR Codes</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="completion-outputs">
+                    <h3><i class="fas fa-folder-open"></i> Output Files</h3>
+                    <div class="output-grid">
+                        <div class="output-item">
+                            <i class="fas fa-qrcode"></i>
+                            <span>QR Codes</span>
+                            <small>${qrCodes} PNG files</small>
+                        </div>
+                        <div class="output-item">
+                            <i class="fas fa-file-csv"></i>
+                            <span>Adobe VDP CSV</span>
+                            <small>Variable data processing</small>
+                        </div>
+                        ${billingGenerated ? `
+                        <div class="output-item">
+                            <i class="fas fa-receipt"></i>
+                            <span>Billing CSV</span>
+                            <small>Ordered vs Produced</small>
+                        </div>
+                        ` : ''}
+                        <div class="output-item">
+                            <i class="fas fa-database"></i>
+                            <span>VIN Log Updated</span>
+                            <small>Dealership history</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="completion-actions">
+                    <button class="btn-wizard secondary" onclick="wizard.viewOrderFolder()">
+                        <i class="fas fa-folder-open"></i>
+                        View Output Folder
+                    </button>
+                    <button class="btn-wizard primary" onclick="wizard.startNewOrder()">
+                        <i class="fas fa-plus"></i>
+                        Process Another Order
+                    </button>
+                    <button class="btn-wizard success" onclick="wizard.finishSession()">
+                        <i class="fas fa-check"></i>
+                        Finish Session
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
     showMessage(message, type = 'info') {
         const messageDiv = document.createElement('div');
         messageDiv.className = `wizard-message wizard-${type}`;
@@ -2017,6 +2140,38 @@ class OrderWizard {
         }
         
         document.body.appendChild(messageDiv);
+    }
+
+    // Completion screen action methods
+    viewOrderFolder() {
+        if (this.currentQRResult?.qr_folder) {
+            // Show folder path and inform user
+            const folderPath = this.currentQRResult.qr_folder;
+            this.showMessage(`Order files are located at: ${folderPath}`, 'info');
+        } else {
+            this.showMessage('Output folder information not available', 'warning');
+        }
+    }
+    
+    startNewOrder() {
+        // Reset wizard state and start fresh
+        this.currentStep = 0;
+        this.currentOrderResult = null;
+        this.currentQRResult = null;
+        this.currentOrderDealership = null;
+        this.currentOrderVins = [];
+        
+        // Return to main interface
+        window.location.reload();
+    }
+    
+    finishSession() {
+        // Close the wizard or return to main dashboard
+        if (window.opener) {
+            window.close();
+        } else {
+            window.location.href = '/';
+        }
     }
 
     showSuccess(message) {

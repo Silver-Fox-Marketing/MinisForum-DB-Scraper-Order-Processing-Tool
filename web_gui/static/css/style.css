@@ -4830,3 +4830,201 @@ body {
     padding-top: var(--spacing-lg);
     border-top: 1px solid var(--border-color);
 }
+
+/* ==========================================
+   ORDER COMPLETION SCREEN STYLES
+   ========================================== */
+
+.completion-header {
+    text-align: center;
+    margin-bottom: var(--spacing-xl);
+    padding: var(--spacing-xl) 0;
+}
+
+.completion-icon {
+    font-size: 4rem;
+    color: var(--success-green);
+    margin-bottom: var(--spacing-md);
+}
+
+.completion-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--black);
+    margin-bottom: var(--spacing-sm);
+}
+
+.completion-subtitle {
+    font-size: 1.2rem;
+    color: var(--gray);
+    margin: 0;
+}
+
+.completion-details {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-xl);
+}
+
+.detail-card {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--border-color);
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-md);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.detail-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.detail-card.primary {
+    border-color: var(--primary-red);
+    background: linear-gradient(135deg, #fff 0%, #fef8f8 100%);
+}
+
+.detail-icon {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-md);
+    background: var(--light-gray);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: var(--primary-red);
+}
+
+.detail-card.primary .detail-icon {
+    background: var(--primary-red);
+    color: var(--white);
+}
+
+.detail-content h3 {
+    margin: 0 0 var(--spacing-xs) 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--black);
+}
+
+.detail-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--primary-red);
+    margin: 0 0 var(--spacing-xs) 0;
+}
+
+.detail-description {
+    font-size: 0.9rem;
+    color: var(--gray);
+    margin: 0;
+}
+
+.completion-outputs {
+    background: var(--light-gray);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-xl);
+    margin-bottom: var(--spacing-xl);
+}
+
+.completion-outputs h3 {
+    margin: 0 0 var(--spacing-lg) 0;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--black);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.completion-outputs h3 i {
+    color: var(--primary-red);
+}
+
+.output-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--spacing-md);
+}
+
+.output-item {
+    background: var(--white);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-lg);
+    text-align: center;
+    border: 1px solid var(--border-color);
+    transition: transform 0.2s ease;
+}
+
+.output-item:hover {
+    transform: translateY(-1px);
+}
+
+.output-item i {
+    font-size: 2rem;
+    color: var(--primary-red);
+    margin-bottom: var(--spacing-sm);
+    display: block;
+}
+
+.output-item span {
+    display: block;
+    font-weight: 600;
+    color: var(--black);
+    margin-bottom: var(--spacing-xs);
+}
+
+.output-item small {
+    color: var(--gray);
+    font-size: 0.85rem;
+}
+
+.completion-actions {
+    display: flex;
+    justify-content: center;
+    gap: var(--spacing-lg);
+    margin-top: var(--spacing-xl);
+    padding-top: var(--spacing-lg);
+    border-top: 1px solid var(--border-color);
+}
+
+.btn-wizard.success {
+    background: var(--success-green);
+    color: var(--white);
+    border: none;
+}
+
+.btn-wizard.success:hover {
+    background: #218838;
+}
+
+/* Responsive design for completion screen */
+@media (max-width: 768px) {
+    .completion-details {
+        grid-template-columns: 1fr;
+    }
+    
+    .output-grid {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    }
+    
+    .completion-actions {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .completion-title {
+        font-size: 2rem;
+    }
+    
+    .completion-icon {
+        font-size: 3rem;
+    }
+}
