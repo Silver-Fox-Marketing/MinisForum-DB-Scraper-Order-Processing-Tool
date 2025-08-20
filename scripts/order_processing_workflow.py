@@ -555,6 +555,41 @@ class OrderProcessingWorkflow:
             # Step 5: Generate Adobe CSV with QR paths included
             csv_path = self.generate_adobe_csv(new_vehicles, dealership_name, csv_folder, qr_paths)
             
+            # Step 5.5: Generate Billing CSV
+            billing_csv_path = None
+            try:
+                from correct_order_processing import CorrectOrderProcessor
+                processor = CorrectOrderProcessor()
+                
+                # Convert vehicles to billing format
+                ordered_vehicles = []
+                for vehicle in new_vehicles:
+                    ordered_vehicles.append({
+                        'vin': vehicle.get('vin', ''),
+                        'type': vehicle.get('type', 'new'),
+                        'year': vehicle.get('year', ''),
+                        'make': vehicle.get('make', ''),
+                        'model': vehicle.get('model', '')
+                    })
+                
+                # For CAO orders, ordered and produced are the same (what we're processing)
+                produced_vehicles = ordered_vehicles.copy()
+                
+                # Generate billing CSV in the main order folder (not in adobe subfolder)
+                billing_csv_path = processor._generate_billing_csv(
+                    ordered_vehicles=ordered_vehicles,
+                    produced_vehicles=produced_vehicles,
+                    dealership_name=dealership_name,
+                    order_date=timestamp.strftime('%m.%d'),
+                    output_folder=output_folder
+                )
+                
+                logger.info(f"Generated billing CSV: {billing_csv_path}")
+                
+            except Exception as e:
+                logger.error(f"Failed to generate billing CSV: {e}")
+                # Continue processing even if billing CSV fails
+            
             # Step 6: Create order record
             order_id = self._create_order_record(
                 dealership_name, 
@@ -576,6 +611,8 @@ class OrderProcessingWorkflow:
                 'qr_codes_generated': len(qr_paths),
                 'qr_folder': str(qr_folder),
                 'csv_file': csv_path,
+                'billing_csv_path': str(billing_csv_path) if billing_csv_path else None,
+                'billing_csv_generated': billing_csv_path is not None,
                 'timestamp': timestamp
             }
             
@@ -624,6 +661,41 @@ class OrderProcessingWorkflow:
             # Generate Adobe CSV with QR paths included
             csv_path = self.generate_adobe_csv(vehicles, dealership_name, csv_folder, qr_paths)
             
+            # Generate Billing CSV
+            billing_csv_path = None
+            try:
+                from correct_order_processing import CorrectOrderProcessor
+                processor = CorrectOrderProcessor()
+                
+                # Convert vehicles to billing format
+                ordered_vehicles = []
+                for vehicle in vehicles:
+                    ordered_vehicles.append({
+                        'vin': vehicle.get('vin', ''),
+                        'type': vehicle.get('type', 'new'),
+                        'year': vehicle.get('year', ''),
+                        'make': vehicle.get('make', ''),
+                        'model': vehicle.get('model', '')
+                    })
+                
+                # For LIST orders, ordered and produced are the same (what was requested)
+                produced_vehicles = ordered_vehicles.copy()
+                
+                # Generate billing CSV in the main order folder
+                billing_csv_path = processor._generate_billing_csv(
+                    ordered_vehicles=ordered_vehicles,
+                    produced_vehicles=produced_vehicles,
+                    dealership_name=dealership_name,
+                    order_date=datetime.now().strftime('%m.%d'),
+                    output_folder=output_base
+                )
+                
+                logger.info(f"Generated billing CSV: {billing_csv_path}")
+                
+            except Exception as e:
+                logger.error(f"Failed to generate billing CSV: {e}")
+                # Continue processing even if billing CSV fails
+            
             # Create order record
             order_id = self._create_order_record(
                 dealership_name,
@@ -645,6 +717,8 @@ class OrderProcessingWorkflow:
                 'qr_codes_generated': len(qr_paths),
                 'qr_folder': str(qr_folder),
                 'csv_file': csv_path,
+                'billing_csv_path': str(billing_csv_path) if billing_csv_path else None,
+                'billing_csv_generated': billing_csv_path is not None,
                 'timestamp': timestamp
             }
             
