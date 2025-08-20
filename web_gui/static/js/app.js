@@ -1196,6 +1196,12 @@ class MinisFornumApp {
         const modal = document.getElementById(modalId);
         if (modal) {
             modal.classList.remove('show');
+            modal.style.display = 'none';
+        }
+        
+        // Special cleanup for dealership settings modal
+        if (modalId === 'dealershipModal') {
+            this.currentEditingDealership = null;
         }
     }
     
@@ -1936,13 +1942,140 @@ class MinisFornumApp {
     
     async editDealershipSettings(dealershipName) {
         console.log(`Editing settings for: ${dealershipName}`);
-        this.addTerminalMessage('Dealership settings editor - Coming soon!', 'info');
+        
+        try {
+            // Get current dealership settings
+            const response = await fetch('/api/dealership-settings');
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to load dealership settings');
+            }
+            
+            // Find the specific dealership
+            const dealership = data.dealerships.find(d => d.name === dealershipName);
+            if (!dealership) {
+                throw new Error(`Dealership ${dealershipName} not found`);
+            }
+            
+            // Store current dealership for saving later
+            this.currentEditingDealership = dealership;
+            
+            // Populate and show the modal
+            this.showDealershipModal(dealership);
+            
+        } catch (error) {
+            console.error('Error loading dealership settings:', error);
+            this.addTerminalMessage(`Error loading settings: ${error.message}`, 'error');
+        }
+    }
+    
+    showDealershipModal(dealership) {
+        // Set modal title
+        const modalTitle = document.getElementById('modalTitle');
+        if (modalTitle) {
+            modalTitle.textContent = `Settings - ${dealership.name}`;
+        }
+        
+        // Get filtering rules
+        const filteringRules = dealership.filtering_rules || {};
+        const vehicleTypes = filteringRules.vehicle_types || ['new', 'used', 'certified'];
+        
+        // Update vehicle type checkboxes
+        const newCheckbox = document.getElementById('vehicleNew');
+        const usedCheckbox = document.getElementById('vehicleUsed');
+        const certifiedCheckbox = document.getElementById('vehicleCertified');
+        
+        if (newCheckbox) newCheckbox.checked = vehicleTypes.includes('new');
+        if (usedCheckbox) usedCheckbox.checked = vehicleTypes.includes('used');
+        if (certifiedCheckbox) certifiedCheckbox.checked = vehicleTypes.includes('certified');
+        
+        // Update price filters if they exist
+        const minPriceInput = document.getElementById('minPrice');
+        const maxPriceInput = document.getElementById('maxPrice');
+        
+        if (minPriceInput && filteringRules.min_price) {
+            minPriceInput.value = filteringRules.min_price;
+        }
+        if (maxPriceInput && filteringRules.max_price) {
+            maxPriceInput.value = filteringRules.max_price;
+        }
+        
+        // Show the modal
+        const modal = document.getElementById('dealershipModal');
+        if (modal) {
+            modal.style.display = 'flex'; // Use flex to maintain centering
+            modal.classList.add('show');
+        }
+        
+        console.log('Dealership modal opened for:', dealership.name);
     }
     
     async saveDealershipSettings() {
         console.log('Saving dealership settings...');
-        // Implementation for saving settings
-        this.addTerminalMessage('Dealership settings saved', 'success');
+        
+        if (!this.currentEditingDealership) {
+            this.addTerminalMessage('No dealership selected for editing', 'error');
+            return;
+        }
+        
+        try {
+            // Get form values
+            const newChecked = document.getElementById('vehicleNew')?.checked || false;
+            const usedChecked = document.getElementById('vehicleUsed')?.checked || false;
+            const certifiedChecked = document.getElementById('vehicleCertified')?.checked || false;
+            const minPrice = document.getElementById('minPrice')?.value || '';
+            const maxPrice = document.getElementById('maxPrice')?.value || '';
+            
+            // Build vehicle types array
+            const vehicleTypes = [];
+            if (newChecked) vehicleTypes.push('new');
+            if (usedChecked) vehicleTypes.push('used');
+            if (certifiedChecked) vehicleTypes.push('certified');
+            
+            // Build filtering rules object
+            const filteringRules = {
+                vehicle_types: vehicleTypes
+            };
+            
+            if (minPrice) filteringRules.min_price = parseFloat(minPrice);
+            if (maxPrice) filteringRules.max_price = parseFloat(maxPrice);
+            
+            // Send update to backend
+            const response = await fetch(`/api/dealership-settings/${this.currentEditingDealership.id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    filtering_rules: filteringRules
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to save settings');
+            }
+            
+            // Close modal and refresh settings
+            this.closeDealershipModal();
+            this.loadDealershipSettings();
+            this.addTerminalMessage(`Settings saved for ${this.currentEditingDealership.name}`, 'success');
+            
+        } catch (error) {
+            console.error('Error saving dealership settings:', error);
+            this.addTerminalMessage(`Error saving settings: ${error.message}`, 'error');
+        }
+    }
+    
+    closeDealershipModal() {
+        const modal = document.getElementById('dealershipModal');
+        if (modal) {
+            modal.style.display = 'none';
+            modal.classList.remove('show');
+        }
+        this.currentEditingDealership = null;
     }
     
     setupNewQueueEventListeners() {
@@ -2022,7 +2155,7 @@ class MinisFornumApp {
                 const typeClass = dealershipType.toLowerCase(); // 'cao' or 'list'
                 console.log(`🏢 Dealership: ${dealership.name} -> Type: ${dealershipType} -> Class: ${typeClass}`);
                 return `
-                    <div class="dealership-item" data-dealership="${dealership.name}">
+                    <div class="dealership-item" data-dealership="${dealership.name}" draggable="true">
                         <div class="dealership-name">${dealership.name}</div>
                         <div class="dealership-type ${typeClass}">${dealershipType}</div>
                     </div>
@@ -2060,6 +2193,62 @@ class MinisFornumApp {
         
         // Add event listener using delegation
         dealershipList.addEventListener('click', this.dealershipClickHandler);
+        
+        // Set up drag and drop event handlers
+        this.setupDragAndDrop();
+    }
+    
+    setupDragAndDrop() {
+        const dealershipList = document.getElementById('dealershipList');
+        const queuePanel = document.getElementById('queueItems');
+        
+        if (!dealershipList || !queuePanel) return;
+        
+        // Add dragstart event to all dealership items
+        dealershipList.addEventListener('dragstart', (e) => {
+            const dealershipItem = e.target.closest('.dealership-item');
+            if (dealershipItem) {
+                e.dataTransfer.effectAllowed = 'copy';
+                e.dataTransfer.setData('text/plain', dealershipItem.getAttribute('data-dealership'));
+                dealershipItem.classList.add('dragging');
+                
+                // Store the dragged element
+                this.draggedDealership = dealershipItem.getAttribute('data-dealership');
+                console.log('🎯 Started dragging:', this.draggedDealership);
+            }
+        });
+        
+        // Add dragend event to clean up
+        dealershipList.addEventListener('dragend', (e) => {
+            const dealershipItem = e.target.closest('.dealership-item');
+            if (dealershipItem) {
+                dealershipItem.classList.remove('dragging');
+            }
+        });
+        
+        // Set up the queue panel as a drop zone
+        queuePanel.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            queuePanel.classList.add('drag-over');
+        });
+        
+        queuePanel.addEventListener('dragleave', (e) => {
+            if (e.target === queuePanel || !queuePanel.contains(e.relatedTarget)) {
+                queuePanel.classList.remove('drag-over');
+            }
+        });
+        
+        queuePanel.addEventListener('drop', (e) => {
+            e.preventDefault();
+            queuePanel.classList.remove('drag-over');
+            
+            const dealershipName = e.dataTransfer.getData('text/plain');
+            if (dealershipName) {
+                this.addDealershipToQueue(dealershipName);
+                console.log('✅ Dropped dealership:', dealershipName);
+            }
+        });
     }
     
     setupDealershipSearchListeners() {

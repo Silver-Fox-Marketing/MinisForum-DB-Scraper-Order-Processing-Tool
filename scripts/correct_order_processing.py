@@ -116,6 +116,17 @@ class CorrectOrderProcessor:
             # Step 5: Generate Adobe CSV in EXACT format we need
             csv_path = self._generate_adobe_csv(new_vehicles, dealership_name, template_type, order_folder, qr_paths)
             
+            # Step 5.5: Generate Billing CSV for tracking
+            # For CAO orders, ordered = current inventory, produced = new vehicles actually processed
+            order_date = datetime.now().strftime('%#m.%#d') if os.name == 'nt' else datetime.now().strftime('%-m.%-d')
+            billing_csv_path = self._generate_billing_csv(
+                ordered_vehicles=current_vehicles,  # All vehicles in current inventory
+                produced_vehicles=new_vehicles,      # Only new vehicles we're processing
+                dealership_name=dealership_name,
+                order_date=order_date,
+                output_folder=order_folder
+            )
+            
             # Step 6: CRITICAL - Log processed vehicle VINs to history database (unless testing)
             if skip_vin_logging:
                 logger.info("Skipping VIN logging - test data processing")
@@ -132,7 +143,9 @@ class CorrectOrderProcessor:
                 'qr_codes_generated': len(qr_paths),
                 'qr_folder': str(qr_folder),
                 'csv_file': str(csv_path),
+                'billing_csv': str(billing_csv_path),
                 'download_csv': f"/download_csv/{csv_path.name}",
+                'download_billing': f"/download_csv/{billing_csv_path.name}",
                 'timestamp': timestamp,
                 'vins_logged_to_history': vin_logging_result['vins_logged'],
                 'duplicate_vins_skipped': vin_logging_result['duplicates_skipped'],
@@ -190,6 +203,17 @@ class CorrectOrderProcessor:
             # Generate Adobe CSV - use filtered vehicles
             csv_path = self._generate_adobe_csv(filtered_vehicles, dealership_name, template_type, order_folder, qr_paths)
             
+            # Generate Billing CSV for tracking
+            # For LIST orders, ordered = requested VINs, produced = filtered vehicles actually processed
+            order_date = datetime.now().strftime('%#m.%#d') if os.name == 'nt' else datetime.now().strftime('%-m.%-d')
+            billing_csv_path = self._generate_billing_csv(
+                ordered_vehicles=vehicles,          # All vehicles requested (from VIN list)
+                produced_vehicles=filtered_vehicles, # Vehicles that passed filters and were processed
+                dealership_name=dealership_name,
+                order_date=order_date,
+                output_folder=order_folder
+            )
+            
             # CRITICAL: Log processed vehicle VINs to history database for future order accuracy - use filtered vehicles (unless testing)
             if skip_vin_logging:
                 logger.info("Skipping VIN logging - test data processing")
@@ -207,7 +231,9 @@ class CorrectOrderProcessor:
                 'qr_codes_generated': len(qr_paths),
                 'qr_folder': str(qr_folder),
                 'csv_file': str(csv_path),
+                'billing_csv': str(billing_csv_path),
                 'download_csv': f"/download_csv/{csv_path.name}",
+                'download_billing': f"/download_csv/{billing_csv_path.name}",
                 'timestamp': timestamp,
                 'vins_logged_to_history': vin_logging_result['vins_logged'],
                 'duplicate_vins_skipped': vin_logging_result['duplicates_skipped'],
@@ -493,6 +519,90 @@ class CorrectOrderProcessor:
         logger.info(f"Previous order had {len(previous_vin_set)} VINs, current has {len(current_vin_set)}, {len(new_vins)} are NEW")
         
         return new_vins
+    
+    def _generate_billing_csv(self, ordered_vehicles: List[Dict], produced_vehicles: List[Dict], 
+                              dealership_name: str, order_date: str, output_folder: Path) -> Path:
+        """Generate billing CSV in the format required for billing tracking
+        
+        Format includes:
+        - Summary statistics (left section)
+        - ORDERED vs PRODUCED VIN lists (right section)
+        - Duplicate tracking
+        - New vs Used breakdown
+        """
+        import csv
+        from collections import Counter
+        
+        # Clean dealership name for filename
+        clean_name = dealership_name.replace(' ', '_').replace('.', '').replace("'", '')
+        
+        # Create filename with SCP (Shortcut Pack) notation
+        # Format: DEALERSHIP_SCP_M.DD - BILLING.csv
+        date_str = order_date if order_date else datetime.now().strftime('%-m.%-d') if os.name != 'nt' else datetime.now().strftime('%#m.%#d')
+        filename = f"{clean_name.upper()}_SCP_{date_str} - BILLING.csv"
+        billing_path = output_folder / filename
+        
+        # Extract VINs
+        ordered_vins = [v.get('vin', '') for v in ordered_vehicles]
+        produced_vins = [v.get('vin', '') for v in produced_vehicles]
+        
+        # Count vehicle types
+        new_count = sum(1 for v in produced_vehicles if self._get_type_prefix(v.get('type', '')) == 'NEW')
+        used_count = sum(1 for v in produced_vehicles if self._get_type_prefix(v.get('type', '')) in ['PO', 'CPO'])
+        
+        # Find duplicates
+        ordered_counter = Counter(ordered_vins)
+        produced_counter = Counter(produced_vins)
+        ordered_duplicates = [vin for vin, count in ordered_counter.items() if count > 1]
+        produced_duplicates = [vin for vin, count in produced_counter.items() if count > 1]
+        
+        # Count duplicates by type
+        new_duplicates = sum(1 for v in produced_vehicles 
+                            if v.get('vin') in produced_duplicates 
+                            and self._get_type_prefix(v.get('type', '')) == 'NEW')
+        used_duplicates = sum(1 for v in produced_vehicles 
+                             if v.get('vin') in produced_duplicates 
+                             and self._get_type_prefix(v.get('type', '')) in ['PO', 'CPO'])
+        
+        # Write the billing CSV
+        with open(billing_path, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.writer(csvfile)
+            
+            # Write headers and summary section with VIN lists side by side
+            # Row 1: Headers
+            writer.writerow(['Totals:', '', '', 'DUPLICATES', '', '', '', 'ORDERED', 'PRODUCED'])
+            
+            # Rows 2-9: Statistics with VINs starting from row 2
+            rows_data = [
+                ['Total Ordered', len(ordered_vins), '', '', '', '', ''],
+                ['Total Produced:', len(produced_vins), '', '', '', '', ''],
+                ['Total New:', new_count, '', '', '', '', ''],
+                ['Total Used:', used_count, '', '', '', '', ''],
+                ['', '', '', '', '', '', ''],
+                ['Used Duplicates:', used_duplicates, '', '', '', '', ''],
+                ['New Duplicates', new_duplicates, '', '', '', '', ''],
+                ['Duplicates:', len(produced_duplicates), '', '', '', '', '']
+            ]
+            
+            # Add VINs to the rows (starting from row 2, index 0)
+            for i in range(max(len(ordered_vins), len(produced_vins))):
+                if i < len(rows_data):
+                    # Add to existing summary rows
+                    rows_data[i].append(ordered_vins[i] if i < len(ordered_vins) else '')
+                    rows_data[i].append(produced_vins[i] if i < len(produced_vins) else '')
+                else:
+                    # Add new rows for remaining VINs
+                    row = ['', '', '', '', '', '', '', 
+                           ordered_vins[i] if i < len(ordered_vins) else '',
+                           produced_vins[i] if i < len(produced_vins) else '']
+                    rows_data.append(row)
+            
+            # Write all rows
+            for row in rows_data:
+                writer.writerow(row)
+        
+        logger.info(f"Generated billing CSV: {billing_path}")
+        return billing_path
     
     def _generate_qr_codes(self, vehicles: List[Dict], dealership_name: str, output_folder: Path) -> List[str]:
         """Generate QR codes for vehicle-specific information"""
