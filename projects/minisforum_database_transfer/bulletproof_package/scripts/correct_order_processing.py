@@ -25,7 +25,9 @@ class CorrectOrderProcessor:
     """Order processing that matches our exact reference logic"""
     
     def __init__(self):
-        self.output_base = Path("orders")
+        # Use absolute path to main project orders folder
+        project_root = Path(__file__).parent.parent
+        self.output_base = project_root / "orders"
         self.output_base.mkdir(exist_ok=True)
         
         # Map dealership config names to actual data location names
@@ -116,6 +118,9 @@ class CorrectOrderProcessor:
             # Step 5: Generate Adobe CSV in EXACT format we need
             csv_path = self._generate_adobe_csv(new_vehicles, dealership_name, template_type, order_folder, qr_paths)
             
+            # Step 5.5: Generate billing sheet CSV automatically after QR codes
+            billing_csv_path = self._generate_billing_sheet_csv(new_vehicles, dealership_name, order_folder, timestamp)
+            
             # Step 6: CRITICAL - Log processed vehicle VINs to history database (unless testing)
             if skip_vin_logging:
                 logger.info("Skipping VIN logging - test data processing")
@@ -133,6 +138,8 @@ class CorrectOrderProcessor:
                 'qr_folder': str(qr_folder),
                 'csv_file': str(csv_path),
                 'download_csv': f"/download_csv/{csv_path.name}",
+                'billing_csv_file': str(billing_csv_path),
+                'download_billing_csv': f"/download_csv/{billing_csv_path.name}",
                 'timestamp': timestamp,
                 'vins_logged_to_history': vin_logging_result['vins_logged'],
                 'duplicate_vins_skipped': vin_logging_result['duplicates_skipped'],
@@ -190,6 +197,9 @@ class CorrectOrderProcessor:
             # Generate Adobe CSV - use filtered vehicles
             csv_path = self._generate_adobe_csv(filtered_vehicles, dealership_name, template_type, order_folder, qr_paths)
             
+            # Generate billing sheet CSV automatically after QR codes
+            billing_csv_path = self._generate_billing_sheet_csv(filtered_vehicles, dealership_name, order_folder, timestamp)
+            
             # CRITICAL: Log processed vehicle VINs to history database for future order accuracy - use filtered vehicles (unless testing)
             if skip_vin_logging:
                 logger.info("Skipping VIN logging - test data processing")
@@ -208,6 +218,8 @@ class CorrectOrderProcessor:
                 'qr_folder': str(qr_folder),
                 'csv_file': str(csv_path),
                 'download_csv': f"/download_csv/{csv_path.name}",
+                'billing_csv_file': str(billing_csv_path),
+                'download_billing_csv': f"/download_csv/{billing_csv_path.name}",
                 'timestamp': timestamp,
                 'vins_logged_to_history': vin_logging_result['vins_logged'],
                 'duplicate_vins_skipped': vin_logging_result['duplicates_skipped'],
@@ -759,6 +771,86 @@ class CorrectOrderProcessor:
             return 'CERTIFIED'
         else:
             return 'USED'
+    
+    def _generate_billing_sheet_csv(self, vehicles: List[Dict], dealership_name: str, output_folder: Path, timestamp: str) -> Path:
+        """Generate billing sheet CSV automatically after QR codes - matches exact format from examples"""
+        
+        # File naming pattern: [DEALERSHIP NAME] [DATE] - BILLING.csv
+        clean_name = dealership_name.upper().replace(' ', '')
+        date_str = datetime.now().strftime('%m-%d')  # Format: 8-19
+        filename = f"{clean_name}_{date_str} - BILLING.csv"
+        billing_path = output_folder / filename
+        
+        logger.info(f"Generating billing sheet CSV: {billing_path}")
+        
+        # Count vehicle types
+        new_count = 0
+        used_count = 0
+        cpo_count = 0
+        
+        vehicle_lines = []
+        vin_list = []
+        
+        for vehicle in vehicles:
+            year = vehicle.get('year', '')
+            make = vehicle.get('make', '')
+            model = vehicle.get('model', '')
+            stock = vehicle.get('stock', '')
+            vin = vehicle.get('vin', '')
+            vtype = vehicle.get('type', '').lower()
+            
+            # Determine vehicle type for billing
+            if 'new' in vtype:
+                billing_type = 'New'
+                new_count += 1
+            elif 'certified' in vtype or 'cpo' in vtype or 'pre-owned' in vtype:
+                billing_type = 'Pre-Owned'
+                cpo_count += 1
+            else:
+                billing_type = 'Used'
+                used_count += 1
+            
+            # Format vehicle line: "Year Make Model - Stock - VIN"
+            vehicle_line = f"{year} {make} {model} - {stock} - {vin}"
+            vehicle_lines.append([vehicle_line, billing_type])
+            vin_list.append(vin)
+        
+        total_vehicles = len(vehicles)
+        
+        # Write billing CSV in exact format from examples
+        with open(billing_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            
+            # Header row - matches format from examples
+            writer.writerow(['Printed Vehicles:', '', 'TOTALS:', '', 'VINLOG:', '', 'Duplicates:'])
+            
+            # Vehicle lines with summary statistics in right columns
+            for i, (vehicle_line, vehicle_type) in enumerate(vehicle_lines):
+                if i == 0:
+                    # First row includes New count
+                    writer.writerow([vehicle_line, vehicle_type, 'New:', new_count, vin_list[i] if i < len(vin_list) else '', '', 'No Dupes'])
+                elif i == 1:
+                    # Second row includes Used count
+                    writer.writerow([vehicle_line, vehicle_type, 'Used:', used_count, vin_list[i] if i < len(vin_list) else '', '', ''])
+                elif i == 2:
+                    # Third row includes Pre-Owned count
+                    writer.writerow([vehicle_line, vehicle_type, 'Pre-Owned:', cpo_count, vin_list[i] if i < len(vin_list) else '', '', ''])
+                elif i == 3:
+                    # Fourth row includes Total
+                    writer.writerow([vehicle_line, vehicle_type, 'Total:', total_vehicles, vin_list[i] if i < len(vin_list) else '', '', ''])
+                elif i == 4:
+                    # Fifth row includes Duplicates count (always 0 for new orders)
+                    writer.writerow([vehicle_line, vehicle_type, 'Duplicates:', 0, vin_list[i] if i < len(vin_list) else '', '', ''])
+                else:
+                    # Remaining rows just have vehicle info and VIN
+                    writer.writerow([vehicle_line, vehicle_type, '', '', vin_list[i] if i < len(vin_list) else '', '', ''])
+            
+            # Add empty rows if needed (billing sheets typically have some padding)
+            for _ in range(3):
+                writer.writerow(['', '', '', '', '', '', ''])
+        
+        logger.info(f"Generated billing sheet CSV: {billing_path}")
+        return billing_path
     
     def _update_vin_history(self, dealership_name: str, vins: List[str]):
         """Update VIN history for next comparison"""
