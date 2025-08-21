@@ -59,6 +59,44 @@ Silver Fox Marketing Brand Colors and Typography
     --shadow-sm: 0 1px 3px rgba(34, 9, 1, 0.1);
     --shadow-md: 0 4px 6px rgba(34, 9, 1, 0.1);
     --shadow-lg: 0 10px 15px rgba(34, 9, 1, 0.1);
+    
+    /* Theme System - Light Mode (Default) */
+    --theme-bg-primary: #ffffff;
+    --theme-bg-secondary: #f8fafc;
+    --theme-bg-tertiary: #f1f5f9;
+    --theme-surface: #ffffff;
+    --theme-surface-elevated: #ffffff;
+    --theme-border: #e2e8f0;
+    --theme-border-light: #f1f5f9;
+    --theme-text-primary: #1e293b;
+    --theme-text-secondary: #64748b;
+    --theme-text-muted: #94a3b8;
+    --theme-shadow: rgba(0, 0, 0, 0.1);
+    --theme-shadow-heavy: rgba(0, 0, 0, 0.15);
+}
+
+/* Dark Mode Theme Variables - Silver Fox Brand Aligned */
+:root[data-theme="dark"] {
+    --theme-bg-primary: #1a0e0a;      /* Deep warm dark based on brand black */
+    --theme-bg-secondary: #2d1810;    /* Slightly lighter warm dark */
+    --theme-bg-tertiary: #4a3a32;     /* Silver Fox grey-brown for cells */
+    --theme-surface: #2d1810;         /* Card backgrounds */
+    --theme-surface-elevated: #5c4b42; /* Elevated card backgrounds - darker silver fox grey */
+    --theme-border: #4a2e22;          /* Warm brown borders */
+    --theme-border-light: #5c3926;    /* Lighter warm borders */
+    --theme-text-primary: #f5f1ee;    /* Warm off-white for primary text */
+    --theme-text-secondary: #d4c4b8;  /* Warm light brown for secondary text */
+    --theme-text-muted: #9c8875;      /* Warm muted brown for muted text */
+    --theme-shadow: rgba(34, 9, 1, 0.6);      /* Shadow using brand black */
+    --theme-shadow-heavy: rgba(34, 9, 1, 0.8); /* Heavier shadow */
+    
+    /* Dark mode accent colors that complement the warm theme */
+    --theme-accent-warm: #ff8f71;     /* Use brand light-red for accents */
+    --theme-accent-gold: #ffc817;     /* Use brand gold for highlights */
+    
+    /* Silver Fox grey variants for dark mode */
+    --theme-silver-fox-grey: #6b5d56; /* Adapted brand grey for dark mode */
+    --theme-silver-fox-light: #7a6d66; /* Lighter variant */
 }
 
 /* Reset and Base Styles */
@@ -72,9 +110,10 @@ body {
     font-family: var(--font-body);
     font-size: 14px;
     line-height: 1.5;
-    color: var(--black);
-    background-color: #f8f9fa;
+    color: var(--theme-text-primary);
+    background-color: var(--theme-bg-secondary);
     overflow-x: hidden;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* App Container */
@@ -260,7 +299,8 @@ body {
     flex: 1;
     display: flex;
     flex-direction: column;
-    background: var(--white);
+    background: var(--theme-bg-primary);
+    transition: background-color 0.3s ease;
 }
 
 /* Modern Tab Navigation */
@@ -302,9 +342,10 @@ body {
 
 .tab-button.active {
     color: var(--dark-red);
-    background: var(--white);
+    background: var(--theme-bg-primary);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
     transform: translateY(-2px);
+    transition: background-color 0.3s ease;
     border: 2px solid rgba(253, 65, 13, 0.2);
 }
 
@@ -367,7 +408,8 @@ body {
 .panel-header h2 {
     font-family: var(--font-header);
     font-size: 1.5rem;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     margin: 0;
 }
 
@@ -424,9 +466,10 @@ body {
 }
 
 .btn-secondary {
-    background: linear-gradient(135deg, #ffffff, #f8fafc);
-    color: #475569;
-    border-color: #e2e8f0;
+    background: var(--theme-bg-primary);
+    color: var(--theme-text-secondary);
+    border-color: var(--theme-border);
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
@@ -556,6 +599,62 @@ body {
     border-right-width: 2px;
 }
 
+/* Dark Mode Toggle Button */
+.theme-toggle {
+    background: transparent;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    color: #64748b;
+    font-size: 1rem;
+    margin-left: 16px;
+    position: relative;
+    overflow: hidden;
+}
+
+.theme-toggle::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.6s ease;
+}
+
+.theme-toggle:hover::before {
+    left: 100%;
+}
+
+.theme-toggle:hover {
+    background: linear-gradient(135deg, rgba(253, 65, 13, 0.08), rgba(253, 65, 13, 0.12));
+    border-color: var(--primary-red);
+    color: var(--dark-red);
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 6px 20px rgba(253, 65, 13, 0.15);
+}
+
+/* Dark Mode Theme Toggle Active State */
+:root[data-theme="dark"] .theme-toggle {
+    background: linear-gradient(135deg, var(--primary-red), var(--dark-red));
+    border-color: var(--primary-red);
+    color: white;
+    box-shadow: 0 4px 12px rgba(253, 65, 13, 0.3);
+}
+
+:root[data-theme="dark"] .theme-toggle:hover {
+    background: linear-gradient(135deg, var(--dark-red), #8b1c0c);
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 8px 24px rgba(253, 65, 13, 0.4);
+}
+
 /* Dealership Grid */
 .dealership-grid {
     display: grid;
@@ -565,9 +664,10 @@ body {
 }
 
 .dealership-card {
-    background: var(--white);
-    border: 1px solid #e1e5e9;
+    background: var(--theme-bg-primary);
+    border: 1px solid var(--theme-border);
     border-radius: var(--radius-lg);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
     padding: var(--spacing-lg);
     box-shadow: var(--shadow-sm);
     transition: all 0.2s ease;
@@ -600,7 +700,8 @@ body {
     font-family: var(--font-accent);
     font-weight: 500;
     font-size: 1rem;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     margin: 0;
     line-height: 1.3;
 }
@@ -639,7 +740,8 @@ body {
 }
 
 .info-value {
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     font-weight: 500;
 }
 
@@ -670,16 +772,18 @@ body {
 
 /* Scraper Status */
 .scraper-status {
-    background: var(--white);
-    border: 1px solid #e1e5e9;
+    background: var(--theme-bg-primary);
+    border: 1px solid var(--theme-border);
     border-radius: var(--radius-lg);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
     padding: var(--spacing-xl);
     box-shadow: var(--shadow-sm);
 }
 
 .status-header h3 {
     font-family: var(--font-accent);
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     margin-bottom: var(--spacing-md);
 }
 
@@ -718,16 +822,19 @@ body {
 }
 
 .overview-card {
-    background: var(--white);
-    border: 1px solid #e1e5e9;
+    background: var(--theme-bg-primary);
+    border: 1px solid var(--theme-border);
     border-radius: var(--radius-lg);
+    color: var(--theme-text-primary);
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
     padding: var(--spacing-lg);
     box-shadow: var(--shadow-sm);
 }
 
 .overview-card h3 {
     font-family: var(--font-accent);
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     margin-bottom: var(--spacing-md);
     font-size: 1.1rem;
 }
@@ -750,7 +857,8 @@ body {
 }
 
 .metric-value {
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     font-weight: 600;
     font-size: 1rem;
 }
@@ -795,9 +903,11 @@ body {
 }
 
 .modal-content {
-    background: var(--white);
+    background: var(--theme-bg-primary);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
+    color: var(--theme-text-primary);
+    transition: background-color 0.3s ease, color 0.3s ease;
     max-width: 500px;
     width: 90%;
     max-height: 80vh;
@@ -820,7 +930,8 @@ body {
 
 .modal-header h3 {
     font-family: var(--font-accent);
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     margin: 0;
 }
 
@@ -859,7 +970,8 @@ body {
 .form-group label {
     display: block;
     font-weight: 500;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     margin-bottom: var(--spacing-sm);
     font-size: 0.9rem;
 }
@@ -891,7 +1003,8 @@ body {
     align-items: center;
     cursor: pointer;
     font-size: 0.9rem;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -950,7 +1063,8 @@ body {
 
 .file-name {
     font-weight: 500;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
 }
 
 .file-details {
@@ -1087,7 +1201,8 @@ body {
 .metric-value {
     font-size: 2rem;
     font-weight: 700;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     line-height: 1;
     margin-bottom: var(--spacing-xs);
     font-family: var(--font-header);
@@ -1108,7 +1223,8 @@ body {
 
 .system-actions h3 {
     margin: 0 0 var(--spacing-md) 0;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     font-size: 1.1rem;
     font-weight: 600;
 }
@@ -1229,16 +1345,18 @@ body {
 .card-value {
     font-size: 1.8rem;
     font-weight: 700;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     line-height: 1;
     font-family: var(--font-header);
 }
 
 /* Queue Orders List */
 .queue-orders {
-    background: var(--white);
-    border: 1px solid #e0e0e0;
+    background: var(--theme-bg-primary);
+    border: 1px solid var(--theme-border);
     border-radius: var(--radius-lg);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
     padding: var(--spacing-xl);
     margin-bottom: var(--spacing-xl);
     box-shadow: var(--shadow-sm);
@@ -1246,7 +1364,8 @@ body {
 
 .queue-orders h3 {
     margin: 0 0 var(--spacing-lg) 0;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     font-size: 1.1rem;
     font-weight: 600;
 }
@@ -1298,7 +1417,8 @@ body {
 
 .order-title {
     font-weight: 600;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     font-size: 1rem;
 }
 
@@ -1388,7 +1508,8 @@ body {
 
 .order-btn.view:hover {
     background: #f8f9fa;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
 }
 
 /* Empty State */
@@ -1420,7 +1541,8 @@ body {
 
 .add-custom-order h3 {
     margin: 0 0 var(--spacing-lg) 0;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     font-size: 1.1rem;
     font-weight: 600;
 }
@@ -1450,8 +1572,11 @@ body {
 
 .form-control {
     padding: var(--spacing-sm) var(--spacing-md);
-    border: 1px solid #e1e5e9;
+    border: 1px solid var(--theme-border);
     border-radius: var(--radius-md);
+    background: var(--theme-bg-primary);
+    color: var(--theme-text-primary);
+    transition: border-color 0.3s ease, background-color 0.3s ease, color 0.3s ease;
     font-size: 0.9rem;
     transition: border-color 0.2s ease;
     font-family: var(--font-body);
@@ -1466,7 +1591,8 @@ body {
 .form-group label {
     font-size: 0.9rem;
     font-weight: 500;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
 }
 
 /* Progress Indicator */
@@ -1676,10 +1802,11 @@ body {
 
 /* Selection Panel (Left Side) */
 .selection-panel {
-    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-    border: 1px solid #e2e8f0;
+    background: var(--theme-bg-primary);
+    border: 1px solid var(--theme-border);
     border-radius: 16px;
     padding: var(--spacing-xl);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
     display: flex;
     flex-direction: column;
     gap: var(--spacing-xl);
@@ -1699,7 +1826,8 @@ body {
 .day-selection h3,
 .dealership-selection h3 {
     margin: 8px 0 var(--spacing-md) 0;
-    color: #1e293b;
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     font-size: 1.2rem;
     font-weight: 700;
     border-bottom: 3px solid #e2e8f0;
@@ -1739,9 +1867,10 @@ body {
 }
 
 .day-btn {
-    background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
-    border: 2px solid #e2e8f0;
+    background: var(--theme-bg-tertiary);
+    border: 2px solid var(--theme-border);
     border-radius: 12px;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
     padding: var(--spacing-md) var(--spacing-sm);
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1751,13 +1880,14 @@ body {
     gap: var(--spacing-xs);
     font-size: 0.9rem;
     font-weight: 600;
-    color: #475569;
+    color: var(--theme-text-secondary);
+    transition: color 0.3s ease;
     position: relative;
     overflow: hidden;
 }
 
 .day-btn:hover {
-    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    background: var(--theme-surface-elevated);
     border-color: var(--primary-red);
     transform: translateY(-2px) scale(1.02);
     box-shadow: 0 8px 25px -8px rgba(231, 76, 60, 0.3), 0 0 0 1px rgba(231, 76, 60, 0.1);
@@ -1804,7 +1934,10 @@ body {
 .dealership-search .search-input {
     flex: 1;
     padding: 16px 20px 16px 48px;
-    border: 2px solid #e2e8f0;
+    border: 2px solid var(--theme-border);
+    background: var(--theme-bg-primary);
+    color: var(--theme-text-primary);
+    transition: border-color 0.3s ease, background-color 0.3s ease, color 0.3s ease;
     border-radius: 16px;
     font-size: 0.95rem;
     font-weight: 500;
@@ -1822,7 +1955,7 @@ body {
 .dealership-search .search-input:focus {
     outline: none;
     border-color: var(--primary-red);
-    background: #ffffff;
+    background: var(--theme-bg-primary);
     box-shadow: 0 0 0 4px rgba(253, 65, 13, 0.1), 0 4px 16px rgba(0, 0, 0, 0.08);
     transform: translateY(-1px);
 }
@@ -1912,9 +2045,10 @@ body {
 }
 
 .dealership-item {
-    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-    border: 2px solid #e2e8f0;
+    background: var(--theme-bg-tertiary);
+    border: 2px solid var(--theme-border);
     border-radius: 16px;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
     padding: 16px;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1929,7 +2063,7 @@ body {
 }
 
 .dealership-item:hover {
-    background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
+    background: var(--theme-surface-elevated);
     border-color: var(--primary-red);
     transform: translateY(-4px) scale(1.02);
     box-shadow: 0 12px 32px rgba(253, 65, 13, 0.15), 0 0 0 1px rgba(253, 65, 13, 0.1);
@@ -2001,7 +2135,8 @@ body {
 
 .dealership-name {
     font-weight: 700;
-    color: #1e293b;
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     font-size: 0.95rem;
     line-height: 1.3;
     margin-bottom: 4px;
@@ -2093,7 +2228,8 @@ body {
 .dealership-name {
     font-weight: 600;
     flex: 1;
-    color: #1e293b;
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     font-size: 1rem;
     line-height: 1.4;
     padding-right: 12px;
@@ -2103,7 +2239,8 @@ body {
     font-size: 0.75rem;
     font-weight: 600;
     background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
-    color: #475569;
+    color: var(--theme-text-secondary);
+    transition: color 0.3s ease;
     padding: var(--spacing-xs) var(--spacing-md);
     border-radius: 20px;
     text-transform: uppercase;
@@ -2129,10 +2266,11 @@ body {
 
 /* Queue Panel (Right Side) */
 .queue-panel {
-    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-    border: 1px solid #e2e8f0;
+    background: var(--theme-bg-primary);
+    border: 1px solid var(--theme-border);
     border-radius: 16px;
     padding: var(--spacing-xl);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
     display: flex;
     flex-direction: column;
     box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
@@ -2142,7 +2280,8 @@ body {
 
 .queue-panel h3 {
     margin: 0 0 var(--spacing-lg) 0;
-    color: #1e293b;
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     font-size: 1.2rem;
     font-weight: 700;
     border-bottom: 3px solid #e2e8f0;
@@ -2220,7 +2359,8 @@ body {
 
 .queue-dealership-name {
     font-weight: 600;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     font-size: 1rem;
 }
 
@@ -2267,7 +2407,8 @@ body {
 .order-type-option label {
     cursor: pointer;
     font-weight: 500;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
 }
 
 .order-type-option.cao label {
@@ -2360,7 +2501,8 @@ body {
 
 .selection-header h3 {
     margin: 0;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     font-size: 1.1rem;
     font-weight: 600;
 }
@@ -2403,7 +2545,8 @@ body {
     gap: var(--spacing-sm);
     cursor: pointer;
     font-size: 0.9rem;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
 }
 
 .dealership-label {
@@ -2462,9 +2605,10 @@ body {
 }
 
 .search-controls {
-    background: var(--white);
-    border: 1px solid #e0e0e0;
+    background: var(--theme-bg-primary);
+    border: 1px solid var(--theme-border);
     border-radius: var(--radius-lg);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
     padding: var(--spacing-lg);
     box-shadow: var(--shadow-sm);
 }
@@ -2479,11 +2623,12 @@ body {
 .search-input {
     flex: 1;
     padding: 16px 20px 16px 48px;
-    border: 2px solid #e2e8f0;
+    border: 2px solid var(--theme-border);
+    background: var(--theme-bg-primary);
+    color: var(--theme-text-primary);
     border-radius: 16px;
     font-size: 1rem;
     font-weight: 500;
-    background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
@@ -2496,9 +2641,18 @@ body {
 .search-input:focus {
     outline: none;
     border-color: var(--primary-red);
-    background: #ffffff;
+    background: var(--theme-bg-primary);
     box-shadow: 0 0 0 4px rgba(253, 65, 13, 0.1), 0 4px 16px rgba(0, 0, 0, 0.08);
     transform: translateY(-1px);
+}
+
+/* Placeholder styling for dark mode */
+.search-input::placeholder,
+.form-control::placeholder,
+.filter-select::placeholder,
+.setting-select::placeholder {
+    color: var(--theme-text-muted);
+    transition: color 0.3s ease;
 }
 
 .search-bar-container::before {
@@ -2572,13 +2726,17 @@ body {
 .filter-group label {
     font-size: 0.9rem;
     font-weight: 500;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
 }
 
 .filter-select, .date-input, .sort-select {
     padding: var(--spacing-sm) var(--spacing-md);
-    border: 1px solid #e1e5e9;
+    border: 1px solid var(--theme-border);
     border-radius: var(--radius-sm);
+    background: var(--theme-bg-primary);
+    color: var(--theme-text-primary);
+    transition: border-color 0.3s ease, background-color 0.3s ease, color 0.3s ease;
     font-size: 0.9rem;
     background: var(--white);
     transition: border-color 0.2s ease;
@@ -2633,9 +2791,11 @@ body {
 }
 
 .search-results {
-    background: var(--white);
-    border: 1px solid #e0e0e0;
+    background: var(--theme-bg-primary);
+    border: 1px solid var(--theme-border);
     border-radius: var(--radius-lg);
+    color: var(--theme-text-primary);
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
     box-shadow: var(--shadow-sm);
     min-height: 400px;
 }
@@ -2653,7 +2813,8 @@ body {
 .results-count {
     font-size: 1rem;
     font-weight: 600;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
 }
 
 .sort-controls {
@@ -2689,7 +2850,8 @@ body {
 
 .initial-message h3 {
     margin-bottom: var(--spacing-md);
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     font-size: 1.5rem;
 }
 
@@ -2742,7 +2904,8 @@ body {
 .results-table th {
     background: #f8f9fa;
     font-weight: 600;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     position: sticky;
     top: 0;
     cursor: pointer;
@@ -2841,7 +3004,8 @@ body {
 }
 
 .search-error h3, .no-results h3 {
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     margin-bottom: var(--spacing-md);
 }
 
@@ -2923,7 +3087,8 @@ body {
 .vin-history-table th {
     background: #f8f9fa;
     font-weight: 600;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     position: sticky;
     top: 0;
     cursor: pointer;
@@ -3225,7 +3390,8 @@ body {
 
 .header-filter option {
     background: var(--white);
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     padding: var(--spacing-xs);
 }
 
@@ -3381,7 +3547,8 @@ body {
     flex: 1;
     font-size: 1rem;
     line-height: 1.5;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     font-weight: 500;
 }
 
@@ -3416,7 +3583,8 @@ body {
 
 .active-scrapers-panel h3 {
     margin: 0 0 var(--spacing-lg) 0;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     font-size: 1.1rem;
     font-weight: 600;
     border-bottom: 2px solid #f1f3f4;
@@ -3461,7 +3629,8 @@ body {
 
 .scraper-dealership-name {
     font-weight: 600;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     font-size: 1rem;
 }
 
@@ -3562,7 +3731,8 @@ body {
 
 .scraper-action-btn.view-output:hover {
     background: #f8f9fa;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
 }
 
 .console-controls {
@@ -4148,7 +4318,8 @@ body {
 .dealership-name {
     font-size: 1.2rem;
     font-weight: 600;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     margin: 0;
     line-height: 1.3;
 }
@@ -4403,7 +4574,8 @@ body {
 
 .import-header h3 {
     margin: 0;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -4458,7 +4630,8 @@ body {
 
 .history-header h3 {
     margin: 0;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -4561,7 +4734,8 @@ body {
 }
 
 .info-item span {
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     font-weight: 500;
 }
 
@@ -4675,7 +4849,8 @@ body {
 
 .settings-card-header h3 {
     margin: 0;
-    color: #1e293b;
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     font-size: 1.2rem;
     font-weight: 700;
     display: flex;
@@ -4774,7 +4949,10 @@ body {
 .setting-select {
     width: 100%;
     padding: 12px 16px;
-    border: 2px solid #e5e7eb;
+    border: 2px solid var(--theme-border);
+    background: var(--theme-bg-primary);
+    color: var(--theme-text-primary);
+    transition: border-color 0.3s ease, background-color 0.3s ease, color 0.3s ease;
     border-radius: 10px;
     font-size: 0.9rem;
     background: #fafbfc;
@@ -5315,7 +5493,8 @@ body {
 .stat-info .stat-value {
     font-size: 1.4rem;
     font-weight: 700;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     line-height: 1;
 }
 
@@ -5356,7 +5535,8 @@ body {
     padding: 2px 6px;
     border-radius: 3px;
     font-size: 0.85rem;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
 }
 
 .btn-link {
@@ -5390,7 +5570,8 @@ body {
 
 .progress-text {
     font-weight: 500;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
 }
 
 .progress-count {
@@ -5439,7 +5620,8 @@ body {
 }
 
 .success-indicator span {
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     font-size: 1.1rem;
 }
 
@@ -5473,7 +5655,8 @@ body {
 
 .preview-header h5 {
     margin: 0;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     font-size: 1rem;
     display: flex;
     align-items: center;
@@ -5485,7 +5668,8 @@ body {
 }
 
 .qr-file-list h5 {
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     margin-bottom: var(--spacing-md);
     display: flex;
     align-items: center;
@@ -5528,7 +5712,8 @@ body {
 }
 
 .filename {
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     font-size: 0.9rem;
     word-break: break-word;
 }
@@ -5620,7 +5805,8 @@ body {
 .completion-title {
     font-size: 2.5rem;
     font-weight: 700;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     margin-bottom: var(--spacing-sm);
 }
 
@@ -5681,7 +5867,8 @@ body {
     margin: 0 0 var(--spacing-xs) 0;
     font-size: 1rem;
     font-weight: 600;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
 }
 
 .detail-value {
@@ -5708,7 +5895,8 @@ body {
     margin: 0 0 var(--spacing-lg) 0;
     font-size: 1.2rem;
     font-weight: 600;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
@@ -5747,7 +5935,8 @@ body {
 .output-item span {
     display: block;
     font-weight: 600;
-    color: var(--black);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease;
     margin-bottom: var(--spacing-xs);
 }
 

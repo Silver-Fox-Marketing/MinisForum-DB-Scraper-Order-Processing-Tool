@@ -120,6 +120,9 @@ class MinisFornumApp {
     async init() {
         console.log('Initializing MinisForum Database GUI...');
         
+        // Initialize theme system
+        this.initTheme();
+        
         // Bind event listeners
         this.bindEventListeners();
         
@@ -6181,6 +6184,59 @@ class MinisFornumApp {
             exportBtn.innerHTML = originalText;
             exportBtn.disabled = false;
         }
+    }
+    
+    // Dark Mode Theme System
+    initTheme() {
+        console.log('Initializing theme system...');
+        
+        // Load saved theme preference or default to light
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        this.setTheme(savedTheme);
+        
+        // Add event listener to theme toggle button
+        const themeToggle = document.getElementById('themeToggle');
+        if (themeToggle) {
+            themeToggle.addEventListener('click', () => {
+                this.toggleTheme();
+            });
+        }
+    }
+    
+    setTheme(theme) {
+        console.log(`Setting theme to: ${theme}`);
+        
+        // Apply theme to document root
+        document.documentElement.setAttribute('data-theme', theme);
+        
+        // Update toggle button icon
+        const themeToggle = document.getElementById('themeToggle');
+        if (themeToggle) {
+            const icon = themeToggle.querySelector('i');
+            if (icon) {
+                if (theme === 'dark') {
+                    icon.className = 'fas fa-sun';
+                    themeToggle.setAttribute('title', 'Switch to Light Mode');
+                } else {
+                    icon.className = 'fas fa-moon';
+                    themeToggle.setAttribute('title', 'Switch to Dark Mode');
+                }
+            }
+        }
+        
+        // Save theme preference
+        localStorage.setItem('theme', theme);
+        
+        // Store current theme for reference
+        this.currentTheme = theme;
+    }
+    
+    toggleTheme() {
+        const newTheme = this.currentTheme === 'dark' ? 'light' : 'dark';
+        this.setTheme(newTheme);
+        
+        // Show notification for theme change
+        this.showNotification(`Switched to ${newTheme} mode`, 'info');
     }
 }
 
