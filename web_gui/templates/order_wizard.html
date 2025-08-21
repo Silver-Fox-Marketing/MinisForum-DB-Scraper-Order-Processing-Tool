@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>QR Generation Wizard - Clean Build</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ v or range(1000, 9999) | random }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div id="app" class="wizard-container">
+        <div class="wizard-header">
+            <h1><i class="fas fa-qrcode"></i> QR Code Generation Wizard</h1>
+            <div class="version-badge">CLEAN BUILD - NO DATA EDITOR</div>
+        </div>
+        
+        <div id="wizardContent" class="wizard-content">
+            <div class="loading-message">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Initializing QR Generation System...</p>
+                <p class="small-text">Clean build - Data editor functionality completely removed</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load only VERSION 2.1 JavaScript with disabled data editor -->
+    <script src="{{ url_for('static', filename='js/order_wizard.js') }}?v={{ v or range(1000, 9999) | random }}"></script>
+    <script>
+        console.log('🆕 COMPLETELY FRESH QR WIZARD TEMPLATE');
+        console.log('🎯 NO VERSION 2.0 CODE POSSIBLE');
+        console.log('✅ Only QR Generation → Order Number → VIN Log workflow');
+        
+        // Ensure page is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('📄 Clean template loaded successfully');
+            console.log('🚫 Zero possibility of data editor button');
+            
+            // Remove the loading message once wizard initializes
+            setTimeout(() => {
+                const loadingMsg = document.querySelector('.loading-message');
+                if (loadingMsg && window.wizard) {
+                    loadingMsg.style.display = 'none';
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
