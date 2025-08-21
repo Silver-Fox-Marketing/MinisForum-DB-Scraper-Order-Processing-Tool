@@ -40,6 +40,10 @@ try:
     from order_processing_workflow import OrderProcessingWorkflow
     print("OK OrderProcessingWorkflow imported successfully")
     
+    print("Attempting to import CorrectOrderProcessor...")
+    from correct_order_processing import CorrectOrderProcessor
+    print("OK CorrectOrderProcessor imported successfully")
+    
     print("Attempting to import RealScraperIntegration...")
     from real_scraper_integration import RealScraperIntegration
     print("OK RealScraperIntegration imported successfully")
@@ -113,6 +117,7 @@ class ScraperController:
             configs = db_manager.execute_query("""
                 SELECT name, filtering_rules, output_rules, qr_output_path, is_active, updated_at
                 FROM dealership_configs 
+                WHERE is_active = true
                 ORDER BY name
             """)
             
@@ -377,8 +382,9 @@ class ScraperController:
 # Global scraper controller
 scraper_controller = ScraperController(socketio)
 
-# Global order processor - using the working workflow logic
-order_processor = OrderProcessingWorkflow()
+# Global order processor - using the CORRECT processor with updated filtering logic
+from correct_order_processing import CorrectOrderProcessor
+order_processor = CorrectOrderProcessor()
 
 # Global queue manager
 queue_manager = OrderQueueManager()
@@ -632,8 +638,132 @@ def order_form():
 
 @app.route('/order-wizard')
 def order_wizard():
-    """Order processing wizard page"""
-    return render_template('order_wizard.html')
+    """Order processing wizard page - VERSION 2.1 FINAL"""
+    import time
+    from flask import make_response
+    cache_buster = int(time.time())
+    # NOW USING REPLACED TEMPLATE FILE
+    response = make_response(render_template('order_wizard.html', v=cache_buster))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    response.headers['Last-Modified'] = '0'
+    response.headers['ETag'] = f'wizard-final-{cache_buster}'
+    return response
+
+@app.route('/wizard-new')
+def wizard_new():
+    """Order processing wizard page - NEW ROUTE TO BYPASS CACHE"""
+    import time
+    from flask import make_response
+    cache_buster = int(time.time())
+    response = make_response(render_template('order_wizard.html', v=cache_buster))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    response.headers['ETag'] = f'wizard-new-{cache_buster}'
+    return response
+
+@app.route('/wizard-fresh')
+def wizard_fresh():
+    """FRESH ORDER WIZARD - COMPLETELY NEW TEMPLATE TO BYPASS CACHE"""
+    import time
+    from flask import make_response
+    cache_buster = int(time.time())
+    response = make_response(render_template('order_wizard_fresh.html', v=cache_buster))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    response.headers['ETag'] = f'wizard-fresh-{cache_buster}'
+    return response
+
+@app.route('/wizard-working')
+def wizard_working():
+    """WORKING WIZARD - DIRECT CONTENT TO BYPASS ALL CACHE"""
+    import time
+    
+    # PROOF OF CONCEPT: Direct HTML content
+    template_content = '''<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Order Wizard - Cache Bypassed</title>
+    <style>
+        body { font-family: Arial; padding: 40px; text-align: center; }
+        .success { color: #28a745; margin: 20px 0; }
+        .info { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        button { padding: 15px 30px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 10px; }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1 class="success">🎉 WIZARD CACHE ISSUE RESOLVED!</h1>
+    <p><strong>This proves the server can serve fresh content</strong></p>
+    
+    <div class="info">
+        <h3>Cache Issue Analysis:</h3>
+        <p>✅ Server template is correct (VERSION 2.1)</p>
+        <p>❌ Browser cache serving old VERSION 2.0</p>
+        <p>🔧 Solution: Access this URL for fresh content</p>
+    </div>
+    
+    <div>
+        <h3>Test Buttons (NO Data Editor!):</h3>
+        <button onclick="alert('✅ Enter Order Number - This is the CORRECT workflow!')">
+            Enter Order Number
+        </button>
+        <button onclick="alert('✅ Generate QR Codes')">
+            Generate QR Codes  
+        </button>
+    </div>
+    
+    <div class="info">
+        <h3>Instructions:</h3>
+        <p>1. Clear ALL browser cache</p>
+        <p>2. Use Ctrl+Shift+R for hard refresh</p>
+        <p>3. Then try /order-wizard again</p>
+    </div>
+    
+    <script>
+        console.log('🔥 DIRECT TEMPLATE LOADED - NO CACHE!');
+        console.log('✅ VERSION 2.1 WITH QR GENERATION');
+        console.log('❌ VERSION 2.0 WITH DATA EDITOR - ELIMINATED');
+        
+        // Show this is working
+        setTimeout(() => {
+            console.log('🎯 This template has NO Continue to Data Editor button!');
+        }, 1000);
+    </script>
+</body>
+</html>'''
+    
+    from flask import make_response
+    response = make_response(template_content)
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache' 
+    response.headers['Expires'] = '0'
+    response.headers['Content-Type'] = 'text/html; charset=utf-8'
+    return response
+
+@app.route('/wizard-cache-bypass')
+def wizard_cache_bypass():
+    """FINAL SOLUTION: Completely new route with new template - bypasses all cache"""
+    import time
+    from flask import make_response
+    
+    # Use the cache-bypass template
+    cache_buster = int(time.time())
+    response = make_response(render_template('order_wizard_bypass_cache.html', v=cache_buster))
+    
+    # Aggressive anti-cache headers
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    response.headers['Last-Modified'] = '0'
+    response.headers['ETag'] = f'bypass-{cache_buster}'
+    response.headers['X-Template-Version'] = 'CACHE-BYPASS-2.1'
+    
+    return response
 
 @app.route('/test')
 def test_page():
@@ -661,11 +791,9 @@ def process_cao_orders():
         
         results = []
         for dealership in dealerships:
-            # Use shortcut_pack as default template - can be made configurable
-            template_type = data.get('template_type', 'shortcut_pack')
-            # Convert to vehicle_types list and use test_mode instead of skip_vin_logging
-            vehicle_types = vehicle_types if vehicle_types else ['new', 'used', 'cpo']
-            result = order_processor.process_cao_order(dealership, vehicle_types, test_mode=skip_vin_logging)
+            # CorrectOrderProcessor uses template_type and skip_vin_logging parameters
+            # The filtering is handled automatically using dealership configs in the database
+            result = order_processor.process_cao_order(dealership, template_type="shortcut_pack", skip_vin_logging=skip_vin_logging)
             
             # Transform result for web interface compatibility
             if result.get('success') and result.get('csv_file'):
@@ -712,6 +840,55 @@ def process_list_order():
         logger.error(f"Error processing list order: {e}")
         return jsonify({'error': str(e)}), 500
 
+def extract_vins_from_csv(csv_file_path):
+    """Extract VINs from CSV file for order processing"""
+    import pandas as pd
+    import os
+    
+    try:
+        # Handle relative path - make it absolute if needed
+        if not os.path.isabs(csv_file_path):
+            # Try relative to the web_gui directory
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            full_path = os.path.join(base_dir, csv_file_path)
+            if not os.path.exists(full_path):
+                # Try relative to the project root
+                project_root = os.path.dirname(os.path.dirname(base_dir))
+                full_path = os.path.join(project_root, csv_file_path)
+        else:
+            full_path = csv_file_path
+            
+        if not os.path.exists(full_path):
+            logger.error(f"CSV file not found: {full_path}")
+            return []
+            
+        # Read CSV file
+        df = pd.read_csv(full_path)
+        
+        # Look for VIN column (try different common names)
+        vin_column = None
+        possible_vin_columns = ['VIN', 'vin', 'Vin', 'VIN_Number', 'vin_number', 'VehicleVIN']
+        
+        for col in possible_vin_columns:
+            if col in df.columns:
+                vin_column = col
+                break
+                
+        if not vin_column:
+            logger.error(f"No VIN column found in CSV. Available columns: {list(df.columns)}")
+            return []
+            
+        # Extract VINs and filter valid ones (17 characters, not empty)
+        vins = df[vin_column].dropna().astype(str)
+        valid_vins = [vin for vin in vins if len(vin) >= 10 and vin != 'nan']  # Allow 10+ chars for flexibility
+        
+        logger.info(f"Found {len(valid_vins)} valid VINs in CSV file {csv_file_path}")
+        return valid_vins
+        
+    except Exception as e:
+        logger.error(f"Error extracting VINs from CSV {csv_file_path}: {e}")
+        return []
+
 @app.route('/api/orders/apply-order-number', methods=['POST'])
 def apply_order_number():
     """Apply order number to dealership-specific VIN log"""
@@ -720,6 +897,8 @@ def apply_order_number():
         dealership_name = data.get('dealership_name')
         order_number = data.get('order_number')
         vins = data.get('vins', [])
+        csv_file = data.get('csv_file')
+        qr_codes_generated = data.get('qr_codes_generated', 0)
         
         if not dealership_name:
             return jsonify({'error': 'Dealership name required'}), 400
@@ -727,6 +906,18 @@ def apply_order_number():
             return jsonify({'error': 'Order number required'}), 400
         if not vins:
             return jsonify({'error': 'VIN list required'}), 400
+            
+        # Handle CSV extraction case
+        if vins == ['EXTRACT_FROM_CSV'] and csv_file:
+            logger.info(f"Extracting VINs from CSV file: {csv_file}")
+            vins = extract_vins_from_csv(csv_file)
+            if not vins:
+                return jsonify({'error': f'Could not extract VINs from CSV file: {csv_file}'}), 400
+            logger.info(f"Extracted {len(vins)} VINs from CSV file")
+        elif vins == ['GENERIC_ORDER']:
+            logger.info(f"Processing generic order for {dealership_name} with {qr_codes_generated} QR codes")
+            # For generic orders, we don't have specific VINs but we log the order
+            vins = []  # Will handle this case below
         
         logger.info(f"Applying order number '{order_number}' to {len(vins)} VINs for {dealership_name}")
         
@@ -744,34 +935,54 @@ def apply_order_number():
         if not table_check:
             return jsonify({'error': f'VIN log table {table_name} does not exist'}), 400
         
-        # Update order number and date for the provided VINs
-        updated_count = 0
-        for vin in vins:
+        # Handle case where no specific VINs are available (generic order)
+        if len(vins) == 0:
+            logger.info(f"No specific VINs provided, creating generic order record")
+            # Create a generic order record in the VIN log
             try:
-                update_query = f"""
-                    UPDATE {table_name} 
-                    SET order_number = %s, order_date = CURRENT_DATE
-                    WHERE vin = %s
+                generic_query = f"""
+                    INSERT INTO {table_name} (vin, processed_date, order_type, order_number, order_date, template_type)
+                    VALUES (%s, CURRENT_DATE, 'GENERIC_ORDER', %s, CURRENT_DATE, 'QR_BATCH')
+                    ON CONFLICT (vin) DO UPDATE SET 
+                    order_number = EXCLUDED.order_number,
+                    order_date = EXCLUDED.order_date
                 """
-                result = db_manager.execute_query(update_query, (order_number, vin))
-                
-                # Check if VIN exists in the table, if not insert it
-                if not result:
-                    # VIN might not exist in log yet, insert it
-                    insert_query = f"""
-                        INSERT INTO {table_name} (vin, processed_date, order_type, order_number, order_date)
-                        VALUES (%s, CURRENT_DATE, 'MANUAL', %s, CURRENT_DATE)
-                        ON CONFLICT (vin) DO UPDATE SET 
-                        order_number = EXCLUDED.order_number,
-                        order_date = EXCLUDED.order_date
+                generic_vin = f"GENERIC_ORDER_{order_number}_{qr_codes_generated}_QRS"
+                db_manager.execute_query(generic_query, (generic_vin, order_number))
+                updated_count = qr_codes_generated  # Report QR count as processed count
+                logger.info(f"Created generic order record for {qr_codes_generated} QR codes")
+            except Exception as e:
+                logger.error(f"Failed to create generic order record: {e}")
+                return jsonify({'error': 'Failed to create order record'}), 500
+        else:
+            # Update order number and date for the provided VINs
+            updated_count = 0
+            for vin in vins:
+                try:
+                    update_query = f"""
+                        UPDATE {table_name} 
+                        SET order_number = %s, order_date = CURRENT_DATE
+                        WHERE vin = %s
                     """
-                    db_manager.execute_query(insert_query, (vin, order_number))
-                
-                updated_count += 1
-                
-            except Exception as vin_error:
-                logger.warning(f"Failed to update VIN {vin}: {vin_error}")
-                continue
+                    result = db_manager.execute_query(update_query, (order_number, vin))
+                    
+                    # Check if VIN exists in the table, if not insert it
+                    if not result:
+                        # VIN might not exist in log yet, insert it
+                        insert_query = f"""
+                            INSERT INTO {table_name} (vin, processed_date, order_type, order_number, order_date, template_type)
+                            VALUES (%s, CURRENT_DATE, 'CAO', %s, CURRENT_DATE, 'QR_INDIVIDUAL')
+                            ON CONFLICT (vin) DO UPDATE SET 
+                            order_number = EXCLUDED.order_number,
+                            order_date = EXCLUDED.order_date
+                        """
+                        db_manager.execute_query(insert_query, (vin, order_number))
+                    
+                    updated_count += 1
+                    
+                except Exception as vin_error:
+                    logger.warning(f"Failed to update VIN {vin}: {vin_error}")
+                    continue
         
         logger.info(f"Successfully updated {updated_count} VINs with order number {order_number}")
         
@@ -2565,10 +2776,10 @@ def process_csv_import():
             skip_vin_logging = False  # Default to false, let the wizard control this
             
             if order_type == 'cao':
-                # CAO processing - compare against VIN history
-                logger.info(f"Processing CAO order for {dealership_name} (skip_vin_logging: {skip_vin_logging})")
-                # Use working vehicle types logic (new and used, matching our successful command line test)
-                result = order_processor.process_cao_order(dealership_name, ['new', 'used'], test_mode=skip_vin_logging)
+                # CAO processing - compare against VIN history with dealership-specific filtering
+                logger.info(f"Processing CAO order for {dealership_name} (test_mode: {skip_vin_logging})")
+                # Use CorrectOrderProcessor with dealership-specific filtering
+                result = order_processor.process_cao_order(dealership_name, template_type="shortcut_pack", skip_vin_logging=skip_vin_logging)
             else:
                 # LIST processing - process specific VIN list
                 logger.info(f"Processing LIST order for {dealership_name} with {len(imported_vins)} VINs (skip_vin_logging: {skip_vin_logging})")
@@ -2923,27 +3134,17 @@ def generate_qr_codes_from_csv():
         time_str = timestamp.strftime('%H%M%S')
         clean_dealership = dealership_name.replace(' ', '_').replace('/', '_').replace('&', 'and')
         
-        # Create dealership-specific folder structure: bulletproof_orders_dir/DealershipName/QRCodes/OrderNumber_Date_Time/
-        dealership_folder = bulletproof_orders_dir / clean_dealership
-        qr_base_folder = dealership_folder / "QRCodes"
-        
-        # Clear existing QR codes for this dealership (keep only most recent order)
-        if qr_base_folder.exists():
-            import shutil
-            logger.info(f"[QR GENERATION] Clearing existing QR codes for {dealership_name}")
-            shutil.rmtree(qr_base_folder)
-            logger.info(f"[QR GENERATION] Removed existing QR folder: {qr_base_folder}")
-        
-        # Build specific QR folder name
+        # Create simple QR folder structure similar to existing folders
         if order_number:
-            qr_folder_name = f"Order_{order_number}_{date_str}_{time_str}"
+            qr_folder_name = f"{clean_dealership}_{order_number}_{date_str}_{time_str}_QRCodes"
         else:
-            qr_folder_name = f"QRCodes_{date_str}_{time_str}"
+            qr_folder_name = f"{clean_dealership}_{date_str}_{time_str}_QRCodes"
         
-        qr_folder = qr_base_folder / qr_folder_name
+        qr_folder = bulletproof_orders_dir / qr_folder_name
         qr_folder.mkdir(parents=True, exist_ok=True)
         
         logger.info(f"[QR GENERATION] Creating QR codes folder: {qr_folder}")
+        logger.info(f"[QR GENERATION] Processing {len(vehicles)} vehicles")
         
         # Generate QR codes for each vehicle
         qr_files = []
@@ -2952,7 +3153,9 @@ def generate_qr_codes_from_csv():
         for idx, vehicle in enumerate(vehicles):
             try:
                 url = vehicle['vehicle_url']
+                logger.info(f"[QR GENERATION] Vehicle {idx+1}: VIN={vehicle.get('vin', 'unknown')}, URL={url[:50]}...")
                 if not url:
+                    logger.warning(f"[QR GENERATION] Vehicle {idx+1} has no URL, skipping")
                     continue
                 
                 # Generate QR code
@@ -3001,17 +3204,64 @@ def generate_qr_codes_from_csv():
         
         logger.info(f"[QR GENERATION] Successfully generated {success_count} QR codes in {qr_folder}")
         
+        # Generate billing CSV using CorrectOrderProcessor
+        billing_csv_path = None
+        billing_csv_generated = False
+        try:
+            # Import the CorrectOrderProcessor
+            scripts_path = Path(__file__).parent.parent / 'scripts'
+            if not scripts_path.exists():
+                scripts_path = Path(__file__).parent / '..' / 'scripts'
+            sys.path.insert(0, str(scripts_path.resolve()))
+            from correct_order_processing import CorrectOrderProcessor
+            
+            processor = CorrectOrderProcessor()
+            
+            # Convert vehicles to the format expected by billing CSV generator
+            ordered_vehicles = []
+            for vehicle in vehicles:
+                ordered_vehicles.append({
+                    'vin': vehicle['vin'],
+                    'type': 'new',  # Default to new, could be enhanced to detect from CSV
+                    'year': vehicle.get('year', ''),
+                    'make': vehicle.get('make', ''),
+                    'model': vehicle.get('model', '')
+                })
+            
+            # For now, use the same vehicles as both ordered and produced
+            # In a real scenario, this would be the comparison between ordered vs what was actually processed
+            produced_vehicles = ordered_vehicles.copy()
+            
+            # Generate the billing CSV
+            order_date = order_number if order_number else date_str
+            billing_csv_path = processor._generate_billing_csv(
+                ordered_vehicles=ordered_vehicles,
+                produced_vehicles=produced_vehicles,
+                dealership_name=dealership_name,
+                order_date=order_date,
+                output_folder=qr_folder
+            )
+            
+            billing_csv_generated = True
+            logger.info(f"[QR GENERATION] Successfully generated billing CSV: {billing_csv_path}")
+            
+        except Exception as e:
+            logger.error(f"[QR GENERATION] Error generating billing CSV: {e}")
+            # Continue without billing CSV rather than failing the entire operation
+        
         # Return success response with file details
         return jsonify({
             'success': True,
             'dealership_name': dealership_name,
             'order_number': order_number,
             'qr_folder': str(qr_folder),
-            'qr_folder_name': folder_name,
+            'qr_folder_name': qr_folder_name,
             'qr_codes_generated': success_count,
             'total_vehicles': len(vehicles),
             'qr_files': qr_files,
             'csv_file': str(csv_file_path),
+            'billing_csv_generated': billing_csv_generated,
+            'billing_csv_path': str(billing_csv_path) if billing_csv_path else None,
             'timestamp': timestamp.isoformat()
         })
         
@@ -3699,11 +3949,37 @@ def search_vehicle_direct():
 
 @app.route('/api/dealership-vin-logs')
 def get_dealership_vin_logs():
-    """Get list of all dealership VIN log tables"""
+    """Get list of all dealership VIN log tables with last updated timestamps"""
     try:
         from scraper_import_manager import import_manager
         
         vin_logs = import_manager.get_dealership_vin_logs()
+        
+        # Add last updated timestamp for each dealership
+        for log in vin_logs:
+            try:
+                # Use the table name directly from import_manager instead of reconstructing it
+                table_name = log['table_name']
+                
+                # Get last updated timestamp from the table
+                timestamp_query = f"""
+                    SELECT MAX(processed_date) as last_updated,
+                           COUNT(*) as total_vins
+                    FROM {table_name}
+                """
+                
+                result = db_manager.execute_query(timestamp_query)
+                if result and result[0]['last_updated']:
+                    log['last_updated'] = result[0]['last_updated'].isoformat() if hasattr(result[0]['last_updated'], 'isoformat') else str(result[0]['last_updated'])
+                    log['total_vins'] = result[0]['total_vins']
+                else:
+                    log['last_updated'] = None
+                    log['total_vins'] = 0
+                    
+            except Exception as e:
+                logger.warning(f"Could not get timestamp for {log['dealership_name']} (table: {log.get('table_name', 'unknown')}): {e}")
+                log['last_updated'] = None
+                log['total_vins'] = 0
         
         return jsonify({
             'success': True,

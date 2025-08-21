@@ -238,7 +238,7 @@ class OrderWizard {
             },
             body: JSON.stringify({
                 dealerships: [dealershipName],
-                vehicle_types: ['new', 'cpo', 'used'],
+                vehicle_types: null,  // Use dealership-specific filtering rules from database
                 skip_vin_logging: skipVinLogging
             })
         });

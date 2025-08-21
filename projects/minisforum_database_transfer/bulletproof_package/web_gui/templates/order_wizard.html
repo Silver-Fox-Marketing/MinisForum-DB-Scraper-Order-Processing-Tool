@@ -993,11 +993,6 @@
                 <span>Review</span>
             </div>
             <i class="fas fa-chevron-right progress-arrow"></i>
-            <div class="progress-step" id="step-qr-generation">
-                <i class="fas fa-qrcode"></i>
-                <span>QR Codes</span>
-            </div>
-            <i class="fas fa-chevron-right progress-arrow"></i>
             <div class="progress-step" id="step-order-number">
                 <i class="fas fa-hashtag"></i>
                 <span>Order #</span>
@@ -1045,522 +1040,183 @@
                 <!-- Testing Mode Option for CAO -->
                 <div class="testing-mode-option" style="margin: 20px 0; padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px;">
                     <label style="display: flex; align-items: center; cursor: pointer;">
-                        <input type="checkbox" id="skipVinLoggingCAO" style="margin-right: 10px; width: 18px; height: 18px;">
-                        <span style="font-weight: 500; color: #856404;">
-                            <i class="fas fa-flask" style="margin-right: 5px;"></i>
-                            Testing Mode - Skip VIN History Logging
-                        </span>
+                        <input type="checkbox" id="skipVinLogging" style="margin-right: 10px;">
+                        <strong>Testing Mode:</strong> Skip VIN logging (for testing without affecting production VIN logs)
                     </label>
-                    <p style="margin: 8px 0 0 28px; color: #856404; font-size: 13px;">
-                        When enabled, processed VINs will NOT be added to the dealership's VIN history. Use this for testing with sample data to avoid affecting future CAO comparisons.
+                    <p style="margin: 10px 0 0 0; font-size: 0.9rem; color: #666;">
+                        When enabled, processed VINs will NOT be added to the VIN history. Use this for testing or when reprocessing orders.
                     </p>
                 </div>
                 
                 <div class="wizard-actions">
-                    <button class="btn-wizard secondary" onclick="wizard.skipCAO()">
-                        <i class="fas fa-forward"></i>
-                        Skip CAO Processing
-                    </button>
-                    <button class="btn-wizard primary" id="caoNextBtn" onclick="wizard.proceedToListProcessing()" style="display: none;">
-                        <i class="fas fa-arrow-right"></i>
-                        Continue to VIN Entry
+                    <button class="btn-wizard secondary" onclick="wizard.previousStep()">
+                        <i class="fas fa-arrow-left"></i>
+                        Back
                     </button>
                 </div>
             </div>
             
-            <!-- Step 3: List Processing (VIN Entry) -->
+            <!-- Step 3: List Processing -->
             <div class="wizard-step" id="listStep">
                 <div class="step-header">
-                    <h2 class="step-title">VIN Entry</h2>
-                    <p class="step-description">Enter VINs for <span id="currentDealershipName">dealership</span></p>
+                    <h2 class="step-title">VIN Entry for List Orders</h2>
+                    <p class="step-description">Enter VINs for list-based dealership orders</p>
                 </div>
                 
-                <div class="dealership-card" id="currentDealershipCard">
-                    <h3 id="dealershipDisplayName">Loading...</h3>
-                    <span class="dealership-type">LIST ORDER</span>
+                <div class="current-dealership" id="currentDealershipCard">
+                    <!-- Will be populated with current dealership info -->
                 </div>
                 
                 <div class="vin-input-section">
-                    <label for="vinInput">Enter VINs (one per line):</label>
-                    <textarea id="vinInput" class="vin-textarea" placeholder="Enter VINs here, one per line..."></textarea>
+                    <label for="vinTextarea">Enter VINs (one per line):</label>
+                    <textarea id="vinTextarea" class="vin-textarea" placeholder="Enter VINs here, one per line..."></textarea>
                     
                     <div class="vin-help">
-                        <strong><i class="fas fa-info-circle"></i> VIN Entry Instructions:</strong>
+                        <h4><i class="fas fa-info-circle"></i> VIN Entry Guidelines</h4>
                         <ul>
                             <li>Enter one VIN per line</li>
-                            <li>VINs will be automatically validated</li>
-                            <li>Invalid VINs will be highlighted for correction</li>
+                            <li>VINs should be 17 characters long</li>
+                            <li>You can paste from spreadsheets or documents</li>
+                            <li>Empty lines and extra whitespace will be ignored</li>
                         </ul>
-                    </div>
-                    
-                    <!-- Testing Mode Option -->
-                    <div class="testing-mode-option" style="margin-top: 20px; padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px;">
-                        <label style="display: flex; align-items: center; cursor: pointer;">
-                            <input type="checkbox" id="skipVinLogging" style="margin-right: 10px; width: 18px; height: 18px;">
-                            <span style="font-weight: 500; color: #856404;">
-                                <i class="fas fa-flask" style="margin-right: 5px;"></i>
-                                Testing Mode - Skip VIN History Logging
-                            </span>
-                        </label>
-                        <p style="margin: 8px 0 0 28px; color: #856404; font-size: 13px;">
-                            When enabled, processed VINs will NOT be added to the dealership's VIN history. Use this for testing with sample data to avoid affecting future CAO comparisons.
-                        </p>
                     </div>
                 </div>
                 
                 <div class="wizard-actions">
-                    <button class="btn-wizard secondary" onclick="wizard.skipCurrentDealership()">
-                        <i class="fas fa-forward"></i>
-                        Skip This Dealership
+                    <button class="btn-wizard secondary" onclick="wizard.previousStep()">
+                        <i class="fas fa-arrow-left"></i>
+                        Back
                     </button>
-                    <button class="btn-wizard primary" onclick="wizard.processCurrentDealership()">
-                        <i class="fas fa-cog"></i>
-                        Process Order
+                    <button class="btn-wizard primary" onclick="wizard.processListVins()">
+                        <i class="fas fa-arrow-right"></i>
+                        Process VINs
                     </button>
                 </div>
             </div>
             
-            <!-- Step 4: Review Output -->
+            <!-- Step 4: Review -->
             <div class="wizard-step" id="reviewStep">
                 <div class="step-header">
-                    <h2 class="step-title">Review Output</h2>
-                    <p class="step-description">Inspect generated files for <span id="reviewDealershipName">dealership</span></p>
+                    <h2 class="step-title">Review Order Data</h2>
+                    <p class="step-description">Review and verify the vehicle data before generating QR codes</p>
                 </div>
                 
-                <!-- CSV Data Preview with Inline Editing -->
+                <!-- CSV Preview Section -->
                 <div class="csv-preview-section">
                     <div class="csv-header">
-                        <h4><i class="fas fa-table"></i> CSV Data Preview</h4>
+                        <h4><i class="fas fa-table"></i> Vehicle Data Preview</h4>
                         <div class="csv-controls">
-                            <span class="csv-stats">
+                            <div class="csv-stats">
                                 <i class="fas fa-car"></i>
-                                <span id="csvVehicleCount">0</span> vehicles
-                            </span>
-                            <button class="btn-wizard secondary" onclick="wizard.downloadCSV()">
+                                <span id="vehicleCount">0 vehicles</span>
+                            </div>
+                            <button class="btn btn-secondary" onclick="wizard.downloadCsv()">
                                 <i class="fas fa-download"></i>
                                 Download CSV
                             </button>
                         </div>
                     </div>
-                    
-                    <!-- Spreadsheet View -->
                     <div class="csv-spreadsheet-container">
-                        <div class="spreadsheet-wrapper">
-                            <table class="csv-spreadsheet" id="csvSpreadsheet">
-                                <thead id="csvTableHead">
-                                    <!-- Column headers will be populated here -->
-                                </thead>
-                                <tbody id="csvTableBody">
-                                    <!-- Data rows will be populated here -->
-                                </tbody>
-                            </table>
-                        </div>
                         <div class="spreadsheet-placeholder" id="csvPlaceholder">
                             <i class="fas fa-table"></i>
-                            <p>No CSV data available</p>
-                            <p class="help-text">Process a dealership order to see CSV data here</p>
+                            <p>Loading vehicle data...</p>
                         </div>
-                    </div>
-                </div>
-                
-                <!-- QR Codes Preview -->
-                <div class="output-preview">
-                    <div class="preview-section">
-                        <h4><i class="fas fa-qrcode"></i> QR Codes Generated</h4>
-                        <div class="qr-grid" id="qrCodeGrid">
-                            <!-- QR codes will be displayed here -->
+                        <div class="spreadsheet-wrapper">
+                            <table class="csv-spreadsheet" id="csvTable" style="display: none;">
+                                <!-- Will be populated with CSV data -->
+                            </table>
                         </div>
-                    </div>
-                </div>
-                
-                <div class="adobe-readiness">
-                    <div class="readiness-question">Ready to proceed to order number assignment?</div>
-                    <div class="readiness-actions">
-                        <button class="btn-wizard success" onclick="wizard.approveOutput()">
-                            <i class="fas fa-check"></i>
-                            Looks Good - Continue
-                        </button>
                     </div>
                 </div>
                 
                 <div class="wizard-actions">
-                    <button class="btn-wizard secondary" onclick="wizard.backToVINEntry()">
+                    <button class="btn-wizard secondary" onclick="wizard.previousStep()">
                         <i class="fas fa-arrow-left"></i>
-                        Back to VIN Entry
+                        Back
                     </button>
-                    <div></div>
-                </div>
-            </div>
-
-            <!-- Step 4.75: QR Code Generation -->
-            <div class="wizard-step" id="qrGenerationStep">
-                <div class="step-header">
-                    <h2 class="step-title">QR Code Generation</h2>
-                    <p class="step-description">Generate QR codes for vehicle URLs from <span id="qrDealershipName">dealership</span></p>
-                </div>
-                
-                <div class="qr-generation-container">
-                    <div class="qr-status-card" id="qrStatusCard">
-                        <div class="qr-info">
-                            <h4><i class="fas fa-qrcode"></i> QR Code Generation</h4>
-                            <p>Generate QR codes linking directly to each vehicle's webpage</p>
-                            
-                            <div class="qr-summary-stats">
-                                <div class="summary-stat">
-                                    <div class="stat-icon">
-                                        <i class="fas fa-file-csv"></i>
-                                    </div>
-                                    <div class="stat-info">
-                                        <span class="stat-value" id="qrVehicleCount">0</span>
-                                        <span class="stat-label">Vehicles Ready</span>
-                                    </div>
-                                </div>
-                                <div class="summary-stat">
-                                    <div class="stat-icon">
-                                        <i class="fas fa-tag"></i>
-                                    </div>
-                                    <div class="stat-info">
-                                        <span class="stat-value" id="qrOrderNumber">Auto-Generated</span>
-                                        <span class="stat-label">Order Number</span>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="qr-technical-details" id="qrTechnicalDetails" style="display: none;">
-                                <div class="tech-detail">
-                                    <i class="fas fa-file-alt"></i>
-                                    <span>Source: <code id="qrCsvFileName">Loading...</code></span>
-                                </div>
-                                <div class="tech-detail">
-                                    <i class="fas fa-folder-open"></i>
-                                    <span>Output: <code id="qrOutputFolder">Will be auto-generated</code></span>
-                                </div>
-                            </div>
-                            
-                            <button class="btn-link" onclick="wizard.toggleTechnicalDetails()" id="qrToggleBtn">
-                                <i class="fas fa-chevron-down"></i>
-                                Show Technical Details
-                            </button>
-                        </div>
-                        
-                        <div class="qr-progress" id="qrProgress" style="display: none;">
-                            <div class="progress-info">
-                                <span class="progress-text">Generating QR codes...</span>
-                                <span class="progress-count" id="qrProgressCount">0/0</span>
-                            </div>
-                            <div class="progress-bar">
-                                <div class="progress-fill" id="qrProgressFill"></div>
-                            </div>
-                        </div>
-                        
-                        <div class="qr-results" id="qrResults" style="display: none;">
-                            <div class="results-header">
-                                <div class="success-indicator">
-                                    <i class="fas fa-check-circle"></i>
-                                    <span><strong id="qrGeneratedCount">0</strong> QR codes generated successfully</span>
-                                </div>
-                                <div class="folder-location">
-                                    <i class="fas fa-folder-open"></i>
-                                    <span id="qrFolderName">Output folder</span>
-                                </div>
-                            </div>
-                            
-                            <div class="qr-preview" id="qrPreview">
-                                <div class="preview-header">
-                                    <h5><i class="fas fa-images"></i> Generated Files Preview</h5>
-                                    <button class="btn-link" onclick="wizard.toggleQRFileList()" id="qrPreviewToggle">
-                                        <i class="fas fa-chevron-down"></i>
-                                        Show Details
-                                    </button>
-                                </div>
-                                <div class="qr-file-list" id="qrFileList" style="display: none;">
-                                    <!-- QR code files will be listed here -->
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="qr-actions" id="qrActions">
-                        <button class="btn-wizard secondary" onclick="wizard.backToCsvReview()">
-                            <i class="fas fa-arrow-left"></i>
-                            Back to CSV Review
-                        </button>
-                        <button class="btn-wizard primary" onclick="wizard.generateQRCodes()" id="generateQRBtn">
-                            <i class="fas fa-qrcode"></i>
-                            Generate QR Codes
-                        </button>
-                        <button class="btn-wizard primary" onclick="wizard.completeProcessing()" id="qrProceedBtn" style="display: none;">
-                            <i class="fas fa-check"></i>
-                            Complete Order
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Step 4.5: Manual Data Editor -->
-            <div class="wizard-step" id="dataEditorStep">
-                <div class="step-header">
-                    <h2 class="step-title">Manual Data Editor</h2>
-                    <p class="step-description">Edit CSV data before finalizing for Adobe</p>
-                </div>
-                
-                <div class="editor-controls">
-                    <div class="editor-header">
-                        <div class="editor-info">
-                            <h4><i class="fas fa-table"></i> CSV Data Editor</h4>
-                            <p>Edit any incorrect data before finalizing the order. Changes will be saved to the CSV file.</p>
-                        </div>
-                        <div class="editor-actions">
-                            <button class="btn-wizard secondary" onclick="wizard.addNewRow()">
-                                <i class="fas fa-plus"></i>
-                                Add Row
-                            </button>
-                            <button class="btn-wizard warning" onclick="wizard.resetData()">
-                                <i class="fas fa-undo"></i>
-                                Reset Changes
-                            </button>
-                            <button class="btn-wizard primary" onclick="wizard.showQRUrlEditor()">
-                                <i class="fas fa-qrcode"></i>
-                                Edit QR URLs
-                            </button>
-                            <button class="btn-wizard success" onclick="wizard.saveAndRegenerate()">
-                                <i class="fas fa-save"></i>
-                                Save & Regenerate
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="data-editor-container">
-                    <div class="editor-toolbar">
-                        <div class="editor-stats">
-                            <span class="stat-item">
-                                <i class="fas fa-car"></i>
-                                <span id="editorVehicleCount">0</span> vehicles
-                            </span>
-                            <span class="stat-item">
-                                <i class="fas fa-exclamation-triangle"></i>
-                                <span id="editorErrorCount">0</span> errors
-                            </span>
-                            <span class="stat-item">
-                                <i class="fas fa-edit"></i>
-                                <span id="editorChangeCount">0</span> changes
-                            </span>
-                        </div>
-                        <div class="editor-search">
-                            <input type="text" id="editorSearchInput" placeholder="Search VIN, Stock, etc..." class="search-input">
-                            <button class="search-btn" onclick="wizard.searchData()">
-                                <i class="fas fa-search"></i>
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div class="data-table-container">
-                        <table class="data-editor-table" id="dataEditorTable">
-                            <thead>
-                                <tr id="dataEditorHeaders">
-                                    <!-- Headers will be populated dynamically -->
-                                </tr>
-                            </thead>
-                            <tbody id="dataEditorBody">
-                                <!-- Data rows will be populated dynamically -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                
-                <div class="editor-validation">
-                    <h4><i class="fas fa-check-circle"></i> Data Validation</h4>
-                    <div class="validation-results" id="validationResults">
-                        <!-- Validation results will be shown here -->
-                    </div>
-                </div>
-                
-                <div class="wizard-actions">
-                    <button class="btn-wizard secondary" onclick="wizard.backToReview()">
-                        <i class="fas fa-arrow-left"></i>
-                        Back to Review
-                    </button>
-                    <button class="btn-wizard primary" onclick="wizard.finalizeCorrectedData()">
-                        <i class="fas fa-check"></i>
-                        Apply Changes & Continue
+                    <button class="btn-wizard primary" onclick="wizard.proceedToQRGeneration()">
+                        <i class="fas fa-qrcode"></i>
+                        Generate QR Codes
                     </button>
                 </div>
             </div>
             
-            <!-- Step 5: Order Number Entry -->
+            <!-- Step 5: Order Number Input -->
             <div class="wizard-step" id="orderNumberStep">
                 <div class="step-header">
-                    <h2 class="step-title">Order Number Assignment</h2>
-                    <p class="step-description">Enter order number for <span id="orderDealershipName">dealership</span> VINs</p>
+                    <h2 class="step-title">Enter Order Number</h2>
+                    <p class="step-description">Provide the order number for file organization and tracking</p>
                 </div>
                 
-                <div class="dealership-card" id="orderNumberDealershipCard">
-                    <h3 id="orderNumberDealershipDisplay">Loading...</h3>
-                    <span class="dealership-type">ORDER NUMBER REQUIRED</span>
-                    <div style="margin-top: 15px; color: #666; font-size: 14px;">
-                        <i class="fas fa-info-circle"></i>
-                        This order number will be applied to all <span id="orderVinCount">0</span> processed VINs
+                <div class="order-input-section">
+                    <div class="input-group" style="max-width: 400px; margin: 0 auto;">
+                        <label for="orderNumberInput" style="display: block; margin-bottom: 10px; font-weight: 600; color: var(--black);">Order Number:</label>
+                        <input type="text" id="orderNumberInput" style="width: 100%; padding: 15px; border: 2px solid #e1e5e9; border-radius: 8px; font-size: 1.1rem; text-align: center;" placeholder="Enter order number...">
                     </div>
-                </div>
-                
-                <div class="order-number-input-section" style="margin-top: 30px;">
-                    <label for="orderNumberInput" style="display: block; margin-bottom: 10px; font-weight: 600; color: #333;">
-                        <i class="fas fa-hashtag" style="margin-right: 8px;"></i>
-                        Order Number:
-                    </label>
-                    <input type="text" 
-                           id="orderNumberInput" 
-                           placeholder="Enter order number (e.g., BMW_CAO_20250818_001)" 
-                           style="width: 100%; padding: 15px; font-size: 16px; border: 2px solid #e1e5e9; border-radius: 8px; font-family: 'Courier New', monospace; letter-spacing: 1px;"
-                           maxlength="50">
                     
-                    <div style="margin-top: 15px; padding: 15px; background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 8px;">
-                        <strong><i class="fas fa-lightbulb" style="color: #0ea5e9;"></i> Order Number Guidelines:</strong>
-                        <ul style="margin: 10px 0 0 20px; color: #666;">
-                            <li>Use a unique identifier for this order batch</li>
-                            <li>Format: DEALERSHIP_TYPE_DATE_SEQUENCE (recommended)</li>
-                            <li>Example: BMW_CAO_20250818_001</li>
-                            <li>This will be recorded with each VIN for tracking purposes</li>
+                    <div class="order-help" style="margin-top: 20px; background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 8px; padding: 15px; max-width: 500px; margin-left: auto; margin-right: auto;">
+                        <h4><i class="fas fa-info-circle"></i> Order Number Guidelines</h4>
+                        <ul>
+                            <li>Use a unique identifier for this order</li>
+                            <li>This will be used in file names and folder organization</li>
+                            <li>Recommended format: ABC123 or similar</li>
+                            <li>Avoid special characters or spaces</li>
                         </ul>
-                    </div>
-                    
-                    <div id="orderNumberPreview" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; display: none;">
-                        <h4 style="margin: 0 0 10px 0; color: #333;">
-                            <i class="fas fa-eye" style="color: #28a745;"></i> 
-                            Preview: VINs to be updated
-                        </h4>
-                        <div id="vinPreviewList" style="max-height: 200px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 12px; color: #666;">
-                            <!-- VIN list will be populated here -->
-                        </div>
                     </div>
                 </div>
                 
                 <div class="wizard-actions">
-                    <button class="btn-wizard secondary" onclick="wizard.backToDataEditor()">
+                    <button class="btn-wizard secondary" onclick="wizard.previousStep()">
                         <i class="fas fa-arrow-left"></i>
-                        Back to Editor
+                        Back
                     </button>
-                    <button class="btn-wizard primary" id="applyOrderNumberBtn" onclick="wizard.applyOrderNumber()" disabled>
+                    <button class="btn-wizard primary" onclick="wizard.generateFinalOutput()">
                         <i class="fas fa-check"></i>
-                        Apply Order Number
+                        Complete Order
                     </button>
                 </div>
             </div>
             
-            <!-- Step 6: Completion -->
+            <!-- Step 6: Complete -->
             <div class="wizard-step" id="completeStep">
                 <div class="completion-summary">
                     <div class="completion-icon">
                         <i class="fas fa-check-circle"></i>
                     </div>
-                    <h2 class="completion-title">Queue Processing Complete!</h2>
-                    <p>All dealerships have been processed and files are ready for Adobe.</p>
+                    <h2 class="completion-title">Order Processing Complete!</h2>
+                    <p>Your order has been processed successfully. All files are ready for download.</p>
                     
                     <div class="completion-stats" id="completionStats">
                         <!-- Will be populated with processing statistics -->
                     </div>
+                    
+                    <div class="output-preview" id="outputPreview">
+                        <!-- Will be populated with file links -->
+                    </div>
                 </div>
                 
                 <div class="wizard-actions">
-                    <button class="btn-wizard secondary" onclick="window.close()">
-                        <i class="fas fa-times"></i>
-                        Close Wizard
+                    <button class="btn-wizard secondary" onclick="wizard.viewOrderFolder()">
+                        <i class="fas fa-folder-open"></i>
+                        View Folder
                     </button>
-                    <button class="btn-wizard primary" onclick="wizard.downloadAllFiles()">
-                        <i class="fas fa-download"></i>
-                        Download All Files
+                    <button class="btn-wizard primary" onclick="wizard.startNewOrder()">
+                        <i class="fas fa-plus"></i>
+                        New Order
                     </button>
                 </div>
             </div>
         </div>
     </div>
     
-    <!-- QR URL Editor Modal -->
-    <div class="modal-overlay" id="qrUrlEditorModal" style="display: none;">
-        <div class="qr-url-modal">
-            <div class="modal-header">
-                <h3><i class="fas fa-qrcode"></i> QR Code URL Editor</h3>
-                <button class="modal-close" onclick="wizard.closeQRUrlEditor()">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            
-            <div class="modal-body">
-                <div class="qr-url-info">
-                    <p><strong>Instructions:</strong> Enter the correct vehicle page URL for each vehicle. These URLs will be embedded in the QR codes.</p>
-                </div>
-                
-                <div class="url-editor-container">
-                    <div class="url-editor-header">
-                        <div class="bulk-actions">
-                            <input type="text" id="bulkUrlTemplate" placeholder="https://example.com/vehicle/{STOCK}" class="bulk-url-input">
-                            <button class="btn btn-secondary" onclick="wizard.applyBulkUrlTemplate()">
-                                <i class="fas fa-magic"></i>
-                                Apply Template
-                            </button>
-                        </div>
-                        <div class="url-stats">
-                            <span class="url-stat">
-                                <i class="fas fa-link"></i>
-                                <span id="urlsCompleteCount">0</span>/<span id="urlsTotalCount">0</span> URLs set
-                            </span>
-                        </div>
-                    </div>
-                    
-                    <div class="url-list-container">
-                        <div class="url-list-header">
-                            <div class="url-col-stock">Stock #</div>
-                            <div class="url-col-vehicle">Vehicle</div>
-                            <div class="url-col-url">Vehicle URL</div>
-                            <div class="url-col-preview">QR Preview</div>
-                        </div>
-                        <div class="url-list-body" id="urlListBody">
-                            <!-- URL rows will be populated here -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="wizard.closeQRUrlEditor()">
-                    <i class="fas fa-times"></i>
-                    Cancel
-                </button>
-                <button class="btn btn-success" onclick="wizard.regenerateQRWithUrls()">
-                    <i class="fas fa-qrcode"></i>
-                    Generate QR Codes
-                </button>
-            </div>
-        </div>
-    </div>
-    
+    <!-- Load JavaScript -->
     <script src="{{ url_for('static', filename='js/order_wizard.js') }}?v={{ range(1000, 9999) | random }}"></script>
     <script>
-        // Initialize the wizard when page loads
-        let wizard;
-        
+        // Initialize wizard when page loads
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('Order Wizard page loaded - VERSION 2.0 WITH MANUAL DATA EDITOR');
-            console.log('Features: Manual data editor, QR URL editor, inline editing, validation');
-            
-            try {
-                wizard = new OrderWizard();
-                console.log('Order Wizard initialized successfully');
-            } catch (error) {
-                console.error('Error initializing Order Wizard:', error);
-                
-                // Show error message to user
-                document.body.innerHTML = `
-                    <div style="padding: 40px; text-align: center; font-family: Arial;">
-                        <h2 style="color: #dc3545;">Order Wizard Initialization Error</h2>
-                        <p>Failed to initialize the order wizard. Please check the console for details.</p>
-                        <p><strong>Error:</strong> ${error.message}</p>
-                        <button onclick="window.close()" style="padding: 10px 20px; margin: 10px;">Close Window</button>
-                        <button onclick="location.reload()" style="padding: 10px 20px; margin: 10px;">Retry</button>
-                    </div>
-                `;
-            }
+            console.log('🚀 Initializing Order Processing Wizard...');
+            window.wizard = new OrderWizard();
+            console.log('✅ Order Processing Wizard initialized successfully');
         });
     </script>
 </body>

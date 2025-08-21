@@ -326,16 +326,23 @@ class CorrectOrderProcessor:
         query = "SELECT * FROM raw_vehicle_data WHERE location = %s"
         params = [actual_location_name]
         
-        # Apply vehicle type filter
-        vehicle_types = filtering_rules.get('vehicle_types', ['new', 'used', 'certified'])
+        # Apply vehicle type filter using the new 'allowed_vehicle_types' field
+        vehicle_types = filtering_rules.get('allowed_vehicle_types', filtering_rules.get('vehicle_types', ['new', 'used', 'cpo']))
         if vehicle_types and 'all' not in vehicle_types:
             type_conditions = []
             for vtype in vehicle_types:
-                if vtype == 'certified':
-                    type_conditions.append("(type ILIKE '%certified%' OR type ILIKE '%cpo%')")
-                else:
-                    type_conditions.append("type ILIKE %s")
-                    params.append(f'%{vtype}%')
+                if vtype == 'cpo' or vtype == 'certified':
+                    # Handle all variations of CPO/Certified Pre-Owned
+                    type_conditions.append("(type ILIKE %s OR type ILIKE %s OR type ILIKE %s OR type = %s OR type = %s OR type = %s OR type = %s OR type = %s)")
+                    params.extend(['%certified%', '%cpo%', '%pre-owned%', 'cpo', 'CPO', 'Certified Pre-Owned', 'Certified Pre-owned', 'certified pre-owned'])
+                elif vtype == 'new':
+                    # Handle all variations of New
+                    type_conditions.append("(type = %s OR type = %s OR type = %s)")
+                    params.extend(['New', 'new', 'NEW'])
+                elif vtype == 'used':
+                    # Handle all variations of Used/Pre-Owned
+                    type_conditions.append("(type = %s OR type = %s OR type = %s OR type ILIKE %s OR type ILIKE %s)")
+                    params.extend(['Used', 'used', 'USED', '%pre-owned%', '%Pre-Owned%'])
             if type_conditions:
                 query += f" AND ({' OR '.join(type_conditions)})"
         
@@ -369,9 +376,10 @@ class CorrectOrderProcessor:
                 query += " AND status != %s"
                 params.append(exclude_statuses)
         
-        # Apply stock number filter
+        # Apply stock number filter (exclude missing and asterisk placeholders)
         if filtering_rules.get('exclude_missing_stock', True):
-            query += " AND stock IS NOT NULL AND stock != ''"
+            query += " AND stock IS NOT NULL AND stock != %s AND stock != %s"
+            params.extend(['', '*'])
             
         # Apply price filter  
         if filtering_rules.get('exclude_missing_price', True):
@@ -383,7 +391,10 @@ class CorrectOrderProcessor:
         logger.info(f"Params: {params}")
         
         try:
-            result = db_manager.execute_query(query, tuple(params))
+            # Ensure params is properly formatted as tuple for database query
+            query_params = tuple(params) if params else None
+            logger.info(f"Final query params as tuple: {query_params}")
+            result = db_manager.execute_query(query, query_params)
             logger.info(f"Query returned {len(result)} vehicles")
             return result
         except Exception as e:
@@ -417,8 +428,8 @@ class CorrectOrderProcessor:
             if isinstance(filtering_rules, str):
                 filtering_rules = json.loads(filtering_rules)
         
-        # Get allowed vehicle types
-        vehicle_types = filtering_rules.get('vehicle_types', ['new', 'used', 'certified'])
+        # Get allowed vehicle types using the new 'allowed_vehicle_types' field
+        vehicle_types = filtering_rules.get('allowed_vehicle_types', filtering_rules.get('vehicle_types', ['new', 'used', 'certified']))
         
         # Filter vehicles based on type
         filtered_vehicles = []
