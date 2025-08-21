@@ -67,9 +67,9 @@
         <header class="app-header">
             <div class="header-content">
                 <div class="logo-section">
-                    <img src="{{ url_for('static', filename='images/LS_MAIN-PRIMARY.svg') }}" alt="Silver Fox Marketing" class="header-logo">
+                    <img src="{{ url_for('static', filename='images/LS_TEXT-SECONDARY.svg') }}" alt="Silver Fox Marketing" class="header-logo">
                     <div class="title-section">
-                        <h1 class="app-title">MinisForum Database Control</h1>
+                        <h1 class="app-title">Database and Order Processing Dashboard</h1>
                         <span class="company-name">Silver Fox Marketing</span>
                     </div>
                 </div>
@@ -92,27 +92,27 @@
                 <!-- Tab Navigation -->
                 <nav class="tab-navigation">
                     <button class="tab-button active" data-tab="scraper">
-                        <i class="fas fa-spider"></i>
-                        Scraper Control
+                        <i class="fas fa-store tab-icon"></i>
+                        Dealerships
                     </button>
                     <button class="tab-button" data-tab="queue-management">
-                        <i class="fas fa-tasks"></i>
+                        <i class="fas fa-clipboard-list tab-icon"></i>
                         Order Queue
                     </button>
                     <button class="tab-button" data-tab="data-search">
-                        <i class="fas fa-search"></i>
-                        Data
+                        <i class="fas fa-chart-bar tab-icon"></i>
+                        Analytics
                     </button>
                     <button class="tab-button" data-tab="system-status">
-                        <i class="fas fa-chart-line"></i>
-                        System Status
+                        <i class="fas fa-heartbeat tab-icon"></i>
+                        System Health
                     </button>
                     <button class="tab-button" data-tab="dealership-settings">
-                        <i class="fas fa-cog"></i>
-                        Dealership Settings
+                        <i class="fas fa-cogs tab-icon"></i>
+                        Settings
                     </button>
                     <button class="tab-button" onclick="window.open('/stress-test', '_blank')">
-                        <i class="fas fa-vial"></i>
+                        <i class="fas fa-flask tab-icon"></i>
                         System Tests
                     </button>
                     <button class="tab-button" onclick="window.open('/websocket-test', '_blank')" title="Test WebSocket Connection">

@@ -1836,32 +1836,41 @@ class MinisFornumApp {
                 }).join('')
                 : '<span class="no-types">No vehicle types configured</span>';
             
+            const dealerInitials = dealer.name.split(' ')
+                .map(word => word.charAt(0))
+                .slice(0, 2)
+                .join('')
+                .toUpperCase();
+            
+            const isActive = dealer.is_active;
+            const vehicleCount = Math.floor(Math.random() * 200) + 50; // Placeholder - replace with actual count
+            
             return `
             <div class="dealership-settings-card" data-dealer-name="${dealer.name}">
                 <div class="settings-card-header">
-                    <h3>${dealer.name}</h3>
-                    <div class="active-status">
-                        <input type="checkbox" 
-                               id="active-${dealer.name.replace(/\s+/g, '-')}" 
-                               ${dealer.is_active ? 'checked' : ''} 
-                               onchange="app.toggleDealershipActive('${dealer.name}', this.checked)">
-                        <label for="active-${dealer.name.replace(/\s+/g, '-')}">Active</label>
+                    <h3>
+                        <div class="dealer-icon">${dealerInitials}</div>
+                        ${dealer.name}
+                    </h3>
+                    <div class="dealer-status">
+                        <div class="status-indicator ${isActive ? '' : 'offline'}"></div>
+                        <span class="vehicle-count-badge">${vehicleCount} vehicles</span>
                     </div>
                 </div>
                 <div class="settings-card-body">
                     <div class="setting-group">
-                        <label>Vehicle Types to Process:</label>
+                        <label class="setting-label">Vehicle Types to Process:</label>
                         <div class="vehicle-types-display">
                             ${vehicleTypesDisplay}
                         </div>
                     </div>
                     
                     <div class="setting-group">
-                        <label>Configuration:</label>
+                        <label class="setting-label">Status:</label>
                         <div class="config-details">
                             <span class="config-item">
-                                <i class="fas fa-car"></i>
-                                ${vehicleTypes.length} vehicle type(s) configured
+                                <i class="fas fa-${isActive ? 'check-circle' : 'times-circle'}"></i>
+                                ${isActive ? 'Active' : 'Inactive'}
                             </span>
                             <span class="config-item">
                                 <i class="fas fa-calendar"></i>
@@ -1869,13 +1878,21 @@ class MinisFornumApp {
                             </span>
                         </div>
                     </div>
-                    
-                    <div class="setting-actions">
-                        <button class="btn btn-secondary btn-sm" onclick="app.editDealershipSettings('${dealer.name}')">
-                            <i class="fas fa-edit"></i>
-                            Edit Settings
-                        </button>
-                    </div>
+                </div>
+                
+                <div class="card-actions">
+                    <button class="card-action-btn btn-test" onclick="app.testDealerConnection('${dealer.name}')">
+                        <i class="fas fa-play"></i>
+                        Test
+                    </button>
+                    <button class="card-action-btn btn-configure" onclick="app.editDealershipSettings('${dealer.name}')">
+                        <i class="fas fa-cog"></i>
+                        Configure
+                    </button>
+                    <button class="card-action-btn btn-status" onclick="app.toggleDealershipActive('${dealer.name}', ${!isActive})">
+                        <i class="fas fa-power-off"></i>
+                        ${isActive ? 'Disable' : 'Enable'}
+                    </button>
                 </div>
             </div>
             `;
@@ -1940,6 +1957,42 @@ class MinisFornumApp {
         }
     }
     
+    async testDealerConnection(dealershipName) {
+        console.log(`Testing connection for: ${dealershipName}`);
+        
+        // Find the button that was clicked to show loading state
+        const card = document.querySelector(`[data-dealer-name="${dealershipName}"]`);
+        const testBtn = card?.querySelector('.btn-test');
+        
+        if (testBtn) {
+            const originalContent = testBtn.innerHTML;
+            testBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+            testBtn.disabled = true;
+        }
+        
+        try {
+            const response = await fetch(`/api/test-scraper/${encodeURIComponent(dealershipName)}`, {
+                method: 'POST'
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showNotification(`✅ ${dealershipName} connection test successful!`, 'success');
+            } else {
+                this.showNotification(`❌ ${dealershipName} connection failed: ${result.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('Test connection error:', error);
+            this.showNotification(`❌ Failed to test ${dealershipName}: ${error.message}`, 'error');
+        } finally {
+            if (testBtn) {
+                testBtn.innerHTML = '<i class="fas fa-play"></i> Test';
+                testBtn.disabled = false;
+            }
+        }
+    }
+
     async editDealershipSettings(dealershipName) {
         console.log(`Editing settings for: ${dealershipName}`);
         
@@ -2153,11 +2206,28 @@ class MinisFornumApp {
             const html = dealerships.map(dealership => {
                 const dealershipType = this.getDealershipDefault(dealership.name);
                 const typeClass = dealershipType.toLowerCase(); // 'cao' or 'list'
+                
+                // Generate dealer initials for icon
+                const initials = dealership.name.split(' ')
+                    .map(word => word.charAt(0))
+                    .slice(0, 2)
+                    .join('')
+                    .toUpperCase();
+                
+                // Generate mock vehicle count (replace with real data later)
+                const vehicleCount = Math.floor(Math.random() * 300) + 50;
+                const lastUpdate = new Date().toLocaleDateString();
+                
                 console.log(`🏢 Dealership: ${dealership.name} -> Type: ${dealershipType} -> Class: ${typeClass}`);
                 return `
                     <div class="dealership-item" data-dealership="${dealership.name}" draggable="true">
-                        <div class="dealership-name">${dealership.name}</div>
-                        <div class="dealership-type ${typeClass}">${dealershipType}</div>
+                        <div class="dealership-card-header">
+                            <div class="dealership-info">
+                                <div class="dealership-name">${dealership.name}</div>
+                                <div class="dealership-subtitle">${vehicleCount} vehicles • ${lastUpdate}</div>
+                            </div>
+                            <div class="dealership-type ${typeClass}">${dealershipType}</div>
+                        </div>
                     </div>
                 `;
             }).join('');
