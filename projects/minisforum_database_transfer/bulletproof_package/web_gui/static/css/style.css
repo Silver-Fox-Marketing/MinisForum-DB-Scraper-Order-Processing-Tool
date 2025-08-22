@@ -97,6 +97,9 @@ Silver Fox Marketing Brand Colors and Typography
     /* Silver Fox grey variants for dark mode */
     --theme-silver-fox-grey: #6b5d56; /* Adapted brand grey for dark mode */
     --theme-silver-fox-light: #7a6d66; /* Lighter variant */
+    
+    /* Dark mode header override */
+    --theme-header-text: var(--black); /* Black text for header in dark mode */
 }
 
 /* Reset and Base Styles */
@@ -130,6 +133,16 @@ body {
     padding: var(--spacing-md) var(--spacing-xl);
     box-shadow: var(--shadow-md);
     z-index: 100;
+}
+
+/* Dark mode header text override */
+:root[data-theme="dark"] .app-header {
+    color: var(--black);
+}
+
+:root[data-theme="dark"] .app-title {
+    color: var(--black);
+    text-shadow: none;
 }
 
 .header-content {
@@ -2897,23 +2910,24 @@ body {
 .results-table td {
     padding: 0.75rem; /* 25% reduction from var(--spacing-md) */
     text-align: left;
-    border-bottom: 1px solid #e1e5e9;
+    border-bottom: 1px solid var(--theme-border);
     font-size: 0.75rem; /* 25% reduction from 1rem default */
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease, border-color 0.3s ease;
 }
 
 .results-table th {
-    background: #f8f9fa;
+    background: var(--theme-bg-secondary);
     font-weight: 600;
     color: var(--theme-text-primary);
-    transition: color 0.3s ease;
     position: sticky;
     top: 0;
     cursor: pointer;
-    transition: background-color 0.2s ease;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .results-table th:hover {
-    background: #e9ecef;
+    background: var(--theme-bg-tertiary);
 }
 
 .results-table th.sortable::after {
@@ -3079,24 +3093,25 @@ body {
 .vin-history-table td {
     padding: 0.75rem; /* 25% reduction from var(--spacing-md) */
     text-align: left;
-    border-bottom: 1px solid #e1e5e9;
+    border-bottom: 1px solid var(--theme-border);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease, border-color 0.3s ease;
     white-space: nowrap; /* Prevent text wrapping in table cells */
     font-size: 0.75rem; /* 25% reduction from 1rem default */
 }
 
 .vin-history-table th {
-    background: #f8f9fa;
+    background: var(--theme-bg-secondary);
     font-weight: 600;
     color: var(--theme-text-primary);
-    transition: color 0.3s ease;
     position: sticky;
     top: 0;
     cursor: pointer;
-    transition: background-color 0.2s ease;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .vin-history-table th:hover {
-    background: #e9ecef;
+    background: var(--theme-bg-tertiary);
 }
 
 .vin-history-table td {
@@ -3106,7 +3121,8 @@ body {
 .vin-history-table .vin-cell {
     font-family: 'Courier New', monospace;
     font-size: 0.8rem;
-    background: #f8f9fa;
+    background: var(--theme-bg-secondary);
+    transition: background-color 0.3s ease;
 }
 
 /* Responsive adjustments for VIN history table */
@@ -3573,12 +3589,13 @@ body {
    ============================================================================= */
 
 .active-scrapers-panel {
-    background: var(--white);
-    border: 1px solid #e0e0e0;
+    background: var(--theme-bg-primary);
+    border: 1px solid var(--theme-border);
     border-radius: var(--radius-lg);
     padding: var(--spacing-lg);
     margin-top: var(--spacing-lg);
     box-shadow: var(--shadow-sm);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .active-scrapers-panel h3 {
@@ -3598,26 +3615,27 @@ body {
 }
 
 .scraper-status-card {
-    background: #f8f9fa;
-    border: 1px solid #e1e5e9;
+    background: var(--theme-bg-secondary);
+    border: 1px solid var(--theme-border);
     border-radius: var(--radius-md);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
     padding: var(--spacing-lg);
     transition: all 0.3s ease;
 }
 
 .scraper-status-card.running {
     border-left: 4px solid var(--success-green);
-    background: #f0f9f0;
+    background: var(--theme-bg-tertiary);
 }
 
 .scraper-status-card.error {
     border-left: 4px solid var(--error-red);
-    background: #ffebee;
+    background: var(--theme-bg-tertiary);
 }
 
 .scraper-status-card.completed {
     border-left: 4px solid var(--primary-red);
-    background: #fff3e0;
+    background: var(--theme-bg-tertiary);
 }
 
 .scraper-card-header {
@@ -4588,9 +4606,11 @@ body {
 
 .import-status {
     padding: 1rem;
-    background: white;
-    border: 1px solid #dee2e6;
+    background: var(--theme-bg-primary);
+    border: 1px solid var(--theme-border);
     border-radius: 6px;
+    color: var(--theme-text-primary);
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
 .status-message {
@@ -4613,10 +4633,11 @@ body {
 }
 
 .scraper-history-section {
-    background: white;
-    border: 1px solid #e9ecef;
+    background: var(--theme-bg-primary);
+    border: 1px solid var(--theme-border);
     border-radius: 8px;
     overflow: hidden;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .history-header {
@@ -4624,8 +4645,9 @@ body {
     justify-content: space-between;
     align-items: center;
     padding: 1.5rem;
-    border-bottom: 1px solid #e9ecef;
-    background: #f8f9fa;
+    border-bottom: 1px solid var(--theme-border);
+    background: var(--theme-bg-secondary);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .history-header h3 {
@@ -4652,16 +4674,19 @@ body {
 .scraper-history-table td {
     padding: 0.75rem;
     text-align: left;
-    border-bottom: 1px solid #e9ecef;
+    border-bottom: 1px solid var(--theme-border);
+    color: var(--theme-text-primary);
+    transition: color 0.3s ease, border-color 0.3s ease;
 }
 
 .scraper-history-table th {
-    background: #f8f9fa;
+    background: var(--theme-bg-secondary);
     font-weight: 600;
-    color: #495057;
+    color: var(--theme-text-primary);
     position: sticky;
     top: 0;
     z-index: 10;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .scraper-history-table tbody tr {
@@ -4670,7 +4695,7 @@ body {
 }
 
 .scraper-history-table tbody tr:hover {
-    background: #f8f9fa;
+    background: var(--theme-bg-tertiary);
 }
 
 .import-status-badge {
@@ -4708,11 +4733,13 @@ body {
 }
 
 .import-info {
-    background: #f8f9fa;
-    border: 1px solid #e9ecef;
+    background: var(--theme-bg-secondary);
+    border: 1px solid var(--theme-border);
     border-radius: 6px;
     padding: 1rem;
     margin-bottom: 1.5rem;
+    color: var(--theme-text-primary);
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
 .info-grid {
@@ -5108,9 +5135,10 @@ body {
 }
 
 .import-status-badge.archived {
-    background: #f8f9fa;
-    color: #6c757d;
-    border: 1px solid #dee2e6;
+    background: var(--theme-bg-tertiary);
+    color: var(--theme-text-secondary);
+    border: 1px solid var(--theme-border);
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
 
 .import-status-badge:hover {
