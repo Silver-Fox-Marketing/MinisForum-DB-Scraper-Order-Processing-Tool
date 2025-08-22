@@ -1,0 +1,34 @@
+Raw,Normalized
+Certified Used,cpo
+Certified Pre-Owned,cpo
+Certified Used,cpo
+Certified,cpo
+Used,po
+used,po
+Pre-Owned,po
+pre-owned,po
+new,new
+New,new
+In-transit,offlot
+In-Transit,offlot
+Allocated,offlot
+In-Build-Phase,offlot
+In Transit,offlot
+In Transit to U.S.,offlot
+Arriving Soon,offlot
+In Production,offlot
+Build Phase,offlot
+Being Built,offlot
+Courtesy Vehicle,offlot
+In-Service Courtesy Vehicle,offlot
+Dealer Ordered,offlot
+In-Service FCTP,offlot
+In-service,offlot
+On-Lot,onlot
+In-Lot,onlot
+InStock,onlot
+In Stock,onlot
+In-stock,onlot
+Available,onlot
+On Lot,onlot
+Available at Retailer,onlot

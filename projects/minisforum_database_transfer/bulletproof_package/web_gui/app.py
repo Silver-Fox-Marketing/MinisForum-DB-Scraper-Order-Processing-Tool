@@ -1641,6 +1641,7 @@ def search_vehicle_data():
                     SELECT 
                         r.vin, r.stock, r.location, r.year, r.make, r.model,
                         r.trim, r.ext_color as exterior_color, r.price, r.type as vehicle_type,
+                        r.normalized_type, r.on_lot_status,
                         r.import_timestamp, 'raw' as data_source,
                         COUNT(*) OVER (PARTITION BY r.vin) as scrape_count,
                         MIN(r.import_timestamp) OVER (PARTITION BY r.vin) as first_scraped,
@@ -1648,7 +1649,8 @@ def search_vehicle_data():
                     FROM raw_vehicle_data r
                 )
                 SELECT vin, stock, location, year, make, model, trim, 
-                       exterior_color, price, vehicle_type, import_timestamp, data_source, scrape_count, first_scraped
+                       exterior_color, price, vehicle_type, normalized_type, on_lot_status,
+                       import_timestamp, data_source, scrape_count, first_scraped
                 FROM ranked_vehicles
                 WHERE rn = 1
             """
@@ -1676,12 +1678,14 @@ def search_vehicle_data():
                     SELECT 
                         r.vin, r.stock, r.location, r.year, r.make, r.model,
                         r.trim, r.ext_color as exterior_color, r.price, r.type as vehicle_type,
+                        r.normalized_type, r.on_lot_status,
                         r.import_timestamp, 'raw' as data_source, r.id
                     FROM raw_vehicle_data r
                     UNION ALL
                     SELECT 
                         n.vin, n.stock, n.location, n.year, n.make, n.model,
                         n.trim, '' as exterior_color, n.price, n.vehicle_condition as vehicle_type,
+                        '' as normalized_type, '' as on_lot_status,
                         r.import_timestamp, 'normalized' as data_source, n.id
                     FROM normalized_vehicle_data n
                     JOIN raw_vehicle_data r ON n.raw_data_id = r.id
@@ -1689,14 +1693,16 @@ def search_vehicle_data():
                 ranked_vehicles AS (
                     SELECT 
                         vin, stock, location, year, make, model, trim, 
-                        exterior_color, price, vehicle_type, import_timestamp, data_source,
+                        exterior_color, price, vehicle_type, normalized_type, on_lot_status,
+                        import_timestamp, data_source,
                         COUNT(*) OVER (PARTITION BY vin) as scrape_count,
                         MIN(import_timestamp) OVER (PARTITION BY vin) as first_scraped,
                         ROW_NUMBER() OVER (PARTITION BY vin ORDER BY import_timestamp DESC, id DESC) as rn
                     FROM all_vehicles
                 )
                 SELECT vin, stock, location, year, make, model, trim, 
-                       exterior_color, price, vehicle_type, import_timestamp, data_source, scrape_count, first_scraped
+                       exterior_color, price, vehicle_type, normalized_type, on_lot_status,
+                       import_timestamp, data_source, scrape_count, first_scraped
                 FROM ranked_vehicles
                 WHERE rn = 1
             """

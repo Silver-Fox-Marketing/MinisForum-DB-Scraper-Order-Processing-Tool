@@ -335,28 +335,34 @@ class CorrectOrderProcessor:
                 filtering_rules = json.loads(filtering_rules)
         
         # Build query with filters - use actual location name for data lookup
-        query = "SELECT * FROM raw_vehicle_data WHERE location = %s"
+        # CRITICAL: Only process vehicles from the ACTIVE scraper import that are physically on the lot
+        query = """
+            SELECT rvd.* FROM raw_vehicle_data rvd
+            JOIN scraper_imports si ON rvd.import_id = si.import_id
+            WHERE rvd.location = %s 
+            AND rvd.on_lot_status = 'onlot'
+            AND si.status = 'active'
+        """
         params = [actual_location_name]
         
-        # Apply vehicle type filter using the new 'allowed_vehicle_types' field
+        # Apply vehicle type filter using normalized_type field (much cleaner!)
         vehicle_types = filtering_rules.get('allowed_vehicle_types', filtering_rules.get('vehicle_types', ['new', 'used', 'cpo']))
         if vehicle_types and 'all' not in vehicle_types:
-            type_conditions = []
+            # Convert dealership filter terms to normalized terms
+            normalized_types = []
             for vtype in vehicle_types:
-                if vtype == 'cpo' or vtype == 'certified':
-                    # Handle all variations of CPO/Certified Pre-Owned
-                    type_conditions.append("(type ILIKE %s OR type ILIKE %s OR type ILIKE %s OR type = %s OR type = %s OR type = %s OR type = %s OR type = %s)")
-                    params.extend(['%certified%', '%cpo%', '%pre-owned%', 'cpo', 'CPO', 'Certified Pre-Owned', 'Certified Pre-owned', 'certified pre-owned'])
-                elif vtype == 'new':
-                    # Handle all variations of New
-                    type_conditions.append("(type = %s OR type = %s OR type = %s)")
-                    params.extend(['New', 'new', 'NEW'])
-                elif vtype == 'used':
-                    # Handle all variations of Used/Pre-Owned
-                    type_conditions.append("(type = %s OR type = %s OR type = %s OR type ILIKE %s OR type ILIKE %s)")
-                    params.extend(['Used', 'used', 'USED', '%pre-owned%', '%Pre-Owned%'])
-            if type_conditions:
-                query += f" AND ({' OR '.join(type_conditions)})"
+                if vtype in ['cpo', 'certified']:
+                    normalized_types.append('cpo')
+                elif vtype in ['new']:
+                    normalized_types.append('new') 
+                elif vtype in ['used']:
+                    normalized_types.append('po')  # pre-owned
+            
+            if normalized_types:
+                # Use simple normalized_type field instead of complex raw type matching
+                placeholders = ','.join(['%s'] * len(normalized_types))
+                query += f" AND normalized_type IN ({placeholders})"
+                params.extend(normalized_types)
         
         # Apply year filter
         min_year = filtering_rules.get('min_year')
@@ -364,29 +370,30 @@ class CorrectOrderProcessor:
             query += " AND year >= %s"
             params.append(min_year)
         
-        # Apply require_status filter (highest priority)
+        # Apply require_status filter (highest priority - checks the 'type' column)
         require_statuses = filtering_rules.get('require_status')
         if require_statuses:
             if isinstance(require_statuses, list):
                 status_conditions = []
                 for status in require_statuses:
-                    status_conditions.append("status = %s")
-                    params.append(status)
+                    status_conditions.append("rvd.type ILIKE %s")
+                    params.append(f"%{status}%")
                 query += f" AND ({' OR '.join(status_conditions)})"
             else:
-                query += " AND status = %s"
-                params.append(require_statuses)
+                query += " AND rvd.type ILIKE %s"
+                params.append(f"%{require_statuses}%")
         
-        # Apply exclude_status filter
+        # Apply exclude_status filter (checks the 'type' column for raw status values)
         exclude_statuses = filtering_rules.get('exclude_status')
         if exclude_statuses:
             if isinstance(exclude_statuses, list):
                 for status in exclude_statuses:
-                    query += " AND status != %s"
-                    params.append(status)
+                    # Use ILIKE for case-insensitive matching against the 'type' column
+                    query += " AND rvd.type NOT ILIKE %s"
+                    params.append(f"%{status}%")
             else:
-                query += " AND status != %s"
-                params.append(exclude_statuses)
+                query += " AND rvd.type NOT ILIKE %s"
+                params.append(f"%{exclude_statuses}%")
         
         # Apply stock number filter (exclude missing and asterisk placeholders)
         if filtering_rules.get('exclude_missing_stock', True):
@@ -413,7 +420,15 @@ class CorrectOrderProcessor:
             logger.error(f"Database query failed: {e}")
             logger.error("Attempting simplified query without problematic constraints...")
             # Try a simplified query without filtering if the main query fails
-            simplified_query = "SELECT * FROM raw_vehicle_data WHERE location = %s ORDER BY import_timestamp DESC"
+            # CRITICAL: Still only process vehicles from ACTIVE import that are on the lot
+            simplified_query = """
+                SELECT rvd.* FROM raw_vehicle_data rvd
+                JOIN scraper_imports si ON rvd.import_id = si.import_id
+                WHERE rvd.location = %s 
+                AND rvd.on_lot_status = 'onlot'
+                AND si.status = 'active'
+                ORDER BY rvd.import_timestamp DESC
+            """
             try:
                 result = db_manager.execute_query(simplified_query, (actual_location_name,))
                 logger.info(f"Simplified query returned {len(result)} vehicles")
@@ -898,11 +913,10 @@ class CorrectOrderProcessor:
                 
             # Check this dealership's VIN log ONLY
             history_query = f"""
-                SELECT order_type, processed_date,
-                       (CURRENT_DATE - processed_date) as days_ago
+                SELECT order_type, processed_date
                 FROM {vin_log_table}
                 WHERE vin = %s 
-                ORDER BY processed_date DESC 
+                ORDER BY created_at DESC 
                 LIMIT 5
             """
             
@@ -914,10 +928,10 @@ class CorrectOrderProcessor:
                 # VIN exists in this dealership's history - skip it (already processed)
                 most_recent = history[0]
                 prev_order_type = most_recent['order_type'] or 'unknown'
-                days_ago = most_recent['days_ago']
+                processed_date = most_recent['processed_date']
                 
                 # If VIN is in the log, it's been processed before - skip it
-                logger.info(f"Skipping {vin}: Previously processed as {prev_order_type} {days_ago} days ago")
+                logger.info(f"Skipping {vin}: Previously processed as {prev_order_type} on {processed_date}")
                 should_process = False
             else:
                 # No history in this dealership's log = definitely new

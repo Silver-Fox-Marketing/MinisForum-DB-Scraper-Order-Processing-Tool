@@ -4515,6 +4515,31 @@ class MinisFornumApp {
                                 </div>
                             </div>
                         </th>
+                        <th class="filterable-header" data-field="normalized_type">
+                            <div class="header-content">
+                                <span>Norm Type</span>
+                                <div class="filter-dropdown" id="normalizedTypeFilter">
+                                    <select class="header-filter" data-field="normalized_type">
+                                        <option value="">All</option>
+                                        <option value="new">New</option>
+                                        <option value="po">Pre-Owned</option>
+                                        <option value="cpo">CPO</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </th>
+                        <th class="filterable-header" data-field="on_lot_status">
+                            <div class="header-content">
+                                <span>On Lot Status</span>
+                                <div class="filter-dropdown" id="onLotStatusFilter">
+                                    <select class="header-filter" data-field="on_lot_status">
+                                        <option value="">All</option>
+                                        <option value="onlot">On Lot</option>
+                                        <option value="offlot">Off Lot</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </th>
                         <th class="filterable-header" data-field="time_scraped">
                             <div class="header-content">
                                 <span>Last Scraped</span>
