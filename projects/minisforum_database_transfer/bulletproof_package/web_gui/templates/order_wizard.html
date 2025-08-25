@@ -11,20 +11,177 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        /* Wizard-specific styles */
+        /* Enhanced Wizard Styles - Modern Professional Design */
         .wizard-container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             padding: var(--spacing-xl);
+            position: relative;
+        }
+        
+        .wizard-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 300px;
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--dark-red) 50%, #1a0e0a 100%);
+            z-index: -1;
+            border-radius: 0 0 50px 50px;
+        }
+        
+        /* VIN Entry Table Styles */
+        .vin-table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-md);
+            padding-bottom: var(--spacing-sm);
+            border-bottom: 2px solid var(--border-color);
+        }
+        
+        .vin-table-container {
+            border: 2px solid transparent;
+            background: linear-gradient(white, white) padding-box, 
+                       linear-gradient(135deg, var(--primary-red) 0%, var(--gold) 50%, var(--primary-red) 100%) border-box;
+            border-radius: 20px;
+            margin-bottom: var(--spacing-md);
+            box-shadow: 0 15px 35px rgba(34, 9, 1, 0.08);
+            overflow: hidden;
+        }
+        
+        .vin-entry-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
+            font-size: 0.95rem;
+        }
+        
+        .vin-entry-table th {
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--dark-red) 100%);
+            color: var(--white);
+            padding: var(--spacing-lg);
+            text-align: left;
+            font-weight: 700;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.9rem;
+        }
+        
+        .vin-entry-table td {
+            padding: var(--spacing-xs);
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .vin-row {
+            transition: all 0.3s ease;
+        }
+        
+        .vin-row.valid {
+            background-color: #f0f9ff;
+        }
+        
+        .vin-row.invalid {
+            background-color: #fef2f2;
+            border-left: 4px solid #dc2626;
+        }
+        
+        .vin-input {
+            width: 100%;
+            padding: var(--spacing-md);
+            border: 2px solid rgba(141, 141, 146, 0.2);
+            border-radius: 15px;
+            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        
+        .vin-input:focus {
+            outline: none;
+            border-color: var(--primary-red);
+            box-shadow: 0 0 0 4px rgba(253, 65, 13, 0.1), 0 8px 25px rgba(253, 65, 13, 0.15);
+            transform: translateY(-1px);
+            background: rgba(255, 255, 255, 0.95);
+        }
+        
+        .vin-input.valid {
+            border-color: #16a34a;
+            background-color: #f0fdf4;
+        }
+        
+        .vin-input.invalid {
+            border-color: #dc2626;
+            background-color: #fef2f2;
+        }
+        
+        .vin-status {
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .vin-status.valid {
+            color: #16a34a;
+        }
+        
+        .vin-status.invalid {
+            color: #dc2626;
+        }
+        
+        .vin-summary {
+            display: flex;
+            gap: var(--spacing-lg);
+            padding: var(--spacing-sm);
+            background: var(--light-gray);
+            border-radius: var(--radius-sm);
+            margin-top: var(--spacing-sm);
+        }
+        
+        .valid-count {
+            color: #16a34a;
+        }
+        
+        .invalid-count {
+            color: #dc2626;
+        }
+        
+        .table-controls {
+            display: flex;
+            gap: var(--spacing-sm);
         }
         
         .wizard-header {
             text-align: center;
             margin-bottom: var(--spacing-xl);
-            background: linear-gradient(135deg, var(--primary-red) 0%, var(--dark-red) 100%);
+            background: transparent;
             color: var(--white);
-            padding: var(--spacing-xl);
-            border-radius: var(--radius-lg);
+            padding: var(--spacing-xl) var(--spacing-xl) 0;
+            position: relative;
+        }
+        
+        .wizard-header h1 {
+            font-size: 3.5rem;
+            font-weight: 900;
+            margin-bottom: var(--spacing-md);
+            background: linear-gradient(45deg, var(--white) 0%, var(--gold) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        
+        .wizard-header p {
+            font-size: 1.3rem;
+            opacity: 0.95;
+            font-weight: 300;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
         }
         
         .wizard-progress {
@@ -32,29 +189,71 @@
             justify-content: center;
             align-items: center;
             margin-bottom: var(--spacing-xl);
-            background: var(--white);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
             padding: var(--spacing-lg);
-            border-radius: var(--radius-lg);
-            box-shadow: var(--shadow-sm);
+            border-radius: 25px;
+            box-shadow: 0 20px 40px rgba(34, 9, 1, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .wizard-progress::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.5s;
+        }
+        
+        .wizard-progress:hover::before {
+            left: 100%;
         }
         
         .progress-step {
             display: flex;
             align-items: center;
             gap: var(--spacing-sm);
-            padding: var(--spacing-sm) var(--spacing-lg);
-            border-radius: var(--radius-md);
-            transition: all 0.3s ease;
+            padding: var(--spacing-md) var(--spacing-xl);
+            border-radius: 20px;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            font-weight: 600;
+            background: rgba(245, 245, 245, 0.8);
+            color: var(--gray);
+            border: 2px solid transparent;
+        }
+        
+        .progress-step i {
+            font-size: 1.2rem;
+            transition: transform 0.3s ease;
         }
         
         .progress-step.active {
-            background: var(--primary-red);
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--dark-red) 100%);
             color: var(--white);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(253, 65, 13, 0.4);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .progress-step.active i {
+            transform: scale(1.1);
         }
         
         .progress-step.completed {
-            background: var(--success-green);
+            background: linear-gradient(135deg, var(--success-green) 0%, #1e7e34 100%);
             color: var(--white);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .progress-step:hover {
+            transform: translateY(-1px);
         }
         
         .progress-arrow {
@@ -63,45 +262,104 @@
         }
         
         .wizard-content {
-            background: var(--white);
-            border-radius: var(--radius-lg);
-            padding: var(--spacing-xl);
-            box-shadow: var(--shadow-md);
-            min-height: 500px;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 30px;
+            padding: 3rem;
+            box-shadow: 0 30px 60px rgba(34, 9, 1, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.2);
+            min-height: 600px;
+            position: relative;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            overflow: hidden;
+        }
+        
+        .wizard-content::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-red) 0%, var(--gold) 50%, var(--primary-red) 100%);
+            border-radius: 30px 30px 0 0;
         }
         
         .wizard-step {
             display: none;
+            opacity: 0;
+            transform: translateY(20px);
         }
         
         .wizard-step.active {
             display: block;
-            animation: fadeIn 0.3s ease-in;
+            opacity: 1;
+            transform: translateY(0);
+            animation: slideInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
         
         .step-header {
             text-align: center;
             margin-bottom: var(--spacing-xl);
+            position: relative;
         }
         
         .step-title {
-            font-size: 1.8rem;
+            font-size: 2.5rem;
+            font-weight: 800;
             color: var(--black);
-            margin-bottom: var(--spacing-sm);
+            margin-bottom: var(--spacing-md);
+            background: linear-gradient(135deg, var(--black) 0%, var(--primary-red) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
         
         .step-description {
             color: var(--gray);
-            font-size: 1.1rem;
+            font-size: 1.2rem;
+            font-weight: 400;
+            line-height: 1.6;
+            max-width: 600px;
+            margin: 0 auto;
         }
         
         .dealership-card {
-            background: #f8f9fa;
-            border: 2px solid var(--primary-red);
-            border-radius: var(--radius-lg);
-            padding: var(--spacing-xl);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 249, 250, 0.9) 100%);
+            border: 2px solid transparent;
+            background-clip: padding-box;
+            border-radius: 25px;
+            padding: 2rem;
             margin-bottom: var(--spacing-xl);
             text-align: center;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        
+        .dealership-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            padding: 2px;
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--gold) 50%, var(--primary-red) 100%);
+            border-radius: 25px;
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: xor;
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
         }
         
         .dealership-card h3 {
@@ -141,11 +399,28 @@
         }
         
         .vin-help {
-            background: #f0f9ff;
-            border: 1px solid #0ea5e9;
-            border-radius: var(--radius-md);
-            padding: var(--spacing-lg);
+            background: linear-gradient(135deg, rgba(240, 249, 255, 0.9) 0%, rgba(255, 255, 255, 0.9) 100%);
+            border: 2px solid transparent;
+            background-clip: padding-box;
+            border-radius: 20px;
+            padding: var(--spacing-xl);
             margin-top: var(--spacing-md);
+            position: relative;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        
+        .vin-help::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            padding: 2px;
+            background: linear-gradient(135deg, #0ea5e9 0%, var(--primary-red) 100%);
+            border-radius: 20px;
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: xor;
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
         }
         
         .output-preview {
@@ -232,41 +507,79 @@
             justify-content: space-between;
             align-items: center;
             margin-top: var(--spacing-xl);
-            padding-top: var(--spacing-lg);
-            border-top: 1px solid #e1e5e9;
+            padding-top: var(--spacing-xl);
+            border-top: 2px solid rgba(253, 65, 13, 0.1);
+            position: relative;
+        }
+        
+        .wizard-actions::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 2px;
+            background: linear-gradient(90deg, var(--primary-red), var(--gold));
+            border-radius: 2px;
         }
         
         .btn-wizard {
-            padding: var(--spacing-md) var(--spacing-xl);
-            font-weight: 600;
-            border-radius: var(--radius-md);
+            padding: var(--spacing-lg) var(--spacing-xl);
+            font-weight: 700;
+            border-radius: 20px;
             border: none;
             cursor: pointer;
             display: flex;
             align-items: center;
             gap: var(--spacing-sm);
-            transition: all 0.2s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-wizard::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.5s;
+        }
+        
+        .btn-wizard:hover::before {
+            left: 100%;
         }
         
         .btn-wizard.primary {
-            background: var(--primary-red);
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--dark-red) 100%);
             color: var(--white);
+            box-shadow: 0 8px 25px rgba(253, 65, 13, 0.3);
         }
         
         .btn-wizard.primary:hover {
-            background: var(--dark-red);
-            transform: translateY(-1px);
+            transform: translateY(-3px);
+            box-shadow: 0 15px 35px rgba(253, 65, 13, 0.4);
         }
         
         .btn-wizard.secondary {
-            background: var(--white);
+            background: rgba(255, 255, 255, 0.9);
             color: var(--gray);
-            border: 1px solid #e1e5e9;
+            border: 2px solid rgba(141, 141, 146, 0.2);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
         }
         
         .btn-wizard.secondary:hover {
-            background: #f8f9fa;
+            background: rgba(248, 249, 250, 0.95);
             color: var(--black);
+            transform: translateY(-2px);
+            border-color: var(--primary-red);
         }
         
         .btn-wizard.success {
@@ -282,17 +595,35 @@
         .completion-summary {
             text-align: center;
             padding: var(--spacing-xl);
+            position: relative;
         }
         
         .completion-icon {
-            font-size: 4rem;
-            color: var(--success-green);
+            font-size: 6rem;
+            background: linear-gradient(135deg, var(--success-green) 0%, #1e7e34 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
             margin-bottom: var(--spacing-lg);
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
         }
         
         .completion-title {
-            font-size: 2rem;
-            color: var(--black);
+            font-size: 3rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, var(--black) 0%, var(--primary-red) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
             margin-bottom: var(--spacing-md);
         }
         
@@ -569,24 +900,46 @@
         }
         
         .qr-url-modal {
-            background: var(--white);
-            border-radius: var(--radius-lg);
-            box-shadow: var(--shadow-lg);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            border-radius: 30px;
+            box-shadow: 0 40px 80px rgba(34, 9, 1, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.3);
             width: 90%;
-            max-width: 1000px;
-            max-height: 80vh;
+            max-width: 1200px;
+            max-height: 85vh;
             overflow: hidden;
             display: flex;
             flex-direction: column;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+        }
+        
+        .qr-url-modal::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-red) 0%, var(--gold) 50%, var(--primary-red) 100%);
+            border-radius: 30px 30px 0 0;
         }
         
         .modal-header {
-            background: var(--primary-red);
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--dark-red) 100%);
             color: var(--white);
-            padding: var(--spacing-lg);
+            padding: var(--spacing-xl);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: relative;
+        }
+        
+        .modal-header h3 {
+            font-size: 1.8rem;
+            font-weight: 800;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
         }
         
         .modal-header h3 {
@@ -783,22 +1136,53 @@
             color: var(--gray);
         }
         
-        /* CSV Spreadsheet Preview Styles */
+        /* Enhanced CSV Spreadsheet Preview Styles */
         .csv-preview-section {
             margin: var(--spacing-xl) 0;
-            background: var(--white);
-            border: 1px solid #e1e5e9;
-            border-radius: var(--radius-lg);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 2px solid transparent;
+            background-clip: padding-box;
+            border-radius: 25px;
             overflow: hidden;
+            box-shadow: 0 20px 40px rgba(34, 9, 1, 0.1);
+            position: relative;
+        }
+        
+        .csv-preview-section::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            padding: 2px;
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--gold) 50%, var(--primary-red) 100%);
+            border-radius: 25px;
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: xor;
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
         }
         
         .csv-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: var(--spacing-lg);
-            background: #f8f9fa;
-            border-bottom: 1px solid #e1e5e9;
+            padding: var(--spacing-xl);
+            background: linear-gradient(135deg, rgba(248, 249, 250, 0.95) 0%, rgba(255, 255, 255, 0.95) 100%);
+            border-bottom: 2px solid rgba(253, 65, 13, 0.1);
+            position: relative;
+        }
+        
+        .csv-header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 2px;
+            background: linear-gradient(90deg, var(--primary-red), var(--gold));
+            border-radius: 2px;
         }
         
         .csv-header h4 {
@@ -836,35 +1220,47 @@
         .csv-spreadsheet {
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.85rem;
+            font-size: 0.9rem;
+            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
         }
         
         .csv-spreadsheet th {
-            background: #f8f9fa;
+            background: linear-gradient(135deg, rgba(248, 249, 250, 0.95) 0%, rgba(255, 255, 255, 0.95) 100%);
             color: var(--black);
-            font-weight: 600;
-            padding: var(--spacing-sm) var(--spacing-md);
+            font-weight: 700;
+            padding: var(--spacing-lg) var(--spacing-md);
             text-align: left;
-            border-bottom: 2px solid #e1e5e9;
-            border-right: 1px solid #e1e5e9;
+            border-bottom: 2px solid rgba(253, 65, 13, 0.2);
+            border-right: 1px solid rgba(225, 229, 233, 0.5);
             position: sticky;
             top: 0;
             z-index: 10;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.85rem;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
         }
         
         .csv-spreadsheet td {
-            padding: var(--spacing-sm) var(--spacing-md);
-            border-bottom: 1px solid #f1f3f4;
-            border-right: 1px solid #f1f3f4;
+            padding: var(--spacing-md) var(--spacing-md);
+            border-bottom: 1px solid rgba(241, 243, 244, 0.8);
+            border-right: 1px solid rgba(241, 243, 244, 0.5);
             vertical-align: top;
             max-width: 200px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            transition: all 0.3s ease;
         }
         
         .csv-spreadsheet tr:hover {
-            background: #f8f9fa;
+            background: rgba(253, 65, 13, 0.05);
+            transform: scale(1.01);
+        }
+        
+        .csv-spreadsheet tr:hover td {
+            border-color: rgba(253, 65, 13, 0.2);
         }
         
         .csv-spreadsheet tr.editing {
@@ -878,20 +1274,24 @@
         }
         
         .row-edit-btn {
-            background: var(--primary-red);
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--dark-red) 100%);
             color: var(--white);
             border: none;
-            padding: 4px 8px;
-            border-radius: var(--radius-sm);
+            padding: 8px 12px;
+            border-radius: 15px;
             cursor: pointer;
-            font-size: 0.75rem;
+            font-size: 0.8rem;
+            font-weight: 600;
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 6px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 12px rgba(253, 65, 13, 0.3);
         }
         
         .row-edit-btn:hover {
-            background: var(--dark-red);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(253, 65, 13, 0.4);
         }
         
         .row-save-btn {
@@ -961,10 +1361,76 @@
             color: var(--gray);
             word-break: break-all;
         }
+        
+        /* Modern Glass Morphism Effects */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 20px 40px rgba(34, 9, 1, 0.1);
+        }
+        
+        .glass-border {
+            position: relative;
+            border: 2px solid transparent;
+            background-clip: padding-box;
+        }
+        
+        .glass-border::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            padding: 2px;
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--gold) 50%, var(--primary-red) 100%);
+            border-radius: inherit;
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: xor;
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+        }
+        
+        /* Enhanced Hover Effects */
+        .hover-lift {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .hover-lift:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 20px 40px rgba(34, 9, 1, 0.15);
+        }
+        
+        /* Gradient Text Effects */
+        .gradient-text {
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--gold) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(141, 141, 146, 0.1);
+            border-radius: 10px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--dark-red) 100%);
+            border-radius: 10px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, var(--dark-red) 0%, var(--primary-red) 100%);
+        }
     </style>
 </head>
 <body>
-    <div class="wizard-container">
+    <div class="wizard-container custom-scrollbar">
         <!-- Wizard Header -->
         <div class="wizard-header">
             <h1><i class="fas fa-magic"></i> Order Processing Wizard</h1>
@@ -1068,17 +1534,46 @@
                 </div>
                 
                 <div class="vin-input-section">
-                    <label for="vinTextarea">Enter VINs (one per line):</label>
-                    <textarea id="vinTextarea" class="vin-textarea" placeholder="Enter VINs here, one per line..."></textarea>
+                    <div class="vin-table-header">
+                        <h3><i class="fas fa-list-ol"></i> VIN Entry Table</h3>
+                        <div class="table-controls">
+                            <button class="btn btn-secondary btn-sm" onclick="wizard.addVinRow()">
+                                <i class="fas fa-plus"></i> Add Row
+                            </button>
+                            <button class="btn btn-secondary btn-sm" onclick="wizard.removeLastRow()">
+                                <i class="fas fa-minus"></i> Remove Row
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="vin-table-container">
+                        <table class="vin-entry-table" id="vinEntryTable">
+                            <thead>
+                                <tr>
+                                    <th style="width: 80px;">Row #</th>
+                                    <th>VIN # (17 Characters Required)</th>
+                                    <th style="width: 100px;">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="vinTableBody">
+                                <!-- Initial rows will be generated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
                     
                     <div class="vin-help">
                         <h4><i class="fas fa-info-circle"></i> VIN Entry Guidelines</h4>
                         <ul>
-                            <li>Enter one VIN per line</li>
-                            <li>VINs should be 17 characters long</li>
-                            <li>You can paste from spreadsheets or documents</li>
-                            <li>Empty lines and extra whitespace will be ignored</li>
+                            <li><strong>17 Characters Required:</strong> Each VIN must be exactly 17 characters</li>
+                            <li><strong>Real-time Validation:</strong> Invalid VINs will turn red immediately</li>
+                            <li><strong>No Spaces:</strong> VINs should not contain spaces or special characters</li>
+                            <li><strong>Visual Feedback:</strong> Green checkmark = valid, Red X = invalid</li>
                         </ul>
+                        <div class="vin-summary" id="vinSummary">
+                            <span class="valid-count">Valid VINs: <strong id="validCount">0</strong></span>
+                            <span class="invalid-count">Invalid VINs: <strong id="invalidCount">0</strong></span>
+                            <span class="total-count">Total VINs: <strong id="totalCount">0</strong></span>
+                        </div>
                     </div>
                 </div>
                 
@@ -1116,13 +1611,13 @@
                             </button>
                         </div>
                     </div>
-                    <div class="csv-spreadsheet-container">
+                    <div class="csv-spreadsheet-container custom-scrollbar">
                         <div class="spreadsheet-placeholder" id="csvPlaceholder">
                             <i class="fas fa-table"></i>
                             <p>Loading vehicle data...</p>
                         </div>
                         <div class="spreadsheet-wrapper">
-                            <table class="csv-spreadsheet" id="csvTable" style="display: none;">
+                            <table class="csv-spreadsheet hover-lift" id="csvTable" style="display: none;">
                                 <!-- Will be populated with CSV data -->
                             </table>
                         </div>
