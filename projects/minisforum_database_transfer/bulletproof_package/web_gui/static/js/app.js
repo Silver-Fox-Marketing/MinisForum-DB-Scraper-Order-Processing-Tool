@@ -1945,7 +1945,6 @@ class MinisFornumApp {
                     </button>
                     <button class="card-action-btn btn-configure" onclick="app.editDealershipSettings('${dealer.name}')">
                         <i class="fas fa-cog"></i>
-                        Configure
                     </button>
                     <button class="card-action-btn btn-status" onclick="app.toggleDealershipActive('${dealer.name}', ${!isActive})">
                         <i class="fas fa-${isActive ? 'power-off' : 'unlock'}"></i>
