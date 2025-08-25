@@ -189,7 +189,7 @@ class MinisFornumApp {
         
         // Sidebar toggle functionality
         const sidebarToggle = document.getElementById('sidebarToggle');
-        const sidebarExpandFloat = document.getElementById('sidebarExpandFloat');
+        const sidebarExpand = document.getElementById('sidebarExpand');
         const mobileMenuToggle = document.getElementById('mobileMenuToggle');
         const sidebar = document.querySelector('.sidebar-navigation');
         const mainContent = document.querySelector('.main-content');
@@ -197,14 +197,12 @@ class MinisFornumApp {
         if (sidebarToggle) {
             sidebarToggle.addEventListener('click', () => {
                 sidebar.classList.toggle('collapsed');
-                this.updateFloatingButton();
             });
         }
         
-        if (sidebarExpandFloat) {
-            sidebarExpandFloat.addEventListener('click', () => {
+        if (sidebarExpand) {
+            sidebarExpand.addEventListener('click', () => {
                 sidebar.classList.remove('collapsed');
-                this.updateFloatingButton();
             });
         }
         
@@ -6640,10 +6638,13 @@ class MinisFornumApp {
         const savedTheme = localStorage.getItem('theme') || 'light';
         this.setTheme(savedTheme);
         
-        // Add event listener to theme toggle button
-        const themeToggle = document.getElementById('themeToggle');
-        if (themeToggle) {
-            themeToggle.addEventListener('click', () => {
+        // Add event listener to dark mode toggle button
+        const darkModeToggle = document.getElementById('darkModeToggle');
+        if (darkModeToggle) {
+            // Set initial toggle state
+            darkModeToggle.checked = savedTheme === 'dark';
+            
+            darkModeToggle.addEventListener('change', () => {
                 this.toggleTheme();
             });
         }
@@ -6655,19 +6656,10 @@ class MinisFornumApp {
         // Apply theme to document root
         document.documentElement.setAttribute('data-theme', theme);
         
-        // Update toggle button icon
-        const themeToggle = document.getElementById('themeToggle');
-        if (themeToggle) {
-            const icon = themeToggle.querySelector('i');
-            if (icon) {
-                if (theme === 'dark') {
-                    icon.className = 'fas fa-sun';
-                    themeToggle.setAttribute('title', 'Switch to Light Mode');
-                } else {
-                    icon.className = 'fas fa-moon';
-                    themeToggle.setAttribute('title', 'Switch to Dark Mode');
-                }
-            }
+        // Update dark mode toggle state
+        const darkModeToggle = document.getElementById('darkModeToggle');
+        if (darkModeToggle) {
+            darkModeToggle.checked = theme === 'dark';
         }
         
         // Save theme preference
@@ -7212,18 +7204,6 @@ Example:
         return new Promise(resolve => setTimeout(resolve, ms));
     }
     
-    updateFloatingButton() {
-        const sidebar = document.querySelector('.sidebar-navigation');
-        const floatingButton = document.getElementById('sidebarExpandFloat');
-        
-        if (sidebar && floatingButton) {
-            if (sidebar.classList.contains('collapsed')) {
-                floatingButton.classList.add('show');
-            } else {
-                floatingButton.classList.remove('show');
-            }
-        }
-    }
 }
 
 // Initialize the application when the page loads

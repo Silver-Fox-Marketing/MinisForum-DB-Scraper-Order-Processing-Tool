@@ -84,19 +84,30 @@
                     <div class="last-scrape" id="lastScrape">
                         Last Scrape: Never
                     </div>
+                    <!-- Dark Mode Toggle -->
+                    <div class="theme-toggle-container">
+                        <label class="theme-toggle" for="darkModeToggle" title="Toggle Dark Mode">
+                            <input type="checkbox" id="darkModeToggle" class="theme-toggle-input">
+                            <div class="theme-toggle-slider">
+                                <i class="fas fa-sun theme-icon light-icon"></i>
+                                <i class="fas fa-moon theme-icon dark-icon"></i>
+                                <div class="theme-toggle-thumb"></div>
+                            </div>
+                        </label>
+                    </div>
                 </div>
             </div>
         </header>
 
         <!-- Main Content Area -->
         <div class="main-content">
-            <!-- Floating Expand Button (shown when sidebar is collapsed) -->
-            <button class="sidebar-expand-float" id="sidebarExpandFloat" title="Expand Sidebar">
-                <i class="fas fa-chevron-right"></i>
-            </button>
-            
             <!-- Dynamic Sidebar Navigation -->
             <aside class="sidebar-navigation">
+                <!-- Expand button for collapsed state - positioned at top -->
+                <button class="sidebar-expand" id="sidebarExpand" title="Expand Sidebar">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+                
                 <div class="sidebar-header">
                     <h3 class="sidebar-title">
                         <i class="fas fa-layer-group"></i>

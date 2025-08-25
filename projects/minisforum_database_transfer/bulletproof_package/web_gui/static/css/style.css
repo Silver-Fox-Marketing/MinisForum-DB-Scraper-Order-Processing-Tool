@@ -25,6 +25,7 @@ Silver Fox Marketing Brand Colors and Typography
 
 /* Root Variables - Silver Fox Brand Colors */
 :root {
+    /* Brand Colors */
     --primary-red: #fd410d;
     --light-red: #ff8f71;
     --dark-red: #a52b0f;
@@ -77,18 +78,18 @@ Silver Fox Marketing Brand Colors and Typography
 
 /* Dark Mode Theme Variables - Silver Fox Brand Aligned */
 :root[data-theme="dark"] {
-    --theme-bg-primary: #1a0e0a;      /* Deep warm dark based on brand black */
-    --theme-bg-secondary: #2d1810;    /* Slightly lighter warm dark */
-    --theme-bg-tertiary: #4a3a32;     /* Silver Fox grey-brown for cells */
-    --theme-surface: #2d1810;         /* Card backgrounds */
-    --theme-surface-elevated: #5c4b42; /* Elevated card backgrounds - darker silver fox grey */
-    --theme-border: #4a2e22;          /* Warm brown borders */
-    --theme-border-light: #5c3926;    /* Lighter warm borders */
-    --theme-text-primary: #f5f1ee;    /* Warm off-white for primary text */
-    --theme-text-secondary: #d4c4b8;  /* Warm light brown for secondary text */
-    --theme-text-muted: #9c8875;      /* Warm muted brown for muted text */
-    --theme-shadow: rgba(34, 9, 1, 0.6);      /* Shadow using brand black */
-    --theme-shadow-heavy: rgba(34, 9, 1, 0.8); /* Heavier shadow */
+    --theme-bg-primary: #1a1a1a;      /* Professional dark background */
+    --theme-bg-secondary: #2d2d2d;    /* Slightly lighter dark */
+    --theme-bg-tertiary: #3a3a3a;     /* Medium dark for cards */
+    --theme-surface: #2a2a2a;         /* Card backgrounds */
+    --theme-surface-elevated: #404040; /* Elevated card backgrounds */
+    --theme-border: #4a4a4a;          /* Subtle borders */
+    --theme-border-light: #555555;    /* Lighter borders */
+    --theme-text-primary: #f0f0f0;    /* High contrast white text */
+    --theme-text-secondary: #b0b0b0;  /* Secondary text */
+    --theme-text-muted: #808080;      /* Muted text */
+    --theme-shadow: rgba(0, 0, 0, 0.4);
+    --theme-shadow-heavy: rgba(0, 0, 0, 0.6);
     
     /* Dark mode accent colors that complement the warm theme */
     --theme-accent-warm: #ff8f71;     /* Use brand light-red for accents */
@@ -107,6 +108,98 @@ Silver Fox Marketing Brand Colors and Typography
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+}
+
+/* Dark Mode Toggle Switch */
+.theme-toggle-container {
+    margin-left: 20px;
+    display: flex;
+    align-items: center;
+}
+
+.theme-toggle {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 30px;
+    cursor: pointer;
+}
+
+.theme-toggle-input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+.theme-toggle-slider {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, var(--theme-bg-tertiary) 0%, var(--theme-surface) 100%);
+    border: 2px solid var(--theme-border);
+    border-radius: 30px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8px;
+    overflow: hidden;
+}
+
+.theme-toggle-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 22px;
+    height: 22px;
+    background: linear-gradient(135deg, var(--primary-red) 0%, var(--light-red) 100%);
+    border-radius: 50%;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 6px rgba(253, 65, 13, 0.3);
+}
+
+.theme-icon {
+    font-size: 12px;
+    transition: all 0.3s ease;
+    z-index: 1;
+}
+
+.light-icon {
+    color: var(--gold);
+    opacity: 1;
+}
+
+.dark-icon {
+    color: var(--theme-text-muted);
+    opacity: 0.3;
+}
+
+.theme-toggle-input:checked + .theme-toggle-slider {
+    background: linear-gradient(135deg, #2a2a2a 0%, #404040 100%);
+    border-color: #555555;
+}
+
+.theme-toggle-input:checked + .theme-toggle-slider .theme-toggle-thumb {
+    transform: translateX(28px);
+    background: linear-gradient(135deg, #4a90ff 0%, #6ba3ff 100%);
+    box-shadow: 0 2px 6px rgba(74, 144, 255, 0.3);
+}
+
+.theme-toggle-input:checked + .theme-toggle-slider .light-icon {
+    opacity: 0.3;
+    color: var(--theme-text-muted);
+}
+
+.theme-toggle-input:checked + .theme-toggle-slider .dark-icon {
+    opacity: 1;
+    color: #6ba3ff;
+}
+
+.theme-toggle:hover .theme-toggle-slider {
+    transform: scale(1.05);
 }
 
 body {
@@ -321,15 +414,15 @@ body {
 .sidebar-navigation {
     width: 280px;
     height: 100%;
-    background: rgba(255, 255, 255, 0.95);
+    background: var(--theme-surface);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border-right: 1px solid rgba(253, 65, 13, 0.1);
+    border-right: 1px solid var(--theme-border);
     display: flex;
     flex-direction: column;
     position: relative;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 4px 0 20px rgba(34, 9, 1, 0.08);
+    box-shadow: 4px 0 20px var(--theme-shadow);
 }
 
 .sidebar-navigation.collapsed {
@@ -357,7 +450,7 @@ body {
     margin: 0;
     font-size: 1.2rem;
     font-weight: 700;
-    color: var(--black);
+    color: var(--theme-text-primary);
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
@@ -393,43 +486,52 @@ body {
     transform: rotate(180deg);
 }
 
-/* Floating expand button */
-.sidebar-expand-float {
-    position: fixed;
-    left: 20px;
-    top: 120px;
-    width: 44px;
-    height: 44px;
-    background: linear-gradient(135deg, var(--primary-red) 0%, var(--light-red) 100%);
+/* Sidebar expand button - only visible when collapsed */
+.sidebar-expand {
+    background: var(--primary-red);
     border: none;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
-    color: white;
-    font-size: 1.1rem;
     cursor: pointer;
-    z-index: 1000;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateX(-20px) scale(0.8);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 4px 12px rgba(253, 65, 13, 0.3), 
-                0 2px 4px rgba(0, 0, 0, 0.1);
-    display: flex;
+    display: none;
     align-items: center;
     justify-content: center;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    color: white;
+    margin: 20px auto;
+    font-size: 1.2rem;
+    box-shadow: 0 2px 8px rgba(253, 65, 13, 0.3);
+    position: absolute;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
 }
 
-.sidebar-expand-float:hover {
-    transform: translateX(-20px) scale(1.05);
-    box-shadow: 0 6px 20px rgba(253, 65, 13, 0.4), 
-                0 4px 8px rgba(0, 0, 0, 0.15);
+.sidebar-expand:hover {
+    background: var(--dark-red);
+    color: var(--white);
+    transform: translateX(-50%) scale(1.1);
 }
 
-/* Show floating button when sidebar is collapsed - controlled by JS */
-.sidebar-expand-float.show {
-    opacity: 1;
-    visibility: visible;
-    transform: translateX(0) scale(1);
+/* Collapsed sidebar header adjustments */
+.sidebar-navigation.collapsed .sidebar-header {
+    justify-content: center;
+    padding: var(--spacing-xl) var(--spacing-sm);
 }
+
+.sidebar-navigation.collapsed .sidebar-toggle {
+    display: none !important;
+}
+
+.sidebar-navigation.collapsed .sidebar-expand {
+    display: flex !important;
+    opacity: 1 !important;
+    transform: translateX(-50%) !important;
+    visibility: visible !important;
+}
+
 
 .sidebar-nav {
     flex: 1;
@@ -714,6 +816,8 @@ body {
     overflow-y: auto;
     margin-left: 0;
     transition: margin-left 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    background: var(--theme-bg-secondary);
+    transition: background-color 0.3s ease, margin-left 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .tab-panel {
@@ -737,7 +841,8 @@ body {
     align-items: center;
     margin-bottom: var(--spacing-xl);
     padding-bottom: var(--spacing-md);
-    border-bottom: 2px solid #f1f3f4;
+    border-bottom: 2px solid var(--theme-border-light);
+    transition: border-color 0.3s ease;
 }
 
 .panel-header h2 {
@@ -1022,7 +1127,7 @@ body {
 
 .dealership-card.inactive {
     opacity: 0.6;
-    background: #f8f9fa;
+    background: var(--theme-bg-tertiary);
 }
 
 .card-header {
@@ -1133,7 +1238,7 @@ body {
 .status-item {
     text-align: center;
     padding: var(--spacing-md);
-    background: #f8f9fa;
+    background: var(--theme-bg-tertiary);
     border-radius: var(--radius-md);
 }
 
@@ -1622,7 +1727,7 @@ body {
 .form-group input {
     width: 100%;
     padding: var(--spacing-sm) var(--spacing-md);
-    border: 1px solid #e1e5e9;
+    border: 1px solid var(--theme-border);
     border-radius: var(--radius-md);
     font-size: 0.9rem;
     transition: border-color 0.2s ease;
@@ -1691,8 +1796,8 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: var(--white);
-    border: 1px solid #e1e5e9;
+    background: var(--theme-surface);
+    border: 1px solid var(--theme-border);
     border-radius: var(--radius-md);
     padding: var(--spacing-md);
     box-shadow: var(--shadow-sm);
@@ -1777,7 +1882,7 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-    background: #f1f1f1;
+    background: var(--theme-bg-tertiary);
 }
 
 ::-webkit-scrollbar-thumb {
@@ -1798,8 +1903,8 @@ body {
 }
 
 .metric-card {
-    background: var(--white);
-    border: 1px solid #e0e0e0;
+    background: var(--theme-surface);
+    border: 1px solid var(--theme-border);
     border-radius: var(--radius-md);
     padding: var(--spacing-lg);
     display: flex;
@@ -1858,7 +1963,7 @@ body {
 }
 
 .system-actions {
-    background: #f8f9fa;
+    background: var(--theme-bg-tertiary);
     border-radius: var(--radius-md);
     padding: var(--spacing-lg);
     margin-top: var(--spacing-xl);
@@ -1942,20 +2047,20 @@ body {
 }
 
 .summary-card {
-    background: var(--white);
-    border: 1px solid #e0e0e0;
+    background: var(--theme-surface);
+    border: 1px solid var(--theme-border);
     border-radius: var(--radius-md);
     padding: var(--spacing-lg);
     display: flex;
     align-items: center;
     gap: var(--spacing-md);
     transition: all 0.3s ease;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 4px var(--theme-shadow);
 }
 
 .summary-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 12px var(--theme-shadow-heavy);
     border-color: var(--primary-red);
 }
 
@@ -2020,8 +2125,8 @@ body {
 }
 
 .order-item {
-    background: #f8f9fa;
-    border: 1px solid #e1e5e9;
+    background: var(--theme-bg-tertiary);
+    border: 1px solid var(--theme-border);
     border-radius: var(--radius-md);
     padding: var(--spacing-lg);
     display: flex;
@@ -2031,7 +2136,7 @@ body {
 }
 
 .order-item:hover {
-    background: var(--white);
+    background: var(--theme-surface);
     border-color: var(--primary-red);
     box-shadow: var(--shadow-sm);
 }
@@ -2144,13 +2249,13 @@ body {
 }
 
 .order-btn.view {
-    background: var(--white);
+    background: var(--theme-surface);
     color: var(--gray);
-    border: 1px solid #e1e5e9;
+    border: 1px solid var(--theme-border);
 }
 
 .order-btn.view:hover {
-    background: #f8f9fa;
+    background: var(--theme-bg-tertiary);
     color: var(--theme-text-primary);
     transition: color 0.3s ease;
 }
@@ -2175,8 +2280,8 @@ body {
 
 /* Add Custom Order Section */
 .add-custom-order {
-    background: var(--white);
-    border: 1px solid #e0e0e0;
+    background: var(--theme-surface);
+    border: 1px solid var(--theme-border);
     border-radius: var(--radius-lg);
     padding: var(--spacing-xl);
     box-shadow: var(--shadow-sm);
@@ -2285,7 +2390,7 @@ body {
 
 /* CSV Preview Card Styling */
 .csv-preview-card {
-    background: white;
+    background: var(--theme-surface);
     border: 1px solid #e2e8f0;
     border-radius: 8px;
     margin: 20px 0;
@@ -2335,7 +2440,7 @@ body {
     width: 100%;
     border-collapse: collapse;
     font-size: 14px;
-    background: white;
+    background: var(--theme-surface);
 }
 
 .data-table th {
@@ -2369,7 +2474,7 @@ body {
     font-size: 12px;
     border-radius: 4px;
     border: 1px solid #e2e8f0;
-    background: white;
+    background: var(--theme-surface);
     color: #e74c3c;
     cursor: pointer;
 }
@@ -2578,28 +2683,27 @@ body {
     flex: 1;
     padding: 16px 20px 16px 48px;
     border: 2px solid var(--theme-border);
-    background: var(--theme-bg-primary);
+    background: var(--theme-surface);
     color: var(--theme-text-primary);
-    transition: border-color 0.3s ease, background-color 0.3s ease, color 0.3s ease;
     border-radius: 16px;
     font-size: 0.95rem;
     font-weight: 500;
-    background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 2px 8px var(--theme-shadow);
     position: relative;
 }
 
 .dealership-search .search-input::placeholder {
-    color: #9ca3af;
+    color: var(--theme-text-muted);
     font-weight: 400;
+    transition: color 0.3s ease;
 }
 
 .dealership-search .search-input:focus {
     outline: none;
     border-color: var(--primary-red);
-    background: var(--theme-bg-primary);
-    box-shadow: 0 0 0 4px rgba(253, 65, 13, 0.1), 0 4px 16px rgba(0, 0, 0, 0.08);
+    background: var(--theme-surface-elevated);
+    box-shadow: 0 0 0 4px rgba(253, 65, 13, 0.1), 0 4px 16px var(--theme-shadow);
     transform: translateY(-1px);
 }
 
@@ -2984,8 +3088,8 @@ body {
 
 /* Queue Items */
 .queue-item {
-    background: #f8f9fa;
-    border: 1px solid #e1e5e9;
+    background: var(--theme-bg-tertiary);
+    border: 1px solid var(--theme-border);
     border-radius: var(--radius-md);
     padding: var(--spacing-lg);
     margin-bottom: var(--spacing-md);
@@ -3125,12 +3229,13 @@ body {
    ============================================================================= */
 
 .dealership-selection-panel {
-    background: var(--white);
-    border: 1px solid #e0e0e0;
+    background: var(--theme-surface);
+    border: 1px solid var(--theme-border);
     border-radius: var(--radius-lg);
     padding: var(--spacing-lg);
     margin-bottom: var(--spacing-xl);
     box-shadow: var(--shadow-sm);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .selection-header {
@@ -3139,7 +3244,8 @@ body {
     align-items: center;
     margin-bottom: var(--spacing-lg);
     padding-bottom: var(--spacing-md);
-    border-bottom: 2px solid #f1f3f4;
+    border-bottom: 2px solid var(--theme-border-light);
+    transition: border-color 0.3s ease;
 }
 
 .selection-header h3 {
@@ -3169,15 +3275,15 @@ body {
 }
 
 .dealership-checkbox-item {
-    background: #f8f9fa;
-    border: 1px solid #e1e5e9;
+    background: var(--theme-bg-tertiary);
+    border: 1px solid var(--theme-border);
     border-radius: var(--radius-md);
     padding: var(--spacing-md);
     transition: all 0.2s ease;
 }
 
 .dealership-checkbox-item:hover {
-    background: var(--white);
+    background: var(--theme-surface);
     border-color: var(--primary-red);
 }
 
@@ -3267,25 +3373,26 @@ body {
     flex: 1;
     padding: 16px 20px 16px 48px;
     border: 2px solid var(--theme-border);
-    background: var(--theme-bg-primary);
+    background: var(--theme-surface);
     color: var(--theme-text-primary);
     border-radius: 16px;
     font-size: 1rem;
     font-weight: 500;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 2px 8px var(--theme-shadow);
 }
 
 .search-input::placeholder {
-    color: #9ca3af;
+    color: var(--theme-text-muted);
     font-weight: 400;
+    transition: color 0.3s ease;
 }
 
 .search-input:focus {
     outline: none;
     border-color: var(--primary-red);
-    background: var(--theme-bg-primary);
-    box-shadow: 0 0 0 4px rgba(253, 65, 13, 0.1), 0 4px 16px rgba(0, 0, 0, 0.08);
+    background: var(--theme-surface-elevated);
+    box-shadow: 0 0 0 4px rgba(253, 65, 13, 0.1), 0 4px 16px var(--theme-shadow);
     transform: translateY(-1px);
 }
 
@@ -3381,7 +3488,7 @@ body {
     color: var(--theme-text-primary);
     transition: border-color 0.3s ease, background-color 0.3s ease, color 0.3s ease;
     font-size: 0.9rem;
-    background: var(--white);
+    background: var(--theme-surface);
     transition: border-color 0.2s ease;
 }
 
@@ -3449,7 +3556,7 @@ body {
     align-items: center;
     padding: var(--spacing-lg);
     border-bottom: 1px solid #e1e5e9;
-    background: #f8f9fa;
+    background: var(--theme-bg-tertiary);
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
@@ -3583,7 +3690,7 @@ body {
 .results-table .vin-cell {
     font-family: 'Courier New', monospace;
     font-size: 0.8rem;
-    background: #f8f9fa;
+    background: var(--theme-bg-tertiary);
 }
 
 .results-table .price-cell {
@@ -3601,7 +3708,7 @@ body {
     align-items: center;
     padding: var(--spacing-lg);
     border-top: 1px solid #e1e5e9;
-    background: #f8f9fa;
+    background: var(--theme-bg-tertiary);
     border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
@@ -4035,7 +4142,7 @@ body {
 }
 
 .header-filter option {
-    background: var(--white);
+    background: var(--theme-surface);
     color: var(--theme-text-primary);
     transition: color 0.3s ease;
     padding: var(--spacing-xs);
@@ -4123,7 +4230,7 @@ body {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: var(--white);
+    background: var(--theme-surface);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
     padding: var(--spacing-xl);
@@ -4372,13 +4479,13 @@ body {
 }
 
 .scraper-action-btn.view-output {
-    background: var(--white);
+    background: var(--theme-surface);
     color: var(--gray);
-    border: 1px solid #e1e5e9;
+    border: 1px solid var(--theme-border);
 }
 
 .scraper-action-btn.view-output:hover {
-    background: #f8f9fa;
+    background: var(--theme-bg-tertiary);
     color: var(--theme-text-primary);
     transition: color 0.3s ease;
 }
@@ -4941,8 +5048,8 @@ body {
 }
 
 .dealership-card {
-    background: white;
-    border: 1px solid #e0e0e0;
+    background: var(--theme-surface);
+    border: 1px solid var(--theme-border);
     border-radius: 8px;
     padding: 1.5rem;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -5007,7 +5114,7 @@ body {
 .table-info {
     margin-bottom: 1rem;
     padding: 0.75rem;
-    background: #f8f9fa;
+    background: var(--theme-bg-tertiary);
     border-radius: 4px;
     border-left: 3px solid var(--primary-red);
 }
@@ -5081,7 +5188,7 @@ body {
 }
 
 .vin-log-stats .stat-card {
-    background: #f8f9fa;
+    background: var(--theme-bg-tertiary);
     border: 1px solid #e9ecef;
     border-radius: 6px;
     padding: 1rem;
@@ -5126,7 +5233,7 @@ body {
 }
 
 .vin-log-table th {
-    background: #f8f9fa;
+    background: var(--theme-bg-tertiary);
     font-weight: 600;
     color: #495057;
     position: sticky;
@@ -5135,7 +5242,7 @@ body {
 }
 
 .vin-log-table tr:hover {
-    background: #f8f9fa;
+    background: var(--theme-bg-tertiary);
 }
 
 .vin-number {
@@ -5206,7 +5313,7 @@ body {
 
 /* Scraper View Interface Styles */
 .csv-import-section {
-    background: #f8f9fa;
+    background: var(--theme-bg-tertiary);
     border: 1px solid #e9ecef;
     border-radius: 8px;
     padding: 1.5rem;
@@ -5422,7 +5529,7 @@ body {
 }
 
 .scraper-data-table th {
-    background: #f8f9fa;
+    background: var(--theme-bg-tertiary);
     font-weight: 600;
     color: #495057;
     position: sticky;
@@ -5431,7 +5538,7 @@ body {
 }
 
 .scraper-data-table tr:hover {
-    background: #f8f9fa;
+    background: var(--theme-bg-tertiary);
 }
 
 /* Modern Dealership Settings Styles - Silver Fox Brand */
@@ -6028,8 +6135,8 @@ body {
 }
 
 .dealership-card {
-    background: var(--white);
-    border: 1px solid #e1e5e9;
+    background: var(--theme-surface);
+    border: 1px solid var(--theme-border);
     border-radius: var(--radius-md);
     padding: var(--spacing-md);
     cursor: pointer;
@@ -6405,7 +6512,7 @@ body {
 }
 
 .qr-status-card {
-    background: var(--white);
+    background: var(--theme-surface);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
     padding: var(--spacing-xl);
@@ -6435,7 +6542,7 @@ body {
     display: flex;
     align-items: center;
     gap: var(--spacing-md);
-    background: #f8f9fa;
+    background: var(--theme-bg-tertiary);
     padding: var(--spacing-md);
     border-radius: var(--radius-md);
     border-left: 4px solid var(--primary-red);
@@ -6474,7 +6581,7 @@ body {
 }
 
 .qr-technical-details {
-    background: #f8f9fa;
+    background: var(--theme-bg-tertiary);
     border: 1px solid #e9ecef;
     border-radius: var(--radius-md);
     padding: var(--spacing-md);
@@ -6607,7 +6714,7 @@ body {
 }
 
 .qr-preview {
-    background: #f8f9fa;
+    background: var(--theme-bg-tertiary);
     border: 1px solid #e9ecef;
     border-radius: var(--radius-md);
     overflow: hidden;
@@ -6618,7 +6725,7 @@ body {
     justify-content: space-between;
     align-items: center;
     padding: var(--spacing-md);
-    background: #ffffff;
+    background: var(--theme-surface);
     border-bottom: 1px solid #e9ecef;
 }
 
@@ -6652,7 +6759,7 @@ body {
 }
 
 .qr-file-item {
-    background: #ffffff;
+    background: var(--theme-surface);
     border: 1px solid #e9ecef;
     border-radius: var(--radius-md);
     padding: var(--spacing-md);
@@ -6727,7 +6834,7 @@ body {
 
 .url-text {
     font-family: monospace;
-    background: #f8f9fa;
+    background: var(--theme-bg-tertiary);
     padding: 2px 6px;
     border-radius: 3px;
 }
@@ -6793,7 +6900,7 @@ body {
 }
 
 .detail-card {
-    background: var(--white);
+    background: var(--theme-surface);
     border-radius: var(--radius-lg);
     padding: var(--spacing-lg);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -6882,7 +6989,7 @@ body {
 }
 
 .output-item {
-    background: var(--white);
+    background: var(--theme-surface);
     border-radius: var(--radius-md);
     padding: var(--spacing-lg);
     text-align: center;
@@ -7013,7 +7120,7 @@ body {
     align-items: center;
     justify-content: center;
     font-size: 1.8rem;
-    background: var(--white);
+    background: var(--theme-surface);
     color: var(--primary-red);
 }
 
@@ -7081,7 +7188,7 @@ body {
     align-items: center;
     padding: var(--spacing-sm);
     margin-bottom: var(--spacing-xs);
-    background: var(--white);
+    background: var(--theme-surface);
     border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
 }
@@ -7099,7 +7206,7 @@ body {
 }
 
 .current-dealership-card {
-    background: var(--white);
+    background: var(--theme-surface);
     border: 2px solid var(--primary-red);
     border-radius: var(--radius-lg);
     padding: var(--spacing-xl);
@@ -7145,7 +7252,7 @@ body {
 }
 
 .stat-card {
-    background: var(--white);
+    background: var(--theme-surface);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     padding: var(--spacing-lg);
@@ -7239,7 +7346,7 @@ body {
     display: flex;
     align-items: center;
     margin-right: 20px;
-    background: var(--white);
+    background: var(--theme-surface);
     padding: 8px 12px;
     border-radius: 8px;
     border: 1px solid var(--border-color);
