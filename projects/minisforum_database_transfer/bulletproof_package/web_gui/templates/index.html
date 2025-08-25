@@ -67,9 +67,9 @@
         <header class="app-header">
             <div class="header-content">
                 <div class="logo-section">
-                    <img src="{{ url_for('static', filename='images/LS_TEXT-SECONDARY.svg') }}" alt="Silver Fox Marketing" class="header-logo">
+                    <img src="{{ url_for('static', filename='images/LS_MAIN-PRIMARY.svg') }}" alt="Silver Fox Marketing" class="header-logo">
                     <div class="title-section">
-                        <h1 class="app-title">Database and Order Processing Dashboard</h1>
+                        <h1 class="app-title">MinisForum Database Control</h1>
                         <span class="company-name">Silver Fox Marketing</span>
                     </div>
                 </div>
@@ -81,9 +81,6 @@
                     <div class="last-scrape" id="lastScrape">
                         Last Scrape: Never
                     </div>
-                    <button class="theme-toggle" id="themeToggle" title="Toggle Dark Mode">
-                        <i class="fas fa-moon"></i>
-                    </button>
                 </div>
             </div>
         </header>
@@ -95,27 +92,27 @@
                 <!-- Tab Navigation -->
                 <nav class="tab-navigation">
                     <button class="tab-button active" data-tab="scraper">
-                        <i class="fas fa-store tab-icon"></i>
-                        Dealerships
+                        <i class="fas fa-spider"></i>
+                        Scraper Control
                     </button>
                     <button class="tab-button" data-tab="queue-management">
-                        <i class="fas fa-clipboard-list tab-icon"></i>
+                        <i class="fas fa-tasks"></i>
                         Order Queue
                     </button>
                     <button class="tab-button" data-tab="data-search">
-                        <i class="fas fa-chart-bar tab-icon"></i>
-                        Analytics
+                        <i class="fas fa-search"></i>
+                        Data
                     </button>
                     <button class="tab-button" data-tab="system-status">
-                        <i class="fas fa-heartbeat tab-icon"></i>
-                        System Health
+                        <i class="fas fa-chart-line"></i>
+                        System Status
                     </button>
                     <button class="tab-button" data-tab="dealership-settings">
-                        <i class="fas fa-cogs tab-icon"></i>
-                        Settings
+                        <i class="fas fa-cog"></i>
+                        Dealership Settings
                     </button>
                     <button class="tab-button" onclick="window.open('/stress-test', '_blank')">
-                        <i class="fas fa-flask tab-icon"></i>
+                        <i class="fas fa-vial"></i>
                         System Tests
                     </button>
                     <button class="tab-button" onclick="window.open('/websocket-test', '_blank')" title="Test WebSocket Connection">
@@ -498,9 +495,25 @@
                             </div>
                         </div>
                         
-                        <div class="queue-layout">
-                            <!-- Left Panel - Selection Interface -->
-                            <div class="selection-panel">
+                        <!-- Operations Sub-navigation -->
+                        <div class="sub-tab-navigation">
+                            <button class="sub-tab-button active" data-subtab="order-queue">
+                                <i class="fas fa-clipboard-list"></i>
+                                Order Queue
+                            </button>
+                            <button class="sub-tab-button" data-subtab="scraper-data">
+                                <i class="fas fa-file-csv"></i>
+                                Scraper Data Import
+                            </button>
+                        </div>
+                        
+                        <!-- Sub-tab Panels -->
+                        <div class="sub-tab-panels">
+                            <!-- Order Queue Sub-panel -->
+                            <div class="sub-tab-panel active" id="order-queue-panel">
+                                <div class="queue-layout">
+                                    <!-- Left Panel - Selection Interface -->
+                                    <div class="selection-panel">
                                 <!-- Day Buttons -->
                                 <div class="day-selection">
                                     <h3>Scheduled Days</h3>
@@ -584,6 +597,59 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- Scraper Data Import Sub-panel -->
+                    <div class="sub-tab-panel" id="scraper-data-panel" style="display: none;">
+                        <!-- CSV Import Section -->
+                        <div class="csv-import-section">
+                            <div class="import-header">
+                                <h3>
+                                    <i class="fas fa-file-csv"></i>
+                                    Import Scraper Data
+                                </h3>
+                                <div class="import-actions">
+                                    <input type="file" id="csvFileInput" accept=".csv" style="display: none;">
+                                    <button class="btn btn-primary" id="selectCsvBtn">
+                                        <i class="fas fa-upload"></i>
+                                        Select CSV File
+                                    </button>
+                                    <button class="btn btn-secondary" id="importCsvBtn" disabled>
+                                        <i class="fas fa-download"></i>
+                                        Import Data
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="import-status" id="importStatus" style="display: none;">
+                                <div class="status-message" id="importStatusMessage"></div>
+                                <div class="progress-bar" id="importProgressBar" style="display: none;">
+                                    <div class="progress-fill" id="importProgressFill"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Scraper History Table -->
+                        <div class="scraper-history-section">
+                            <div class="history-header">
+                                <h3>
+                                    <i class="fas fa-history"></i>
+                                    Scraper Import History
+                                </h3>
+                                <button class="btn btn-secondary" id="refreshScraperHistory">
+                                    <i class="fas fa-sync"></i>
+                                    Refresh
+                                </button>
+                            </div>
+                            
+                            <div class="scraper-table-container" id="queueScraperTableContainer">
+                                <div class="loading">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                    Loading scraper history...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
                 </div>
             </div>
         </div>
@@ -1031,7 +1097,7 @@
     </div>
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=2025081915"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=2025082502"></script>
     
 </body>
 </html>

@@ -1783,6 +1783,20 @@ class MinisFornumApp {
     async loadQueueManagement() {
         console.log('Loading new queue management interface...');
         
+        // Initialize sub-tabs for queue management
+        this.initSubTabs();
+        
+        // Ensure the default sub-tab (order-queue) is active
+        const defaultSubTab = document.querySelector('[data-subtab="order-queue"]');
+        if (defaultSubTab) {
+            defaultSubTab.classList.add('active');
+        }
+        const defaultPanel = document.getElementById('order-queue-panel');
+        if (defaultPanel) {
+            defaultPanel.classList.add('active');
+            defaultPanel.style.display = 'block';
+        }
+        
         // Set up event listeners for new queue system
         this.setupNewQueueEventListeners();
         
@@ -1798,6 +1812,8 @@ class MinisFornumApp {
         
         // Initialize empty queue
         this.renderQueue();
+        
+        // Don't setup anything here - let the sub-tab switching handle it
         
         this.addTerminalMessage('Queue management interface loaded', 'success');
     }
@@ -1839,6 +1855,23 @@ class MinisFornumApp {
                 }).join('')
                 : '<span class="no-types">No vehicle types configured</span>';
             
+            // Generate active filters display
+            const activeFilters = [];
+            if (dealer.filtering_rules?.exclude_missing_stock) {
+                activeFilters.push('<span class="filter-tag stock-filter"><i class="fas fa-hashtag"></i> Exclude Missing Stock</span>');
+            }
+            if (dealer.filtering_rules?.exclude_missing_price) {
+                activeFilters.push('<span class="filter-tag price-filter"><i class="fas fa-dollar-sign"></i> Exclude Missing Price</span>');
+            }
+            if (dealer.filtering_rules?.exclude_status?.length > 0) {
+                const statusList = dealer.filtering_rules.exclude_status.join(', ');
+                activeFilters.push(`<span class="filter-tag status-filter"><i class="fas fa-ban"></i> Exclude: ${statusList}</span>`);
+            }
+            
+            const filtersDisplay = activeFilters.length > 0 
+                ? activeFilters.join('')
+                : '<span class="no-filters">No special filters active</span>';
+            
             const dealerInitials = dealer.name.split(' ')
                 .map(word => word.charAt(0))
                 .slice(0, 2)
@@ -1849,7 +1882,7 @@ class MinisFornumApp {
             const vehicleCount = Math.floor(Math.random() * 200) + 50; // Placeholder - replace with actual count
             
             return `
-            <div class="dealership-settings-card" data-dealer-name="${dealer.name}">
+            <div class="dealership-settings-card ${!isActive ? 'disabled' : ''}" data-dealer-name="${dealer.name}" data-dealership-id="${dealer.id}" data-is-active="${isActive}">
                 <div class="settings-card-header">
                     <h3>
                         <div class="dealer-icon">${dealerInitials}</div>
@@ -1862,19 +1895,41 @@ class MinisFornumApp {
                 </div>
                 <div class="settings-card-body">
                     <div class="setting-group">
-                        <label class="setting-label">Vehicle Types to Process:</label>
-                        <div class="vehicle-types-display">
-                            ${vehicleTypesDisplay}
+                        <label class="setting-label">Vehicle Types:</label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" value="new" ${vehicleTypes.includes('new') ? 'checked' : ''}>
+                                <span>New</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" value="used" ${vehicleTypes.includes('used') ? 'checked' : ''}>
+                                <span>Used</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" value="certified" ${vehicleTypes.includes('certified') ? 'checked' : ''}>
+                                <span>Certified</span>
+                            </label>
                         </div>
                     </div>
                     
                     <div class="setting-group">
-                        <label class="setting-label">Status:</label>
-                        <div class="config-details">
-                            <span class="config-item">
-                                <i class="fas fa-${isActive ? 'check-circle' : 'times-circle'}"></i>
-                                ${isActive ? 'Active' : 'Inactive'}
-                            </span>
+                        <label class="setting-label">Price Range:</label>
+                        <div style="display: flex; gap: 12px;">
+                            <input type="number" class="setting-input" placeholder="Min Price" 
+                                   value="${dealer.filtering_rules?.min_price || ''}" 
+                                   style="flex: 1;">
+                            <input type="number" class="setting-input" placeholder="Max Price" 
+                                   value="${dealer.filtering_rules?.max_price || ''}" 
+                                   style="flex: 1;">
+                        </div>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <label>
+                            <input type="checkbox" class="active-toggle" ${isActive ? 'checked' : ''}>
+                            Active Dealership
+                        </label>
+                        <div class="config-details" style="margin-top: 8px;">
                             <span class="config-item">
                                 <i class="fas fa-calendar"></i>
                                 Updated: ${dealer.updated_at ? new Date(dealer.updated_at).toLocaleDateString() : 'Never'}
@@ -1893,7 +1948,7 @@ class MinisFornumApp {
                         Configure
                     </button>
                     <button class="card-action-btn btn-status" onclick="app.toggleDealershipActive('${dealer.name}', ${!isActive})">
-                        <i class="fas fa-power-off"></i>
+                        <i class="fas fa-${isActive ? 'power-off' : 'unlock'}"></i>
                         ${isActive ? 'Disable' : 'Enable'}
                     </button>
                 </div>
@@ -1904,7 +1959,7 @@ class MinisFornumApp {
         // Setup save button
         const saveBtn = document.getElementById('saveDealershipSettings');
         if (saveBtn && !saveBtn.hasEventListener) {
-            saveBtn.addEventListener('click', () => this.saveDealershipSettings());
+            saveBtn.addEventListener('click', () => this.saveAllDealershipSettings());
             saveBtn.hasEventListener = true;
         }
         
@@ -1932,6 +1987,17 @@ class MinisFornumApp {
     }
     
     async toggleDealershipActive(dealershipName, isActive) {
+        // Find the dealership card to update UI immediately
+        const card = document.querySelector(`[data-dealer-name="${dealershipName}"]`);
+        const statusBtn = card?.querySelector('.btn-status');
+        
+        // Show loading state
+        if (statusBtn) {
+            const originalContent = statusBtn.innerHTML;
+            statusBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
+            statusBtn.disabled = true;
+        }
+        
         try {
             const response = await fetch(`/api/dealerships/${encodeURIComponent(dealershipName)}`, {
                 method: 'POST',
@@ -1946,17 +2012,90 @@ class MinisFornumApp {
             const result = await response.json();
             
             if (result.success) {
+                // Update the card's visual state immediately
+                this.updateDealershipCardState(dealershipName, isActive);
+                
                 this.addTerminalMessage(`${dealershipName} ${isActive ? 'activated' : 'deactivated'}`, 'success');
+                
+                // Refresh the order queue dealerships list to filter disabled ones
+                this.loadOrderQueueDealerships();
             } else {
                 this.addTerminalMessage(`Failed to update ${dealershipName}: ${result.error}`, 'error');
-                // Reload settings to reset checkbox state
-                this.loadDealershipSettings();
+                // Reset button state
+                if (statusBtn) {
+                    statusBtn.innerHTML = `<i class="fas fa-${isActive ? 'unlock' : 'power-off'}"></i> ${isActive ? 'Enable' : 'Disable'}`;
+                    statusBtn.disabled = false;
+                }
             }
         } catch (error) {
             console.error('Error toggling dealership active state:', error);
             this.addTerminalMessage(`Error updating ${dealershipName}`, 'error');
-            // Reload settings to reset checkbox state
-            this.loadDealershipSettings();
+            // Reset button state
+            if (statusBtn) {
+                statusBtn.innerHTML = `<i class="fas fa-${isActive ? 'unlock' : 'power-off'}"></i> ${isActive ? 'Enable' : 'Disable'}`;
+                statusBtn.disabled = false;
+            }
+        }
+    }
+    
+    updateDealershipCardState(dealershipName, isActive) {
+        const card = document.querySelector(`[data-dealer-name="${dealershipName}"]`);
+        if (!card) return;
+        
+        // Update card classes
+        if (isActive) {
+            card.classList.remove('disabled');
+        } else {
+            card.classList.add('disabled');
+        }
+        
+        // Update data attribute
+        card.setAttribute('data-is-active', isActive);
+        
+        // Update status indicator
+        const statusIndicator = card.querySelector('.status-indicator');
+        if (statusIndicator) {
+            if (isActive) {
+                statusIndicator.classList.remove('offline');
+            } else {
+                statusIndicator.classList.add('offline');
+            }
+        }
+        
+        // Update status text
+        const statusText = card.querySelector('.config-item:first-child');
+        if (statusText) {
+            statusText.innerHTML = `
+                <i class="fas fa-${isActive ? 'check-circle' : 'times-circle'}"></i>
+                ${isActive ? 'Active' : 'Disabled'}
+            `;
+        }
+        
+        // Update button
+        const statusBtn = card.querySelector('.btn-status');
+        if (statusBtn) {
+            statusBtn.innerHTML = `<i class="fas fa-${isActive ? 'power-off' : 'unlock'}"></i> ${isActive ? 'Disable' : 'Enable'}`;
+            statusBtn.onclick = () => this.toggleDealershipActive(dealershipName, !isActive);
+            statusBtn.disabled = false;
+        }
+        
+        console.log(`Updated dealership card state: ${dealershipName} is now ${isActive ? 'active' : 'disabled'}`);
+    }
+    
+    async loadOrderQueueDealerships() {
+        // Reload the dealership list to apply active/disabled filtering
+        try {
+            const response = await fetch('/api/dealerships');
+            const dealerships = await response.json();
+            
+            this.dealerships = dealerships;
+            this.renderDealershipList(dealerships);
+            
+            console.log(`♻️ Refreshed order queue dealerships list - ${dealerships.length} total dealerships loaded`);
+            
+        } catch (error) {
+            console.error('Error refreshing order queue dealerships:', error);
+            this.addTerminalMessage(`Error refreshing dealerships list: ${error.message}`, 'error');
         }
     }
     
@@ -2125,6 +2264,108 @@ class MinisFornumApp {
         }
     }
     
+    async saveAllDealershipSettings() {
+        console.log('Saving all dealership settings...');
+        
+        try {
+            // Collect all dealership setting data from the form
+            const dealershipCards = document.querySelectorAll('.dealership-settings-card:not(.disabled)');
+            const updates = [];
+            
+            dealershipCards.forEach(card => {
+                const dealershipId = parseInt(card.dataset.dealershipId);
+                if (!dealershipId) return;
+                
+                // Get form values for this dealership
+                const newCheckbox = card.querySelector('input[value="new"]');
+                const usedCheckbox = card.querySelector('input[value="used"]');
+                const certifiedCheckbox = card.querySelector('input[value="certified"]');
+                
+                // Build vehicle types array
+                const vehicleTypes = [];
+                if (newCheckbox && newCheckbox.checked) vehicleTypes.push('new');
+                if (usedCheckbox && usedCheckbox.checked) vehicleTypes.push('used');
+                if (certifiedCheckbox && certifiedCheckbox.checked) vehicleTypes.push('certified');
+                
+                // Get other settings
+                const minPriceInput = card.querySelector('input[placeholder="Min Price"]');
+                const maxPriceInput = card.querySelector('input[placeholder="Max Price"]');
+                const activeToggle = card.querySelector('.active-toggle');
+                
+                const filteringRules = {
+                    vehicle_types: vehicleTypes
+                };
+                
+                if (minPriceInput && minPriceInput.value) {
+                    filteringRules.min_price = parseFloat(minPriceInput.value);
+                }
+                if (maxPriceInput && maxPriceInput.value) {
+                    filteringRules.max_price = parseFloat(maxPriceInput.value);
+                }
+                
+                updates.push({
+                    id: dealershipId,
+                    filtering_rules: filteringRules,
+                    is_active: activeToggle ? activeToggle.checked : true
+                });
+            });
+            
+            if (updates.length === 0) {
+                this.addTerminalMessage('No dealership settings to save', 'warning');
+                return;
+            }
+            
+            // Send bulk update to backend
+            this.addTerminalMessage(`Saving settings for ${updates.length} dealerships...`, 'info');
+            
+            // Process updates individually since we don't have a true bulk endpoint
+            let successCount = 0;
+            let errorCount = 0;
+            
+            for (const update of updates) {
+                try {
+                    const response = await fetch(`/api/dealership-settings/${update.id}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            filtering_rules: update.filtering_rules,
+                            is_active: update.is_active
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        successCount++;
+                    } else {
+                        console.error(`Failed to update dealership ${update.id}:`, data.error);
+                        errorCount++;
+                    }
+                } catch (error) {
+                    console.error(`Error updating dealership ${update.id}:`, error);
+                    errorCount++;
+                }
+            }
+            
+            // Show results
+            if (successCount > 0) {
+                this.addTerminalMessage(`Successfully saved settings for ${successCount} dealership${successCount !== 1 ? 's' : ''}`, 'success');
+            }
+            if (errorCount > 0) {
+                this.addTerminalMessage(`Failed to save settings for ${errorCount} dealership${errorCount !== 1 ? 's' : ''} - check console for details`, 'error');
+            }
+            
+            // Refresh the settings display
+            this.loadDealershipSettings();
+            
+        } catch (error) {
+            console.error('Error saving all dealership settings:', error);
+            this.addTerminalMessage(`Error saving dealership settings: ${error.message}`, 'error');
+        }
+    }
+    
     closeDealershipModal() {
         const modal = document.getElementById('dealershipModal');
         if (modal) {
@@ -2206,7 +2447,23 @@ class MinisFornumApp {
         }
         
         try {
-            const html = dealerships.map(dealership => {
+            // Filter out disabled dealerships from the queue list
+            const activeDealerships = dealerships.filter(dealership => {
+                const isActive = dealership.is_active !== false; // Default to active if not specified
+                if (!isActive) {
+                    console.log(`🚫 Filtered out disabled dealership: ${dealership.name}`);
+                }
+                return isActive;
+            });
+            
+            console.log(`📊 Dealership filtering results: ${dealerships.length} total, ${activeDealerships.length} active, ${dealerships.length - activeDealerships.length} disabled`);
+            
+            if (activeDealerships.length === 0) {
+                dealershipList.innerHTML = '<div class="loading">No active dealerships available</div>';
+                return;
+            }
+            
+            const html = activeDealerships.map(dealership => {
                 const dealershipType = this.getDealershipDefault(dealership.name);
                 const typeClass = dealershipType.toLowerCase(); // 'cao' or 'list'
                 
@@ -2221,7 +2478,7 @@ class MinisFornumApp {
                 const vehicleCount = Math.floor(Math.random() * 300) + 50;
                 const lastUpdate = new Date().toLocaleDateString();
                 
-                console.log(`🏢 Dealership: ${dealership.name} -> Type: ${dealershipType} -> Class: ${typeClass}`);
+                console.log(`🏢 Active Dealership: ${dealership.name} -> Type: ${dealershipType} -> Class: ${typeClass}`);
                 return `
                     <div class="dealership-item" data-dealership="${dealership.name}" draggable="true">
                         <div class="dealership-card-header">
@@ -3250,21 +3507,34 @@ class MinisFornumApp {
     }
     
     initSubTabs() {
-        // Handle sub-tab switching
+        // Handle sub-tab switching - remove existing listeners first
+        document.querySelectorAll('.sub-tab-button').forEach(button => {
+            // Clone the button to remove all event listeners
+            const newButton = button.cloneNode(true);
+            button.parentNode.replaceChild(newButton, button);
+        });
+        
+        // Add fresh event listeners
         document.querySelectorAll('.sub-tab-button').forEach(button => {
             button.addEventListener('click', (e) => {
                 const subtab = e.currentTarget.dataset.subtab;
+                console.log('Sub-tab clicked:', subtab);
                 this.switchSubTab(subtab);
             });
         });
     }
     
     switchSubTab(subtabName) {
+        console.log('Switching to sub-tab:', subtabName);
+        
         // Update sub-tab buttons
         document.querySelectorAll('.sub-tab-button').forEach(button => {
             button.classList.remove('active');
         });
-        document.querySelector(`[data-subtab="${subtabName}"]`).classList.add('active');
+        const activeButton = document.querySelector(`[data-subtab="${subtabName}"]`);
+        if (activeButton) {
+            activeButton.classList.add('active');
+        }
         
         // Update sub-tab panels
         document.querySelectorAll('.sub-tab-panel').forEach(panel => {
@@ -3272,6 +3542,7 @@ class MinisFornumApp {
             panel.style.display = 'none';
         });
         const activePanel = document.getElementById(`${subtabName}-panel`);
+        console.log('Active panel ID:', `${subtabName}-panel`, 'Found:', !!activePanel);
         if (activePanel) {
             activePanel.classList.add('active');
             activePanel.style.display = 'block';
@@ -3286,11 +3557,19 @@ class MinisFornumApp {
         }
         
         // Load content for specific sub-tabs
+        console.log('Loading content for sub-tab:', subtabName);
         if (subtabName === 'vin-history') {
             this.loadDealershipVinLogs();
         } else if (subtabName === 'scraper-view') {
             this.loadScraperHistory();
             this.setupCsvImport();
+        } else if (subtabName === 'scraper-data') {
+            console.log('Loading scraper data for Order Queue tab');
+            // Small delay to ensure DOM is ready
+            setTimeout(() => {
+                this.loadScraperHistory();
+                this.setupCsvImport();
+            }, 100);
         }
     }
     
@@ -5208,6 +5487,30 @@ class MinisFornumApp {
     // =============================================================================
     
     async loadScraperHistory() {
+        console.log('Loading scraper history...');
+        
+        // Check which container to use based on current tab
+        let container = document.getElementById('queueScraperTableContainer');
+        if (!container || !container.offsetParent) {
+            // If queue container doesn't exist or isn't visible, try the analytics one
+            container = document.getElementById('scraperTableContainer');
+        }
+        
+        if (!container) {
+            console.error('Scraper table container not found');
+            return;
+        }
+        
+        console.log('Using container:', container.id);
+        
+        // Show loading state
+        container.innerHTML = `
+            <div class="loading">
+                <i class="fas fa-spinner fa-spin"></i>
+                Loading scraper history...
+            </div>
+        `;
+        
         try {
             const response = await fetch('/api/scraper-imports');
             const data = await response.json();
@@ -5225,7 +5528,12 @@ class MinisFornumApp {
     }
     
     renderScraperHistoryTable(imports) {
-        const container = document.getElementById('scraperTableContainer');
+        // Check which container to use based on current tab
+        let container = document.getElementById('queueScraperTableContainer');
+        if (!container || !container.offsetParent) {
+            // If queue container doesn't exist or isn't visible, try the analytics one
+            container = document.getElementById('scraperTableContainer');
+        }
         
         if (!imports || imports.length === 0) {
             container.innerHTML = `
@@ -5290,7 +5598,12 @@ class MinisFornumApp {
     }
     
     showScraperHistoryError(message) {
-        const container = document.getElementById('scraperTableContainer');
+        // Check which container to use based on current tab
+        let container = document.getElementById('queueScraperTableContainer');
+        if (!container || !container.offsetParent) {
+            // If queue container doesn't exist or isn't visible, try the analytics one
+            container = document.getElementById('scraperTableContainer');
+        }
         container.innerHTML = `
             <div class="error-state">
                 <i class="fas fa-exclamation-triangle"></i>
@@ -5714,9 +6027,21 @@ class MinisFornumApp {
 
     // CSV Import Functionality
     setupCsvImport() {
+        console.log('Setting up CSV import...');
         const selectBtn = document.getElementById('selectCsvBtn');
         const importBtn = document.getElementById('importCsvBtn');
         const fileInput = document.getElementById('csvFileInput');
+        
+        // Setup refresh button for scraper history
+        const refreshBtn = document.getElementById('refreshScraperHistory');
+        if (refreshBtn && !refreshBtn.hasEventListener) {
+            console.log('Adding refresh button listener');
+            refreshBtn.addEventListener('click', () => {
+                console.log('Refresh button clicked');
+                this.loadScraperHistory();
+            });
+            refreshBtn.hasEventListener = true;
+        }
         
         if (selectBtn && !selectBtn.hasEventListener) {
             selectBtn.addEventListener('click', () => {
