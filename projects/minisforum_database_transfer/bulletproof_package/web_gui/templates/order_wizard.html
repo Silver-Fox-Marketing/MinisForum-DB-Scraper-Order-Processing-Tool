@@ -26,7 +26,7 @@
             left: 0;
             right: 0;
             height: 300px;
-            background: linear-gradient(135deg, var(--primary-red) 0%, var(--dark-red) 50%, #1a0e0a 100%);
+            background: linear-gradient(135deg, #1a2332 0%, #2d3748 50%, #1a202c 100%);
             z-index: -1;
             border-radius: 0 0 50px 50px;
         }
@@ -166,10 +166,37 @@
             position: relative;
         }
         
-        .wizard-header h1 {
+        .header-logo-section {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--spacing-lg);
+            flex-wrap: wrap;
+        }
+        
+        .wizard-logo {
+            height: 80px;
+            width: 80px;
+            filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));
+            transition: transform 0.3s ease;
+        }
+        
+        .wizard-logo:hover {
+            transform: scale(1.05);
+        }
+        
+        .header-text {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            text-align: left;
+        }
+        
+        .wizard-title {
             font-size: 3.5rem;
             font-weight: 900;
-            margin-bottom: var(--spacing-md);
+            margin: 0;
+            margin-bottom: var(--spacing-sm);
             background: linear-gradient(45deg, var(--white) 0%, var(--gold) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -177,11 +204,32 @@
             text-shadow: 0 4px 8px rgba(0,0,0,0.3);
         }
         
-        .wizard-header p {
+        .wizard-subtitle {
             font-size: 1.3rem;
             opacity: 0.95;
             font-weight: 300;
             text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            margin: 0;
+        }
+        
+        @media (max-width: 768px) {
+            .header-logo-section {
+                flex-direction: column;
+                gap: var(--spacing-md);
+            }
+            
+            .header-text {
+                align-items: center;
+                text-align: center;
+            }
+            
+            .wizard-title {
+                font-size: 2.5rem;
+            }
+            
+            .wizard-subtitle {
+                font-size: 1.1rem;
+            }
         }
         
         .wizard-progress {
@@ -1433,8 +1481,13 @@
     <div class="wizard-container custom-scrollbar">
         <!-- Wizard Header -->
         <div class="wizard-header">
-            <h1><i class="fas fa-magic"></i> Order Processing Wizard</h1>
-            <p>Guided workflow for processing dealership orders</p>
+            <div class="header-logo-section">
+                <img src="{{ url_for('static', filename='images/LS_GLYPH-PRIMARY.svg') }}" alt="LotSherpa" class="wizard-logo">
+                <div class="header-text">
+                    <h1 class="wizard-title">Order Processing System</h1>
+                    <p class="wizard-subtitle">Guided workflow for processing dealership orders</p>
+                </div>
+            </div>
         </div>
         
         <!-- Progress Indicator -->

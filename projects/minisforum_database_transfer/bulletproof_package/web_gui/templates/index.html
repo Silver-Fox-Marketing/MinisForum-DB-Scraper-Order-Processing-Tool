@@ -65,11 +65,14 @@
     <div class="app-container">
         <!-- Header -->
         <header class="app-header">
+            <button class="mobile-menu-toggle" id="mobileMenuToggle">
+                <i class="fas fa-bars"></i>
+            </button>
             <div class="header-content">
                 <div class="logo-section">
-                    <img src="{{ url_for('static', filename='images/LS_MAIN-PRIMARY.svg') }}" alt="Silver Fox Marketing" class="header-logo">
+                    <img src="{{ url_for('static', filename='images/LS_TEXT-SECONDARY.svg') }}" alt="Silver Fox Marketing" class="header-logo">
                     <div class="title-section">
-                        <h1 class="app-title">MinisForum Database Control</h1>
+                        <h1 class="app-title">Database and Order Processing Toolkit</h1>
                         <span class="company-name">Silver Fox Marketing</span>
                     </div>
                 </div>
@@ -87,41 +90,77 @@
 
         <!-- Main Content Area -->
         <div class="main-content">
-            <!-- Content Area - Full Width -->
-            <div class="content-area">
-                <!-- Tab Navigation -->
-                <nav class="tab-navigation">
-                    <button class="tab-button active" data-tab="scraper">
+            <!-- Floating Expand Button (shown when sidebar is collapsed) -->
+            <button class="sidebar-expand-float" id="sidebarExpandFloat" title="Expand Sidebar">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+            
+            <!-- Dynamic Sidebar Navigation -->
+            <aside class="sidebar-navigation">
+                <div class="sidebar-header">
+                    <h3 class="sidebar-title">
+                        <i class="fas fa-layer-group"></i>
+                        Control Center
+                    </h3>
+                    <button class="sidebar-toggle" id="sidebarToggle" title="Toggle Sidebar">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                </div>
+                
+                <nav class="sidebar-nav">
+                    <button class="sidebar-tab active" data-tab="scraper">
                         <i class="fas fa-spider"></i>
-                        Scraper Control
+                        <span class="tab-label">Scraper Control</span>
+                        <div class="tab-indicator"></div>
                     </button>
-                    <button class="tab-button" data-tab="queue-management">
+                    <button class="sidebar-tab" data-tab="queue-management">
                         <i class="fas fa-tasks"></i>
-                        Order Queue
+                        <span class="tab-label">Order Queue</span>
+                        <div class="tab-indicator"></div>
                     </button>
-                    <button class="tab-button" data-tab="data-search">
+                    <button class="sidebar-tab" data-tab="data-search">
                         <i class="fas fa-search"></i>
-                        Data
+                        <span class="tab-label">Data Search</span>
+                        <div class="tab-indicator"></div>
                     </button>
-                    <button class="tab-button" data-tab="system-status">
+                    <button class="sidebar-tab" data-tab="system-status">
                         <i class="fas fa-chart-line"></i>
-                        System Status
+                        <span class="tab-label">System Status</span>
+                        <div class="tab-indicator"></div>
                     </button>
-                    <button class="tab-button" data-tab="dealership-settings">
+                    <button class="sidebar-tab" data-tab="dealership-settings">
                         <i class="fas fa-cog"></i>
-                        Dealership Settings
+                        <span class="tab-label">Dealership Settings</span>
+                        <div class="tab-indicator"></div>
                     </button>
-                    <button class="tab-button" onclick="window.open('/stress-test', '_blank')">
-                        <i class="fas fa-vial"></i>
-                        System Tests
-                    </button>
-                    <button class="tab-button" onclick="window.open('/websocket-test', '_blank')" title="Test WebSocket Connection">
-                        <i class="fas fa-wifi"></i>
-                        WebSocket Test
-                    </button>
+                    
+                    <div class="sidebar-divider"></div>
+                    
+                    <div class="sidebar-section">
+                        <h4 class="sidebar-section-title">System Tools</h4>
+                        <button class="sidebar-tab external" onclick="window.open('/stress-test', '_blank')">
+                            <i class="fas fa-vial"></i>
+                            <span class="tab-label">System Tests</span>
+                            <i class="fas fa-external-link-alt external-icon"></i>
+                        </button>
+                        <button class="sidebar-tab external" onclick="window.open('/websocket-test', '_blank')" title="Test WebSocket Connection">
+                            <i class="fas fa-wifi"></i>
+                            <span class="tab-label">WebSocket Test</span>
+                            <i class="fas fa-external-link-alt external-icon"></i>
+                        </button>
+                    </div>
                 </nav>
+                
+                <div class="sidebar-footer">
+                    <div class="sidebar-status">
+                        <i class="fas fa-circle status-dot"></i>
+                        <span class="status-label">All Systems Online</span>
+                    </div>
+                </div>
+            </aside>
 
-                <!-- Tab Content -->
+            <!-- Content Area -->
+            <div class="content-area">
                 <div class="tab-content">
                     <!-- Scraper Tab -->
                     <div class="tab-panel active" id="scraper-panel">
@@ -484,6 +523,20 @@
                         <div class="panel-header">
                             <h2>Order Queue Management</h2>
                             <div class="control-buttons">
+                                <div class="wizard-mode-toggle">
+                                    <label class="toggle-label">
+                                        <span class="toggle-text">Wizard Mode:</span>
+                                        <div class="toggle-switch">
+                                            <input type="checkbox" id="useModalWizard" checked>
+                                            <span class="toggle-slider"></span>
+                                        </div>
+                                        <span class="toggle-option-text">
+                                            <span class="modal-option">Modal</span>
+                                            <span class="page-option">New Tab</span>
+                                        </span>
+                                    </label>
+                                </div>
+                                
                                 <button class="btn btn-secondary" id="clearQueueBtn">
                                     <i class="fas fa-trash"></i>
                                     Clear Queue
@@ -1092,6 +1145,210 @@
                 <button class="btn btn-primary" id="closeScraperDataModalBtn">
                     Close
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Order Processing Wizard Modal -->
+    <div class="modal" id="orderWizardModal">
+        <div class="modal-content wizard-modal">
+            <div class="modal-header">
+                <div class="modal-header-logo-section">
+                    <img src="{{ url_for('static', filename='images/LS_GLYPH-PRIMARY.svg') }}" alt="LotSherpa" class="modal-wizard-logo">
+                    <div class="modal-header-text">
+                        <h3 class="modal-wizard-title">Order Processing System</h3>
+                    </div>
+                </div>
+                <button class="modal-close" id="closeOrderWizardModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Wizard Progress Indicator -->
+                <div class="wizard-progress" id="modalWizardProgress">
+                    <div class="progress-step active" id="modal-step-initialize">
+                        <i class="fas fa-play"></i>
+                        <span>Initialize</span>
+                    </div>
+                    <div class="progress-step" id="modal-step-cao">
+                        <i class="fas fa-robot"></i>
+                        <span>Auto Process</span>
+                    </div>
+                    <div class="progress-step" id="modal-step-list">
+                        <i class="fas fa-list"></i>
+                        <span>VIN Entry</span>
+                    </div>
+                    <div class="progress-step" id="modal-step-review">
+                        <i class="fas fa-eye"></i>
+                        <span>Review</span>
+                    </div>
+                    <div class="progress-step" id="modal-step-order">
+                        <i class="fas fa-hashtag"></i>
+                        <span>Order #</span>
+                    </div>
+                    <div class="progress-step" id="modal-step-complete">
+                        <i class="fas fa-check"></i>
+                        <span>Complete</span>
+                    </div>
+                </div>
+
+                <!-- Wizard Content Container -->
+                <div class="wizard-content" id="modalWizardContent">
+                    <!-- Step 1: Initialize -->
+                    <div class="wizard-step active" id="modalInitializeStep">
+                        <div class="step-header">
+                            <h2 class="step-title">Processing Queue Initialized</h2>
+                            <p class="step-description">Ready to process <span id="modalTotalDealerships">0</span> dealerships from your queue</p>
+                        </div>
+                        
+                        <div class="queue-summary" id="modalQueueSummary">
+                            <!-- Queue items will be populated here -->
+                        </div>
+                        
+                        <div class="testing-mode-notice" style="margin: 20px 0; padding: 15px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px;">
+                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                <input type="checkbox" id="modalSkipVinLogging" style="width: 20px; height: 20px;">
+                                <div>
+                                    <strong>Testing Mode</strong>
+                                    <p style="margin: 5px 0 0 0; font-size: 0.9rem; color: #92400e;">
+                                        When enabled, VIN logs will NOT be updated. Use this for testing orders without affecting your VIN history.
+                                    </p>
+                                </div>
+                            </label>
+                        </div>
+                        
+                        <div class="wizard-actions">
+                            <div></div>
+                            <button class="btn-wizard primary" onclick="window.modalWizard.startProcessing()">
+                                <i class="fas fa-play"></i>
+                                Start Processing
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: CAO Processing -->
+                    <div class="wizard-step" id="modalCaoStep">
+                        <div class="step-header">
+                            <h2 class="step-title">Auto-Processing CAO Orders</h2>
+                            <p class="step-description">Automatic processing of CAO dealerships (no user input required)</p>
+                        </div>
+                        
+                        <div class="cao-progress" id="modalCaoProgress">
+                            <!-- CAO progress will be shown here -->
+                        </div>
+                        
+                        <div class="wizard-actions">
+                            <button class="btn-wizard secondary" onclick="window.modalWizard.previousStep()">
+                                <i class="fas fa-arrow-left"></i>
+                                Back
+                            </button>
+                            <button class="btn-wizard primary" onclick="window.modalWizard.nextStep()">
+                                <i class="fas fa-arrow-right"></i>
+                                Continue
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: List Processing -->
+                    <div class="wizard-step" id="modalListStep">
+                        <div class="step-header">
+                            <h2 class="step-title">VIN Entry for List Orders</h2>
+                            <p class="step-description">Enter VINs for list-based dealership orders</p>
+                        </div>
+
+                        <div class="list-dealerships" id="modalListDealerships">
+                            <!-- List dealerships and VIN entry will be shown here -->
+                        </div>
+                        
+                        <div class="wizard-actions">
+                            <button class="btn-wizard secondary" onclick="window.modalWizard.previousStep()">
+                                <i class="fas fa-arrow-left"></i>
+                                Back
+                            </button>
+                            <button class="btn-wizard primary" onclick="window.modalWizard.processListVins()">
+                                <i class="fas fa-arrow-right"></i>
+                                Process VINs
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: Review -->
+                    <div class="wizard-step" id="modalReviewStep">
+                        <div class="step-header">
+                            <h2 class="step-title">Review Order Data</h2>
+                            <p class="step-description">Review and verify the vehicle data before generating QR codes</p>
+                        </div>
+
+                        <div class="review-summary" id="modalReviewSummary">
+                            <!-- Review data will be shown here -->
+                        </div>
+                        
+                        <div class="wizard-actions">
+                            <button class="btn-wizard secondary" onclick="window.modalWizard.previousStep()">
+                                <i class="fas fa-arrow-left"></i>
+                                Back
+                            </button>
+                            <button class="btn-wizard primary" onclick="window.modalWizard.proceedToQRGeneration()">
+                                <i class="fas fa-qrcode"></i>
+                                Generate QR Codes
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 5: Order Number Input -->
+                    <div class="wizard-step" id="modalOrderNumberStep">
+                        <div class="step-header">
+                            <h2 class="step-title">Enter Order Number</h2>
+                            <p class="step-description">Provide the order number for file organization and tracking</p>
+                        </div>
+
+                        <div class="order-number-input">
+                            <div class="form-group">
+                                <label for="modalOrderNumber">Order Number:</label>
+                                <input type="text" id="modalOrderNumber" class="form-control" 
+                                       placeholder="e.g., SF24001, Order123, etc." 
+                                       maxlength="20" required>
+                            </div>
+                        </div>
+                        
+                        <div class="wizard-actions">
+                            <button class="btn-wizard secondary" onclick="window.modalWizard.previousStep()">
+                                <i class="fas fa-arrow-left"></i>
+                                Back
+                            </button>
+                            <button class="btn-wizard primary" onclick="window.modalWizard.generateFinalOutput()">
+                                <i class="fas fa-check"></i>
+                                Complete Order
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 6: Complete -->
+                    <div class="wizard-step" id="modalCompleteStep">
+                        <div class="completion-summary">
+                            <div class="completion-icon">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <h2>Order Processing Complete!</h2>
+                            <p>Your order has been successfully processed and files have been generated.</p>
+                            
+                            <div class="completion-details" id="modalCompletionDetails">
+                                <!-- Completion details will be shown here -->
+                            </div>
+                        </div>
+                        
+                        <div class="wizard-actions">
+                            <button class="btn-wizard secondary" onclick="window.modalWizard.viewOrderFolder()">
+                                <i class="fas fa-folder-open"></i>
+                                View Folder
+                            </button>
+                            <button class="btn-wizard primary" onclick="window.modalWizard.startNewOrder()">
+                                <i class="fas fa-plus"></i>
+                                New Order
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

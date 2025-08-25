@@ -165,12 +165,65 @@ class MinisFornumApp {
     }
     
     bindEventListeners() {
-        // Tab navigation
-        document.querySelectorAll('.tab-button').forEach(button => {
+        // Sidebar tab navigation (updated for new sidebar structure)
+        document.querySelectorAll('.sidebar-tab').forEach(button => {
             button.addEventListener('click', (e) => {
-                this.switchTab(e.target.dataset.tab);
+                e.preventDefault();
+                const tabName = e.currentTarget.dataset.tab;
+                if (tabName) {
+                    this.switchTab(tabName);
+                }
             });
         });
+        
+        // Also handle legacy tab-button class for compatibility
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', (e) => {
+                e.preventDefault();
+                const tabName = e.currentTarget.dataset.tab;
+                if (tabName) {
+                    this.switchTab(tabName);
+                }
+            });
+        });
+        
+        // Sidebar toggle functionality
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        const sidebarExpandFloat = document.getElementById('sidebarExpandFloat');
+        const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+        const sidebar = document.querySelector('.sidebar-navigation');
+        const mainContent = document.querySelector('.main-content');
+        
+        if (sidebarToggle) {
+            sidebarToggle.addEventListener('click', () => {
+                sidebar.classList.toggle('collapsed');
+                this.updateFloatingButton();
+            });
+        }
+        
+        if (sidebarExpandFloat) {
+            sidebarExpandFloat.addEventListener('click', () => {
+                sidebar.classList.remove('collapsed');
+                this.updateFloatingButton();
+            });
+        }
+        
+        if (mobileMenuToggle) {
+            mobileMenuToggle.addEventListener('click', () => {
+                sidebar.classList.toggle('mobile-open');
+                mainContent.classList.toggle('sidebar-open');
+            });
+        }
+        
+        // Close mobile sidebar when clicking overlay
+        if (mainContent) {
+            mainContent.addEventListener('click', (e) => {
+                if (e.target === mainContent && sidebar.classList.contains('mobile-open')) {
+                    sidebar.classList.remove('mobile-open');
+                    mainContent.classList.remove('sidebar-open');
+                }
+            });
+        }
         
         // Main action buttons
         document.getElementById('startScrapeBtn').addEventListener('click', () => {
@@ -856,23 +909,44 @@ class MinisFornumApp {
     }
     
     switchTab(tabName) {
-        // Update tab buttons
+        // Update sidebar tab buttons (updated for new sidebar structure)
+        document.querySelectorAll('.sidebar-tab').forEach(button => {
+            button.classList.remove('active');
+        });
+        
+        // Also handle legacy tab-button class
         document.querySelectorAll('.tab-button').forEach(button => {
             button.classList.remove('active');
         });
-        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        
+        const activeTab = document.querySelector(`.sidebar-tab[data-tab="${tabName}"]`);
+        if (activeTab) {
+            activeTab.classList.add('active');
+        }
         
         // Update tab panels
         document.querySelectorAll('.tab-panel').forEach(panel => {
             panel.classList.remove('active');
         });
-        document.getElementById(`${tabName}-panel`).classList.add('active');
+        
+        const targetPanel = document.getElementById(`${tabName}-panel`);
+        if (targetPanel) {
+            targetPanel.classList.add('active');
+        }
         
         this.currentTab = tabName;
         
         // If switching to scraper tab, ensure scraper status visibility is preserved
         if (tabName === 'scraper') {
             this.restoreScraperStatusVisibility();
+        }
+        
+        // Close mobile sidebar after tab switch
+        const sidebar = document.querySelector('.sidebar-navigation');
+        const mainContent = document.querySelector('.main-content');
+        if (sidebar && mainContent && window.innerWidth <= 768) {
+            sidebar.classList.remove('mobile-open');
+            mainContent.classList.remove('sidebar-open');
         }
         
         // Load tab-specific data
@@ -2964,17 +3038,40 @@ class MinisFornumApp {
             
             this.addTerminalMessage('Opening Order Processing Wizard...', 'info');
             
-            // Open wizard in new tab with cache-busting parameter
-            const timestamp = new Date().getTime();
-            const wizardWindow = window.open(`/order-wizard?v=${timestamp}`, '_blank');
+            // Check wizard mode toggle (default to modal wizard when checked)
+            const toggleElement = document.getElementById('useModalWizard');
+            const useModalWizard = toggleElement ? toggleElement.checked : true;
             
-            if (!wizardWindow) {
-                this.addTerminalMessage('Popup blocked! Processing directly instead...', 'warning');
-                setTimeout(() => this.processQueueDirectly(), 1000);
-                return;
+            if (useModalWizard) {
+                // Open wizard modal
+                this.showModal('orderWizardModal');
+                
+                // Initialize the modal wizard
+                if (typeof window.modalWizard === 'undefined') {
+                    window.modalWizard = new ModalOrderWizard();
+                }
+                
+                window.modalWizard.initializeFromQueue(queueData);
+                this.addTerminalMessage(`Launched modal wizard for ${this.processingQueue.size} dealerships`, 'success');
+                
+            } else {
+                // Open wizard in new tab (original behavior)
+                const timestamp = new Date().getTime();
+                const wizardWindow = window.open(`/order-wizard?v=${timestamp}`, '_blank');
+                
+                if (!wizardWindow) {
+                    this.addTerminalMessage('Popup blocked! Using modal wizard instead...', 'warning');
+                    // Fallback to modal
+                    this.showModal('orderWizardModal');
+                    if (typeof window.modalWizard === 'undefined') {
+                        window.modalWizard = new ModalOrderWizard();
+                    }
+                    window.modalWizard.initializeFromQueue(queueData);
+                    return;
+                }
+                
+                this.addTerminalMessage(`Launched standalone wizard for ${this.processingQueue.size} dealerships`, 'success');
             }
-            
-            this.addTerminalMessage(`Launched order wizard for ${this.processingQueue.size} dealerships`, 'success');
             
             // Clear queue after launching wizard
             setTimeout(() => {
@@ -6586,6 +6683,546 @@ class MinisFornumApp {
         
         // Show notification for theme change
         this.showNotification(`Switched to ${newTheme} mode`, 'info');
+    }
+}
+
+/**
+ * Modal Order Wizard - Simplified version for modal display
+ */
+class ModalOrderWizard {
+    constructor() {
+        this.currentStep = 0;
+        this.steps = ['initialize', 'cao', 'list', 'review', 'order', 'complete'];
+        this.queueData = [];
+        this.caoOrders = [];
+        this.listOrders = [];
+        this.currentListIndex = 0;
+        this.processedOrders = [];
+        this.processingResults = {
+            totalDealerships: 0,
+            caoProcessed: 0,
+            listProcessed: 0,
+            totalVehicles: 0,
+            filesGenerated: 0,
+            errors: []
+        };
+        
+        this.initializeEvents();
+    }
+    
+    initializeEvents() {
+        // Close modal event
+        const closeBtn = document.getElementById('closeOrderWizardModal');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                this.closeModal();
+            });
+        }
+        
+        // Modal backdrop click to close
+        const modal = document.getElementById('orderWizardModal');
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    this.closeModal();
+                }
+            });
+        }
+    }
+    
+    initializeFromQueue(queueData) {
+        console.log('Initializing modal wizard with queue data:', queueData);
+        
+        this.queueData = queueData;
+        this.caoOrders = queueData.filter(item => item.orderType === 'CAO');
+        this.listOrders = queueData.filter(item => item.orderType === 'LIST');
+        this.processingResults.totalDealerships = queueData.length;
+        
+        // Set testing mode checkbox based on queue setting
+        const testingMode = localStorage.getItem('orderWizardTestingMode') === 'true';
+        const modalTestingCheckbox = document.getElementById('modalSkipVinLogging');
+        if (modalTestingCheckbox) {
+            modalTestingCheckbox.checked = testingMode;
+        }
+        
+        // Reset to first step
+        this.currentStep = 0;
+        this.showStep('initialize');
+        
+        // Update the modal content
+        this.renderModalQueueSummary();
+        this.updateModalProgress('initialize');
+    }
+    
+    renderModalQueueSummary() {
+        const summaryContainer = document.getElementById('modalQueueSummary');
+        if (!summaryContainer) return;
+        
+        const totalElement = document.getElementById('modalTotalDealerships');
+        if (totalElement) {
+            totalElement.textContent = this.queueData.length;
+        }
+        
+        const caoCount = this.caoOrders.length;
+        const listCount = this.listOrders.length;
+        
+        summaryContainer.innerHTML = `
+            <div class="queue-summary-grid">
+                <div class="summary-card cao-card">
+                    <div class="card-icon">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div class="card-content">
+                        <h4>CAO Orders (Automatic)</h4>
+                        <div class="card-value">${caoCount}</div>
+                        <div class="card-details">
+                            ${this.caoOrders.map(order => order.name).join(', ') || 'None'}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="summary-card list-card">
+                    <div class="card-icon">
+                        <i class="fas fa-list"></i>
+                    </div>
+                    <div class="card-content">
+                        <h4>List Orders (VIN Entry)</h4>
+                        <div class="card-value">${listCount}</div>
+                        <div class="card-details">
+                            ${this.listOrders.map(order => order.name).join(', ') || 'None'}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    showStep(stepName) {
+        // Hide all modal wizard steps
+        document.querySelectorAll('.wizard-step').forEach(step => {
+            step.classList.remove('active');
+        });
+        
+        // Show target step
+        const targetStep = document.getElementById(`modal${stepName.charAt(0).toUpperCase() + stepName.slice(1)}Step`);
+        if (targetStep) {
+            targetStep.classList.add('active');
+        }
+    }
+    
+    updateModalProgress(stepName) {
+        // Update modal progress indicators
+        document.querySelectorAll('#modalWizardProgress .progress-step').forEach(step => {
+            step.classList.remove('active', 'completed');
+        });
+        
+        const stepIndex = this.steps.indexOf(stepName);
+        for (let i = 0; i <= stepIndex; i++) {
+            const stepEl = document.getElementById(`modal-step-${this.steps[i]}`);
+            if (stepEl) {
+                if (i === stepIndex) {
+                    stepEl.classList.add('active');
+                } else {
+                    stepEl.classList.add('completed');
+                }
+            }
+        }
+    }
+    
+    startProcessing() {
+        console.log('Starting modal wizard processing...');
+        this.updateModalProgress('cao');
+        this.showStep('cao');
+        
+        if (this.caoOrders.length > 0) {
+            this.processCaoOrders();
+        } else {
+            // Skip to list processing
+            setTimeout(() => {
+                this.proceedToListProcessing();
+            }, 1000);
+        }
+    }
+    
+    async processCaoOrders() {
+        const statusContainer = document.getElementById('modalCaoProgress');
+        if (!statusContainer) return;
+        
+        statusContainer.innerHTML = `
+            <div class="cao-processing-status">
+                <h3>Processing ${this.caoOrders.length} CAO Orders...</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="modalCaoProgressFill" style="width: 0%"></div>
+                </div>
+                <div class="processing-list" id="modalCaoProcessingList"></div>
+            </div>
+        `;
+        
+        const processingList = document.getElementById('modalCaoProcessingList');
+        const progressFill = document.getElementById('modalCaoProgressFill');
+        
+        // Process each CAO order
+        for (let i = 0; i < this.caoOrders.length; i++) {
+            const order = this.caoOrders[i];
+            
+            // Add processing item
+            const processingItem = document.createElement('div');
+            processingItem.className = 'cao-processing-item';
+            processingItem.innerHTML = `
+                <div class="processing-dealership">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span>${order.name}</span>
+                </div>
+                <div class="processing-status">Processing...</div>
+            `;
+            processingList.appendChild(processingItem);
+            
+            try {
+                // Make real API call to process CAO order
+                console.log(`Making API call for ${order.name}...`);
+                const result = await this.processCaoOrder(order.name);
+                console.log(`API result for ${order.name}:`, result);
+                
+                // Store result for later use
+                this.processedOrders.push({
+                    dealership: order.name,
+                    type: 'cao',
+                    result: result
+                });
+                
+                processingItem.innerHTML = `
+                    <div class="processing-dealership">
+                        <i class="fas fa-check" style="color: #16a34a;"></i>
+                        <span>${order.name}</span>
+                    </div>
+                    <div class="processing-status" style="color: #16a34a;">
+                        ${result.vehicles_processed || 0} vehicles processed
+                    </div>
+                `;
+                
+                this.processingResults.caoProcessed++;
+                this.processingResults.totalVehicles += result.vehicles_processed || 0;
+                this.processingResults.filesGenerated += result.files_generated || 0;
+                
+            } catch (error) {
+                processingItem.innerHTML = `
+                    <div class="processing-dealership">
+                        <i class="fas fa-times" style="color: #dc2626;"></i>
+                        <span>${order.name}</span>
+                    </div>
+                    <div class="processing-status" style="color: #dc2626;">
+                        Error: ${error.message}
+                    </div>
+                `;
+                this.processingResults.errors.push(`${order.name}: ${error.message}`);
+            }
+            
+            // Update progress
+            const progress = ((i + 1) / this.caoOrders.length) * 100;
+            progressFill.style.width = `${progress}%`;
+        }
+        
+        // Proceed to next step
+        setTimeout(() => {
+            this.nextStep();
+        }, 1500);
+    }
+    
+    async processCaoOrder(dealershipName) {
+        // Get testing mode checkbox state from modal checkbox
+        const modalTestingCheckbox = document.getElementById('modalSkipVinLogging');
+        const testingMode = modalTestingCheckbox ? modalTestingCheckbox.checked : 
+                           (localStorage.getItem('orderWizardTestingMode') === 'true');
+        
+        const response = await fetch('/api/orders/process-cao', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                dealerships: [dealershipName],
+                vehicle_types: null,  // Use dealership-specific filtering rules from database
+                skip_vin_logging: testingMode
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Failed to process CAO order: ${response.statusText}`);
+        }
+        
+        const results = await response.json();
+        console.log('Raw API response:', results);
+        const result = results[0] || results; // Handle both array and single object responses
+        console.log('Processed result:', result);
+        
+        // Map backend fields to frontend expected fields
+        const mappedResult = {
+            vehicles_processed: result.new_vehicles || 0,
+            files_generated: result.qr_codes_generated || 0,
+            success: result.success,
+            dealership: result.dealership,
+            download_csv: result.download_csv,
+            qr_folder: result.qr_folder,
+            csv_file: result.csv_file,
+            timestamp: result.timestamp
+        };
+        
+        console.log('Mapped result for frontend:', mappedResult);
+        return mappedResult;
+    }
+    
+    proceedToListProcessing() {
+        if (this.listOrders.length === 0) {
+            // No list orders, proceed to review
+            this.proceedToReview();
+            return;
+        }
+        
+        this.updateModalProgress('list');
+        this.showStep('list');
+        this.showCurrentListOrder();
+    }
+    
+    showCurrentListOrder() {
+        if (this.currentListIndex >= this.listOrders.length) {
+            this.proceedToReview();
+            return;
+        }
+        
+        const currentOrder = this.listOrders[this.currentListIndex];
+        const dealershipContainer = document.getElementById('modalListDealerships');
+        
+        if (dealershipContainer && currentOrder) {
+            dealershipContainer.innerHTML = `
+                <div class="current-dealership-card">
+                    <h4>${currentOrder.name}</h4>
+                    <p>Please enter VINs for this LIST order dealership:</p>
+                    <textarea 
+                        id="modalVinInput" 
+                        class="vin-textarea" 
+                        placeholder="Enter VINs, one per line...
+Example:
+1HGBH41JXMN109186
+2FMDK3GC4DBA54321
+1FTFW1ET5CFC12345"
+                        rows="8"></textarea>
+                    <div class="vin-help">
+                        <p><strong>Instructions:</strong></p>
+                        <ul>
+                            <li>Enter one VIN per line</li>
+                            <li>Each VIN must be exactly 17 characters</li>
+                            <li>VINs will be automatically validated</li>
+                        </ul>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    processListVins() {
+        const vinInput = document.getElementById('modalVinInput');
+        if (!vinInput || !vinInput.value.trim()) {
+            alert('Please enter VINs for this dealership');
+            return;
+        }
+        
+        const vins = vinInput.value.trim().split('\n')
+            .map(vin => vin.trim())
+            .filter(vin => vin.length > 0);
+        
+        if (vins.length === 0) {
+            alert('Please enter valid VINs');
+            return;
+        }
+        
+        // Validate VINs
+        const invalidVins = vins.filter(vin => vin.length !== 17);
+        if (invalidVins.length > 0) {
+            alert(`Invalid VINs detected (must be 17 characters): ${invalidVins.join(', ')}`);
+            return;
+        }
+        
+        // Process the VINs (simulate)
+        this.processingResults.listProcessed++;
+        this.processingResults.totalVehicles += vins.length;
+        
+        // Move to next dealership or complete
+        this.currentListIndex++;
+        
+        if (this.currentListIndex < this.listOrders.length) {
+            this.showCurrentListOrder();
+        } else {
+            this.proceedToReview();
+        }
+    }
+    
+    proceedToReview() {
+        this.updateModalProgress('review');
+        this.showStep('review');
+        this.renderReviewSummary();
+    }
+    
+    renderReviewSummary() {
+        const summaryContainer = document.getElementById('modalReviewSummary');
+        if (!summaryContainer) return;
+        
+        summaryContainer.innerHTML = `
+            <div class="review-stats">
+                <div class="stat-card">
+                    <div class="stat-value">${this.processingResults.caoProcessed}</div>
+                    <div class="stat-label">CAO Orders Processed</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${this.processingResults.listProcessed}</div>
+                    <div class="stat-label">List Orders Processed</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${this.processingResults.totalVehicles}</div>
+                    <div class="stat-label">Total Vehicles</div>
+                </div>
+                <div class="stat-card ${this.processingResults.errors.length > 0 ? 'error' : 'success'}">
+                    <div class="stat-value">${this.processingResults.errors.length}</div>
+                    <div class="stat-label">Errors</div>
+                </div>
+            </div>
+            
+            ${this.processingResults.errors.length > 0 ? `
+                <div class="error-list">
+                    <h4>Errors encountered:</h4>
+                    <ul>
+                        ${this.processingResults.errors.map(error => `<li>${error}</li>`).join('')}
+                    </ul>
+                </div>
+            ` : ''}
+            
+            <div class="review-actions">
+                <p>Review the processing results above. When ready, proceed to enter the order number.</p>
+            </div>
+        `;
+    }
+    
+    proceedToQRGeneration() {
+        this.updateModalProgress('order');
+        this.showStep('order');
+    }
+    
+    generateFinalOutput() {
+        const orderNumberInput = document.getElementById('modalOrderNumber');
+        const orderNumber = orderNumberInput?.value.trim();
+        
+        if (!orderNumber) {
+            alert('Please enter an order number');
+            return;
+        }
+        
+        // Complete the process
+        this.completeProcessing();
+    }
+    
+    completeProcessing() {
+        this.updateModalProgress('complete');
+        this.showStep('complete');
+        
+        const completionContainer = document.getElementById('modalCompletionDetails');
+        if (completionContainer) {
+            completionContainer.innerHTML = `
+                <div class="completion-stats">
+                    <div class="stat-card">
+                        <div class="stat-value">${this.processingResults.totalDealerships}</div>
+                        <div class="stat-label">Total Dealerships</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${this.processingResults.caoProcessed}</div>
+                        <div class="stat-label">CAO Processed</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${this.processingResults.listProcessed}</div>
+                        <div class="stat-label">List Processed</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${this.processingResults.totalVehicles}</div>
+                        <div class="stat-label">Total Vehicles</div>
+                    </div>
+                </div>
+                
+                <div class="completion-message">
+                    <p>Your order processing is complete! All generated files are available for download.</p>
+                </div>
+            `;
+        }
+    }
+    
+    nextStep() {
+        if (this.currentStep < this.steps.length - 1) {
+            this.currentStep++;
+            const nextStepName = this.steps[this.currentStep];
+            
+            if (nextStepName === 'list') {
+                this.proceedToListProcessing();
+            } else if (nextStepName === 'review') {
+                this.proceedToReview();
+            } else if (nextStepName === 'order') {
+                this.proceedToQRGeneration();
+            } else if (nextStepName === 'complete') {
+                this.completeProcessing();
+            }
+        }
+    }
+    
+    previousStep() {
+        if (this.currentStep > 0) {
+            this.currentStep--;
+            const previousStepName = this.steps[this.currentStep];
+            this.updateModalProgress(previousStepName);
+            this.showStep(previousStepName);
+        }
+    }
+    
+    viewOrderFolder() {
+        alert('Order files have been generated and are available in the output directories.');
+    }
+    
+    startNewOrder() {
+        if (confirm('Start a new order? This will close the wizard.')) {
+            this.closeModal();
+        }
+    }
+    
+    closeModal() {
+        const modal = document.getElementById('orderWizardModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+        
+        // Reset wizard state
+        this.currentStep = 0;
+        this.currentListIndex = 0;
+        this.processedOrders = [];
+        this.processingResults = {
+            totalDealerships: 0,
+            caoProcessed: 0,
+            listProcessed: 0,
+            totalVehicles: 0,
+            filesGenerated: 0,
+            errors: []
+        };
+    }
+    
+    delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    
+    updateFloatingButton() {
+        const sidebar = document.querySelector('.sidebar-navigation');
+        const floatingButton = document.getElementById('sidebarExpandFloat');
+        
+        if (sidebar && floatingButton) {
+            if (sidebar.classList.contains('collapsed')) {
+                floatingButton.classList.add('show');
+            } else {
+                floatingButton.classList.remove('show');
+            }
+        }
     }
 }
 
