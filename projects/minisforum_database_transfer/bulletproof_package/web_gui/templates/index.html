@@ -119,36 +119,47 @@
                 </div>
                 
                 <nav class="sidebar-nav">
-                    <button class="sidebar-tab active" data-tab="scraper">
-                        <i class="fas fa-spider"></i>
-                        <span class="tab-label">Scraper Control</span>
-                        <div class="tab-indicator"></div>
-                    </button>
-                    <button class="sidebar-tab" data-tab="queue-management">
-                        <i class="fas fa-tasks"></i>
-                        <span class="tab-label">Order Queue</span>
-                        <div class="tab-indicator"></div>
-                    </button>
-                    <button class="sidebar-tab" data-tab="data-search">
-                        <i class="fas fa-search"></i>
-                        <span class="tab-label">Data Search</span>
-                        <div class="tab-indicator"></div>
-                    </button>
-                    <button class="sidebar-tab" data-tab="system-status">
-                        <i class="fas fa-chart-line"></i>
-                        <span class="tab-label">System Status</span>
-                        <div class="tab-indicator"></div>
-                    </button>
-                    <button class="sidebar-tab" data-tab="dealership-settings">
-                        <i class="fas fa-cog"></i>
-                        <span class="tab-label">Dealership Settings</span>
-                        <div class="tab-indicator"></div>
-                    </button>
+                    <!-- ORDER PROCESSING SECTION - First and primary -->
+                    <div class="sidebar-section primary">
+                        <h4 class="sidebar-section-title">
+                            <i class="fas fa-cogs"></i>
+                            Order Processing
+                        </h4>
+                        <button class="sidebar-tab active" data-tab="queue-management">
+                            <i class="fas fa-tasks"></i>
+                            <span class="tab-label">Order Queue</span>
+                            <div class="tab-indicator"></div>
+                        </button>
+                    </div>
                     
                     <div class="sidebar-divider"></div>
                     
+                    <!-- ANALYTICS SECTION -->
                     <div class="sidebar-section">
-                        <h4 class="sidebar-section-title">System Tools</h4>
+                        <h4 class="sidebar-section-title">
+                            <i class="fas fa-chart-bar"></i>
+                            Analytics
+                        </h4>
+                        <button class="sidebar-tab" data-tab="dealership-settings">
+                            <i class="fas fa-cog"></i>
+                            <span class="tab-label">Dealership Settings</span>
+                            <div class="tab-indicator"></div>
+                        </button>
+                        <button class="sidebar-tab" data-tab="data-search">
+                            <i class="fas fa-search"></i>
+                            <span class="tab-label">Data Search</span>
+                            <div class="tab-indicator"></div>
+                        </button>
+                    </div>
+                    
+                    <div class="sidebar-divider"></div>
+                    
+                    <!-- SYSTEM TOOLS SECTION -->
+                    <div class="sidebar-section">
+                        <h4 class="sidebar-section-title">
+                            <i class="fas fa-tools"></i>
+                            System Tools
+                        </h4>
                         <button class="sidebar-tab external" onclick="window.open('/stress-test', '_blank')">
                             <i class="fas fa-vial"></i>
                             <span class="tab-label">System Tests</span>
@@ -158,6 +169,11 @@
                             <i class="fas fa-wifi"></i>
                             <span class="tab-label">WebSocket Test</span>
                             <i class="fas fa-external-link-alt external-icon"></i>
+                        </button>
+                        <button class="sidebar-tab" data-tab="system-status">
+                            <i class="fas fa-chart-line"></i>
+                            <span class="tab-label">System Status</span>
+                            <div class="tab-indicator"></div>
                         </button>
                     </div>
                 </nav>
@@ -173,113 +189,6 @@
             <!-- Content Area -->
             <div class="content-area">
                 <div class="tab-content">
-                    <!-- Scraper Tab -->
-                    <div class="tab-panel active" id="scraper-panel">
-                        <div class="panel-header">
-                            <h2>Scraper Control Center</h2>
-                            <div class="control-buttons">
-                                <button class="btn btn-secondary" id="selectDealershipsBtn">
-                                    <i class="fas fa-list-check"></i>
-                                    Select Dealerships
-                                </button>
-                                <button class="btn btn-secondary" id="scheduleBtn">
-                                    <i class="fas fa-clock"></i>
-                                    Schedule
-                                </button>
-                                <button class="btn btn-primary" id="startScrapeBtn">
-                                    <i class="fas fa-play"></i>
-                                    Start Scrape (All)
-                                </button>
-                                <button class="btn btn-secondary" id="testWebSocketBtn" title="Test WebSocket Connection">
-                                    <i class="fas fa-wifi"></i>
-                                    Test Connection
-                                </button>
-                            </div>
-                        </div>
-                        
-
-                        <!-- Live Scraper Console (moved from System Status tab) -->
-                        <div class="system-console">
-                            <div class="console-header">
-                                <h3>
-                                    <i class="fas fa-terminal"></i>
-                                    Live Scraper Console
-                                </h3>
-                                
-                                <!-- Progress Indicators (new) -->
-                                <div class="progress-indicators">
-                                    <div class="indicator">
-                                        <i class="fas fa-building"></i>
-                                        <span class="indicator-value" id="dealershipsProcessed">0</span>
-                                    </div>
-                                    <div class="indicator">
-                                        <i class="fas fa-car"></i>
-                                        <span class="indicator-value" id="vehiclesProcessed">0</span>
-                                    </div>
-                                    <div class="indicator">
-                                        <i class="fas fa-exclamation-triangle"></i>
-                                        <span class="indicator-value" id="errorsCount">0</span>
-                                    </div>
-                                </div>
-                                
-                                <div class="console-controls">
-                                    <button class="terminal-clear" onclick="app.clearScraperConsole()">
-                                        <i class="fas fa-broom"></i>
-                                        Clear
-                                    </button>
-                                    <button class="terminal-clear" onclick="app.pauseScraperConsole()">
-                                        <i class="fas fa-pause" id="pauseIcon"></i>
-                                        <span id="pauseText">Pause</span>
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="console-content" id="scraperConsoleOutput">
-                                <div class="terminal-line">
-                                    <span class="timestamp">[00:00:00]</span>
-                                    <span class="message">Scraper console ready - waiting for scraper activity...</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Dealership Grid - Removed in favor of dropdown selection -->
-                        <!-- <div class="dealership-grid" id="dealershipGrid">
-                            Dealerships will be loaded dynamically
-                        </div> -->
-
-                        <!-- Scraper Status -->
-                        <div class="scraper-status" id="scraperStatus" style="display: none;">
-                            <div class="status-header">
-                                <h3>Scraper Progress</h3>
-                                <div class="progress-bar">
-                                    <div class="progress-fill" id="progressFill"></div>
-                                </div>
-                            </div>
-                            <div class="status-details" id="statusDetails">
-                                <!-- Progress details will be shown here -->
-                            </div>
-                            
-                            <!-- Real-time Scraper Console -->
-                            <div class="scraper-console">
-                                <div class="console-header">
-                                    <h4>
-                                        <i class="fas fa-terminal"></i>
-                                        Real-time Scraper Output
-                                    </h4>
-                                    <button class="btn btn-secondary btn-sm" id="clearScraperConsole">
-                                        <i class="fas fa-trash"></i>
-                                        Clear
-                                    </button>
-                                </div>
-                                <div class="console-content" id="scraperConsoleOutput">
-                                    <div class="terminal-line">
-                                        <span class="timestamp">[Ready]</span>
-                                        <span class="message">Scraper console initialized</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Data Search Tab -->
                     <div class="tab-panel" id="data-search-panel">
                         <div class="panel-header">
@@ -530,7 +439,7 @@
                     </div>
 
                     <!-- Order Queue Management Tab -->
-                    <div class="tab-panel" id="queue-management-panel">
+                    <div class="tab-panel active" id="queue-management-panel">
                         <div class="panel-header">
                             <h2>Order Queue Management</h2>
                             <div class="control-buttons">
@@ -566,8 +475,8 @@
                                 Order Queue
                             </button>
                             <button class="sub-tab-button" data-subtab="scraper-data">
-                                <i class="fas fa-file-csv"></i>
-                                Scraper Data Import
+                                <i class="fas fa-spider"></i>
+                                Scraper Control
                             </button>
                         </div>
                         
@@ -662,52 +571,95 @@
                         </div>
                     </div>
                     
-                    <!-- Scraper Data Import Sub-panel -->
+                    <!-- Scraper Control Sub-panel -->
                     <div class="sub-tab-panel" id="scraper-data-panel" style="display: none;">
-                        <!-- CSV Import Section -->
-                        <div class="csv-import-section">
-                            <div class="import-header">
-                                <h3>
-                                    <i class="fas fa-file-csv"></i>
-                                    Import Scraper Data
-                                </h3>
-                                <div class="import-actions">
-                                    <input type="file" id="csvFileInput" accept=".csv" style="display: none;">
-                                    <button class="btn btn-primary" id="selectCsvBtn">
-                                        <i class="fas fa-upload"></i>
-                                        Select CSV File
+                        <div class="scraper-control-container">
+                            <div class="control-buttons-section">
+                                <div class="control-buttons">
+                                    <button class="btn btn-secondary" id="selectDealershipsBtn">
+                                        <i class="fas fa-list-check"></i>
+                                        Select Dealerships
                                     </button>
-                                    <button class="btn btn-secondary" id="importCsvBtn" disabled>
-                                        <i class="fas fa-download"></i>
-                                        Import Data
+                                    <button class="btn btn-secondary" id="scheduleBtn">
+                                        <i class="fas fa-clock"></i>
+                                        Schedule
+                                    </button>
+                                    <button class="btn btn-primary" id="startScrapeBtn">
+                                        <i class="fas fa-play"></i>
+                                        Start Scrape (All)
+                                    </button>
+                                    <button class="btn btn-secondary" id="testWebSocketBtn" title="Test WebSocket Connection">
+                                        <i class="fas fa-wifi"></i>
+                                        Test Connection
                                     </button>
                                 </div>
-                            </div>
-                            <div class="import-status" id="importStatus" style="display: none;">
-                                <div class="status-message" id="importStatusMessage"></div>
-                                <div class="progress-bar" id="importProgressBar" style="display: none;">
-                                    <div class="progress-fill" id="importProgressFill"></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Scraper History Table -->
-                        <div class="scraper-history-section">
-                            <div class="history-header">
-                                <h3>
-                                    <i class="fas fa-history"></i>
-                                    Scraper Import History
-                                </h3>
-                                <button class="btn btn-secondary" id="refreshScraperHistory">
-                                    <i class="fas fa-sync"></i>
-                                    Refresh
-                                </button>
                             </div>
                             
-                            <div class="scraper-table-container" id="queueScraperTableContainer">
-                                <div class="loading">
-                                    <i class="fas fa-spinner fa-spin"></i>
-                                    Loading scraper history...
+                            <!-- Live Scraper Console -->
+                            <div class="system-console">
+                                <div class="console-header">
+                                    <h3>
+                                        <i class="fas fa-terminal"></i>
+                                        Live Scraper Console
+                                    </h3>
+                                    
+                                    <!-- Progress Indicators -->
+                                    <div class="progress-indicators">
+                                        <div class="indicator">
+                                            <i class="fas fa-building"></i>
+                                            <span class="indicator-value" id="dealershipsProcessed">0</span>
+                                        </div>
+                                        <div class="indicator">
+                                            <i class="fas fa-car"></i>
+                                            <span class="indicator-value" id="vehiclesProcessed">0</span>
+                                        </div>
+                                        <div class="indicator">
+                                            <i class="fas fa-exclamation-triangle"></i>
+                                            <span class="indicator-value" id="errorsCount">0</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="console-controls">
+                                        <button class="terminal-clear" onclick="app.clearScraperConsole()">
+                                            <i class="fas fa-broom"></i>
+                                            Clear
+                                        </button>
+                                        <button class="terminal-clear" onclick="app.pauseScraperConsole()">
+                                            <i class="fas fa-pause" id="pauseIcon"></i>
+                                            <span id="pauseText">Pause</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="console-content" id="scraperConsoleOutput">
+                                    <div class="terminal-line">
+                                        <span class="timestamp">[00:00:00]</span>
+                                        <span class="message">Scraper console ready - waiting for scraper activity...</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Scraper Status -->
+                            <div class="scraper-status" id="scraperStatus" style="display: none;">
+                                <div class="status-header">
+                                    <h3>Scraper Progress</h3>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" id="progressFill"></div>
+                                    </div>
+                                </div>
+                                <div class="status-details" id="statusDetails">
+                                    <!-- Progress details will be shown here -->
+                                </div>
+                            </div>
+
+                            <!-- Active Scrapers Panel -->
+                            <div class="active-scrapers-panel">
+                                <h3>Active Scrapers</h3>
+                                <div class="active-scrapers-list" id="activeScrapersList">
+                                    <div class="empty-state">
+                                        <i class="fas fa-robot"></i>
+                                        <p>No active scrapers</p>
+                                        <p class="help-text">Start a scraper from the controls above to see real-time progress</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1490,7 +1442,49 @@ SF24002
                         </div>
 
                         <div class="review-summary" id="modalReviewSummary">
-                            <!-- Review data will be shown here -->
+                            <!-- Vehicle Data Preview Section -->
+                            <div class="vehicle-preview-section">
+                                <div class="section-header">
+                                    <h3><i class="fas fa-car"></i> Vehicle Data Preview</h3>
+                                    <div class="preview-stats">
+                                        <span class="vehicle-count-badge">
+                                            <i class="fas fa-list-ol"></i>
+                                            <span id="modalVehicleCount">0</span>
+                                        </span>
+                                        <button class="btn btn-secondary btn-sm" id="modalDownloadCsv" style="display: none;">
+                                            <i class="fas fa-download"></i>
+                                            Download CSV
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="vehicle-data-table-container">
+                                    <table class="vehicle-data-table" id="modalVehicleDataTable">
+                                        <thead>
+                                            <tr>
+                                                <th>Actions</th>
+                                                <th>Year/Make</th>
+                                                <th>Model</th>
+                                                <th>Trim</th>
+                                                <th>Stock</th>
+                                                <th>VIN</th>
+                                                <th>QR</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="modalVehicleDataBody">
+                                            <!-- Vehicle data rows will be populated here -->
+                                        </tbody>
+                                    </table>
+                                    
+                                    <div class="no-data-placeholder" id="modalNoDataPlaceholder" style="display: none;">
+                                        <div class="placeholder-content">
+                                            <i class="fas fa-inbox"></i>
+                                            <h4>No Vehicle Data</h4>
+                                            <p>No vehicles found for this order</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         
                         <div class="wizard-actions">
@@ -1559,6 +1553,83 @@ SF24002
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manual Data Entry Modal for Review Stage -->
+    <div id="manualDataEntryModal" class="modal" style="display: none;">
+        <div class="modal-content large-modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-edit"></i> Edit Vehicle Data</h3>
+                <span class="close-modal" onclick="closeManualDataModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="vehicleEditForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="editYear">Year:</label>
+                            <input type="number" id="editYear" name="year" class="form-control" min="1900" max="2030">
+                        </div>
+                        <div class="form-group">
+                            <label for="editMake">Make:</label>
+                            <input type="text" id="editMake" name="make" class="form-control" maxlength="50">
+                        </div>
+                        <div class="form-group">
+                            <label for="editModel">Model:</label>
+                            <input type="text" id="editModel" name="model" class="form-control" maxlength="50">
+                        </div>
+                        <div class="form-group">
+                            <label for="editTrim">Trim:</label>
+                            <input type="text" id="editTrim" name="trim" class="form-control" maxlength="50">
+                        </div>
+                        <div class="form-group">
+                            <label for="editStock">Stock Number:</label>
+                            <input type="text" id="editStock" name="stock" class="form-control" maxlength="20">
+                        </div>
+                        <div class="form-group">
+                            <label for="editVin">VIN:</label>
+                            <input type="text" id="editVin" name="vin" class="form-control" maxlength="17" style="text-transform: uppercase;">
+                        </div>
+                        <div class="form-group">
+                            <label for="editPrice">Price:</label>
+                            <input type="number" id="editPrice" name="price" class="form-control" min="0" step="0.01">
+                        </div>
+                        <div class="form-group">
+                            <label for="editType">Vehicle Type:</label>
+                            <select id="editType" name="type" class="form-control">
+                                <option value="New">New</option>
+                                <option value="Pre-Owned">Pre-Owned</option>
+                                <option value="Certified Pre-Owned">Certified Pre-Owned</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="editColor">Exterior Color:</label>
+                            <input type="text" id="editColor" name="ext_color" class="form-control" maxlength="30">
+                        </div>
+                        <div class="form-group">
+                            <label for="editMileage">Mileage:</label>
+                            <input type="number" id="editMileage" name="mileage" class="form-control" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="editFuelType">Fuel Type:</label>
+                            <input type="text" id="editFuelType" name="fuel_type" class="form-control" maxlength="20">
+                        </div>
+                        <div class="form-group">
+                            <label for="editTransmission">Transmission:</label>
+                            <input type="text" id="editTransmission" name="transmission" class="form-control" maxlength="30">
+                        </div>
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="editVehicleUrl">Vehicle URL:</label>
+                        <input type="url" id="editVehicleUrl" name="vehicle_url" class="form-control">
+                    </div>
+                    <input type="hidden" id="editRowIndex" name="rowIndex">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeManualDataModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveVehicleEdit()">Save Changes</button>
             </div>
         </div>
     </div>

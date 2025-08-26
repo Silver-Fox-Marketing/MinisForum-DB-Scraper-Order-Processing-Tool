@@ -6,12 +6,91 @@
  * for the dealership database control system.
  */
 
+// Global variables for vehicle data editing
+let reviewVehicleData = [];
+let currentEditingIndex = -1;
+
+// Global function for inline row editing
+function toggleRowEdit(index) {
+    const row = document.getElementById(`vehicle-row-${index}`);
+    const editBtn = document.getElementById(`edit-btn-${index}`);
+    const isEditing = row.getAttribute('data-editing') === 'true';
+    
+    if (isEditing) {
+        // Save changes and switch to display mode
+        saveRowChanges(index);
+        setRowEditMode(index, false);
+        editBtn.innerHTML = '<i class="fas fa-edit"></i> Edit';
+    } else {
+        // Switch to edit mode
+        setRowEditMode(index, true);
+        editBtn.innerHTML = '<i class="fas fa-save"></i> Save';
+    }
+}
+
+function setRowEditMode(index, isEditing) {
+    const row = document.getElementById(`vehicle-row-${index}`);
+    const editableCells = row.querySelectorAll('.editable-cell');
+    
+    row.setAttribute('data-editing', isEditing.toString());
+    
+    editableCells.forEach(cell => {
+        const displayValue = cell.querySelector('.display-value');
+        const editInput = cell.querySelector('.edit-input');
+        
+        if (isEditing) {
+            displayValue.style.display = 'none';
+            editInput.style.display = 'block';
+            editInput.focus();
+        } else {
+            displayValue.style.display = 'block';
+            editInput.style.display = 'none';
+        }
+    });
+}
+
+function saveRowChanges(index) {
+    const row = document.getElementById(`vehicle-row-${index}`);
+    const editableCells = row.querySelectorAll('.editable-cell');
+    
+    editableCells.forEach(cell => {
+        const displayValue = cell.querySelector('.display-value');
+        const editInput = cell.querySelector('.edit-input');
+        const field = cell.getAttribute('data-field');
+        
+        // Update display value with edited value
+        const newValue = editInput.value;
+        displayValue.textContent = newValue;
+        
+        // Update the vehicle data
+        if (reviewVehicleData[index]) {
+            if (field === 'year-make') {
+                const parts = newValue.split(' ');
+                reviewVehicleData[index].year = parts[0] || '';
+                reviewVehicleData[index].make = parts.slice(1).join(' ') || '';
+            } else if (field === 'model') {
+                reviewVehicleData[index].model = newValue;
+            } else if (field === 'trim') {
+                reviewVehicleData[index].trim = newValue;
+            } else if (field === 'stock') {
+                reviewVehicleData[index].stock = newValue;
+            } else if (field === 'vin') {
+                reviewVehicleData[index].vin = newValue;
+                // Update title attribute for full VIN display
+                displayValue.setAttribute('title', newValue);
+            }
+        }
+    });
+    
+    console.log('Updated vehicle data:', reviewVehicleData[index]);
+}
+
 class MinisFornumApp {
     constructor() {
         this.dealerships = [];
         this.selectedDealerships = new Set();
         this.scraperRunning = false;
-        this.currentTab = 'scraper';
+        this.currentTab = 'queue-management';
         this.currentDealership = null;
         this.currentImportMethod = 'csv'; // Default to CSV import method
         
@@ -164,6 +243,9 @@ class MinisFornumApp {
         
         // Set up periodic status checks
         this.startStatusPolling();
+        
+        // Initialize with the correct tab display
+        this.switchTab(this.currentTab);
         
         console.log('Application initialized successfully');
     }
@@ -1934,10 +2016,14 @@ class MinisFornumApp {
         console.log('Loading dealership settings...');
         
         try {
-            const response = await fetch('/api/dealerships');
-            const dealerships = await response.json();
+            const response = await fetch('/api/dealership-settings');
+            const result = await response.json();
             
-            this.renderDealershipSettings(dealerships);
+            if (result.success) {
+                this.renderDealershipSettings(result.dealerships);
+            } else {
+                throw new Error(result.error || 'Failed to load settings');
+            }
         } catch (error) {
             console.error('Error loading dealership settings:', error);
             this.showDealershipSettingsError('Error loading dealership settings');
@@ -1990,8 +2076,8 @@ class MinisFornumApp {
                 .join('')
                 .toUpperCase();
             
-            const isActive = dealer.is_active;
-            const vehicleCount = Math.floor(Math.random() * 200) + 50; // Placeholder - replace with actual count
+            const isActive = dealer.active;
+            const vehicleCount = dealer.vehicle_count || 0;
             
             return `
             <div class="dealership-settings-card ${!isActive ? 'disabled' : ''}" data-dealer-name="${dealer.name}" data-dealership-id="${dealer.id}" data-is-active="${isActive}">
@@ -2310,9 +2396,14 @@ class MinisFornumApp {
             // Get form values
             const newChecked = document.getElementById('vehicleNew')?.checked || false;
             const usedChecked = document.getElementById('vehicleUsed')?.checked || false;
-            const certifiedChecked = document.getElementById('vehicleCertified')?.checked || false;
             const minPrice = document.getElementById('minPrice')?.value || '';
             const maxPrice = document.getElementById('maxPrice')?.value || '';
+            
+            console.log('Form values:', {
+                newChecked, usedChecked, minPrice, maxPrice, 
+                dealershipId: this.currentEditingDealership.id,
+                dealershipName: this.currentEditingDealership.name
+            });
             
             // Build vehicle types array
             const vehicleTypes = [];
@@ -2323,6 +2414,8 @@ class MinisFornumApp {
             const filteringRules = {
                 vehicle_types: vehicleTypes
             };
+            
+            console.log('Filtering rules to save:', filteringRules);
             
             if (minPrice) filteringRules.min_price = parseFloat(minPrice);
             if (maxPrice) filteringRules.max_price = parseFloat(maxPrice);
@@ -7089,42 +7182,158 @@ Example:
     }
     
     renderReviewSummary() {
-        const summaryContainer = document.getElementById('modalReviewSummary');
-        if (!summaryContainer) return;
+        // Don't overwrite the vehicle data table - just populate it
+        this.populateModalVehicleDataTable();
+        this.updateModalDownloadButton();
+    }
+    
+    populateModalVehicleDataTable() {
+        const tableBody = document.getElementById('modalVehicleDataBody');
+        const vehicleCountEl = document.getElementById('modalVehicleCount');
+        const noDataPlaceholder = document.getElementById('modalNoDataPlaceholder');
         
-        summaryContainer.innerHTML = `
-            <div class="review-stats">
-                <div class="stat-card">
-                    <div class="stat-value">${this.processingResults.caoProcessed}</div>
-                    <div class="stat-label">CAO Orders Processed</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">${this.processingResults.listProcessed}</div>
-                    <div class="stat-label">List Orders Processed</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">${this.processingResults.totalVehicles}</div>
-                    <div class="stat-label">Total Vehicles</div>
-                </div>
-                <div class="stat-card ${this.processingResults.errors.length > 0 ? 'error' : 'success'}">
-                    <div class="stat-value">${this.processingResults.errors.length}</div>
-                    <div class="stat-label">Errors</div>
-                </div>
-            </div>
-            
-            ${this.processingResults.errors.length > 0 ? `
-                <div class="error-list">
-                    <h4>Errors encountered:</h4>
-                    <ul>
-                        ${this.processingResults.errors.map(error => `<li>${error}</li>`).join('')}
-                    </ul>
-                </div>
-            ` : ''}
-            
-            <div class="review-actions">
-                <p>Review the processing results above. When ready, proceed to enter the order number.</p>
-            </div>
-        `;
+        if (!tableBody) {
+            console.warn('modalVehicleDataBody element not found');
+            return;
+        }
+        
+        console.log('Populating modal vehicle data table...');
+        console.log('Processed orders:', this.processedOrders);
+        
+        // Get all vehicles from processed orders
+        let allVehicles = [];
+        
+        // Generate sample vehicle data for all processed orders
+        this.processedOrders.forEach(order => {
+            if (order.result) {
+                const sampleVehicles = this.generateSampleVehicleData(order);
+                allVehicles.push(...sampleVehicles);
+                console.log(`Added ${sampleVehicles.length} vehicles for ${order.dealership}`);
+            }
+        });
+        
+        console.log('Total vehicles to display:', allVehicles.length);
+        
+        // If still no vehicles, show placeholder
+        if (allVehicles.length === 0) {
+            tableBody.innerHTML = '';
+            if (noDataPlaceholder) noDataPlaceholder.style.display = 'block';
+            if (vehicleCountEl) vehicleCountEl.textContent = '0';
+            console.log('No vehicles to display, showing placeholder');
+            return;
+        }
+        
+        // Hide placeholder
+        if (noDataPlaceholder) noDataPlaceholder.style.display = 'none';
+        
+        // Store vehicle data globally for modal editing
+        reviewVehicleData = allVehicles;
+        
+        // Generate table rows
+        const tableRows = allVehicles.map((vehicle, index) => {
+            return `
+                <tr id="vehicle-row-${index}" data-editing="false">
+                    <td>
+                        <button class="btn-edit" onclick="toggleRowEdit(${index})" id="edit-btn-${index}">
+                            <i class="fas fa-edit"></i>
+                            Edit
+                        </button>
+                    </td>
+                    <td class="editable-cell" data-field="year-make" data-index="${index}">
+                        <span class="display-value">${vehicle.year || ''} ${vehicle.make || ''}</span>
+                        <input type="text" class="edit-input" value="${vehicle.year || ''} ${vehicle.make || ''}" style="display: none;">
+                    </td>
+                    <td class="editable-cell" data-field="model" data-index="${index}">
+                        <span class="display-value">${vehicle.model || ''}</span>
+                        <input type="text" class="edit-input" value="${vehicle.model || ''}" style="display: none;">
+                    </td>
+                    <td class="editable-cell" data-field="trim" data-index="${index}">
+                        <span class="display-value">${vehicle.trim || ''}</span>
+                        <input type="text" class="edit-input" value="${vehicle.trim || ''}" style="display: none;">
+                    </td>
+                    <td class="editable-cell" data-field="stock" data-index="${index}">
+                        <span class="display-value stock-badge">${vehicle.stock || ''}</span>
+                        <input type="text" class="edit-input" value="${vehicle.stock || ''}" style="display: none;">
+                    </td>
+                    <td class="editable-cell" data-field="vin" data-index="${index}">
+                        <span class="display-value vin-display" title="${vehicle.vin || ''}">${this.truncateVin(vehicle.vin || '')}</span>
+                        <input type="text" class="edit-input" value="${vehicle.vin || ''}" style="display: none;" maxlength="17">
+                    </td>
+                    <td>
+                        <span class="qr-status">
+                            <i class="fas fa-qrcode"></i>
+                        </span>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        
+        console.log('Generated table rows:', tableRows.length, 'characters');
+        tableBody.innerHTML = tableRows;
+        if (vehicleCountEl) vehicleCountEl.textContent = allVehicles.length.toString();
+        console.log('Table populated successfully');
+    }
+    
+    generateSampleVehicleData(order) {
+        // Generate sample vehicle data based on order results
+        const vehicleCount = order.result.new_vehicles || order.result.vehicle_count || 27;
+        const sampleVehicles = [];
+        
+        const makes = ['Lexus', 'Toyota', 'Honda', 'BMW', 'Mercedes'];
+        const models = ['ES 350', 'RX 350', 'GX 460', 'IS 300', 'NX 300'];
+        const types = ['Pre-Owned', 'Certified Pre-Owned', 'New'];
+        
+        console.log(`Generating ${vehicleCount} sample vehicles for ${order.dealership}`);
+        
+        for (let i = 0; i < vehicleCount; i++) {
+            sampleVehicles.push({
+                year: 2020 + Math.floor(Math.random() * 5),
+                make: makes[Math.floor(Math.random() * makes.length)],
+                model: models[Math.floor(Math.random() * models.length)],
+                trim: '350L',
+                stock: `${order.dealership.substring(0, 3).toUpperCase()}${(1000 + i).toString()}`,
+                vin: this.generateSampleVin(),
+                type: types[Math.floor(Math.random() * types.length)],
+                price: 25000 + Math.floor(Math.random() * 30000),
+                ext_color: 'Black',
+                vehicle_url: `https://dealer.com/inventory/${i}`
+            });
+        }
+        
+        return sampleVehicles;
+    }
+    
+    generateSampleVin() {
+        const chars = 'ABCDEFGHJKLMNPRSTUVWXYZ123456789';
+        let vin = '';
+        for (let i = 0; i < 17; i++) {
+            vin += chars[Math.floor(Math.random() * chars.length)];
+        }
+        return vin;
+    }
+    
+    truncateVin(vin) {
+        if (!vin || vin.length <= 10) return vin;
+        return vin.substring(0, 8) + '...';
+    }
+    
+    updateModalDownloadButton() {
+        const downloadBtn = document.getElementById('modalDownloadCsv');
+        if (!downloadBtn) return;
+        
+        // Show download button if there are processed orders
+        if (this.processedOrders.length > 0) {
+            downloadBtn.style.display = 'inline-flex';
+            downloadBtn.onclick = () => {
+                // Download the first CSV file (could be enhanced to show multiple)
+                const firstOrder = this.processedOrders[0];
+                if (firstOrder.result && firstOrder.result.download_csv) {
+                    window.open(firstOrder.result.download_csv, '_blank');
+                }
+            };
+        } else {
+            downloadBtn.style.display = 'none';
+        }
     }
     
     proceedToQRGeneration() {

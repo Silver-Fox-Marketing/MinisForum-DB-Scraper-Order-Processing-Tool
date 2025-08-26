@@ -35,7 +35,8 @@ class CorrectOrderProcessor:
             'Dave Sinclair Lincoln South': 'Dave Sinclair Lincoln',
             'BMW of West St. Louis': 'BMW of West St. Louis', 
             'Columbia Honda': 'Columbia Honda',
-            'South County Dodge Chrysler Jeep RAM': 'South County Dodge Chrysler Jeep RAM'
+            'South County Dodge Chrysler Jeep RAM': 'South County Dodge Chrysler Jeep RAM',
+            'South County DCJR': 'South County Dodge Chrysler Jeep RAM'
         }
         
         # Reverse mapping for VIN history lookups
@@ -340,29 +341,37 @@ class CorrectOrderProcessor:
             SELECT rvd.* FROM raw_vehicle_data rvd
             JOIN scraper_imports si ON rvd.import_id = si.import_id
             WHERE rvd.location = %s 
-            AND rvd.on_lot_status = 'onlot'
+            AND rvd.on_lot_status = 'on lot'
             AND si.status = 'active'
         """
         params = [actual_location_name]
         
-        # Apply vehicle type filter using normalized_type field (much cleaner!)
-        vehicle_types = filtering_rules.get('allowed_vehicle_types', filtering_rules.get('vehicle_types', ['new', 'used', 'cpo']))
+        # Apply vehicle type filter - FIXED SIMPLE APPROACH
+        vehicle_types = filtering_rules.get('allowed_vehicle_types', filtering_rules.get('vehicle_types', ['new', 'used']))
         if vehicle_types and 'all' not in vehicle_types:
-            # Convert dealership filter terms to normalized terms
-            normalized_types = []
+            # Build individual ILIKE conditions for each allowed type
+            all_type_patterns = []
             for vtype in vehicle_types:
-                if vtype in ['cpo', 'certified']:
-                    normalized_types.append('cpo')
-                elif vtype in ['new']:
-                    normalized_types.append('new') 
-                elif vtype in ['used']:
-                    normalized_types.append('po')  # pre-owned
+                if vtype == 'new':
+                    all_type_patterns.append('%new%')
+                elif vtype == 'used':
+                    # CRITICAL: "used" includes Pre-Owned AND Certified Pre-Owned
+                    all_type_patterns.extend(['%pre-owned%', '%pre owned%', '%certified%', '%used%', '%cpo%'])
+                elif vtype in ['certified', 'cpo']:
+                    all_type_patterns.extend(['%certified%', '%cpo%'])
+                elif vtype in ['po', 'pre-owned']:
+                    all_type_patterns.extend(['%pre-owned%', '%pre owned%'])
             
-            if normalized_types:
-                # Use simple normalized_type field instead of complex raw type matching
-                placeholders = ','.join(['%s'] * len(normalized_types))
-                query += f" AND normalized_type IN ({placeholders})"
-                params.extend(normalized_types)
+            if all_type_patterns:
+                # Remove duplicates
+                all_type_patterns = list(set(all_type_patterns))
+                # Create simple OR conditions
+                type_conditions = []
+                for pattern in all_type_patterns:
+                    type_conditions.append("type ILIKE %s")
+                    params.append(pattern)
+                
+                query += f" AND ({' OR '.join(type_conditions)})"
         
         # Apply year filter
         min_year = filtering_rules.get('min_year')
@@ -400,8 +409,8 @@ class CorrectOrderProcessor:
             query += " AND stock IS NOT NULL AND stock != %s AND stock != %s"
             params.extend(['', '*'])
             
-        # Apply price filter  
-        if filtering_rules.get('exclude_missing_price', True):
+        # Apply price filter - ONLY for Glendale by default
+        if filtering_rules.get('exclude_missing_price', False):
             query += " AND price IS NOT NULL AND price > 0"
         
         query += " ORDER BY import_timestamp DESC"
@@ -425,7 +434,7 @@ class CorrectOrderProcessor:
                 SELECT rvd.* FROM raw_vehicle_data rvd
                 JOIN scraper_imports si ON rvd.import_id = si.import_id
                 WHERE rvd.location = %s 
-                AND rvd.on_lot_status = 'onlot'
+                AND rvd.on_lot_status = 'on lot'
                 AND si.status = 'active'
                 ORDER BY rvd.import_timestamp DESC
             """
@@ -456,7 +465,7 @@ class CorrectOrderProcessor:
                 filtering_rules = json.loads(filtering_rules)
         
         # Get allowed vehicle types using the new 'allowed_vehicle_types' field
-        vehicle_types = filtering_rules.get('allowed_vehicle_types', filtering_rules.get('vehicle_types', ['new', 'used', 'certified']))
+        vehicle_types = filtering_rules.get('allowed_vehicle_types', filtering_rules.get('vehicle_types', ['new', 'used']))
         
         # Filter vehicles based on type
         filtered_vehicles = []
@@ -469,8 +478,19 @@ class CorrectOrderProcessor:
                 type_matches = True
             else:
                 for allowed_type in vehicle_types:
-                    if allowed_type == 'certified':
-                        if 'certified' in vehicle_type or 'cpo' in vehicle_type:
+                    if allowed_type == 'used':
+                        # CRITICAL: "used" is UMBRELLA term for Pre-Owned AND Certified Pre-Owned
+                        if any(keyword in vehicle_type for keyword in ['used', 'pre-owned', 'pre owned', 'certified', 'cpo']):
+                            type_matches = True
+                            break
+                    elif allowed_type in ['certified', 'cpo']:
+                        # Handle both 'certified' and 'cpo' config values  
+                        if any(keyword in vehicle_type for keyword in ['certified', 'cpo']):
+                            type_matches = True
+                            break
+                    elif allowed_type in ['po', 'pre-owned']:
+                        # Handle pre-owned variants
+                        if any(keyword in vehicle_type for keyword in ['pre-owned', 'pre owned']):
                             type_matches = True
                             break
                     elif allowed_type in vehicle_type:

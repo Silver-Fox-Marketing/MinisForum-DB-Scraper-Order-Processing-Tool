@@ -6215,8 +6215,8 @@ body {
 }
 
 .modern-checkbox-item input[type="checkbox"]:checked + .modern-checkbox-label {
-    background: linear-gradient(135deg, var(--success-color) 0%, #10b981 100%);
-    border-color: var(--success-color);
+    background: linear-gradient(135deg, var(--success-green) 0%, #10b981 100%);
+    border-color: var(--success-green);
     color: white;
 }
 
@@ -6239,7 +6239,7 @@ body {
 
 .checkbox-indicator i {
     font-size: 0.9rem;
-    color: var(--success-color);
+    color: var(--success-green);
     opacity: 0;
     transition: opacity 0.3s ease;
 }
@@ -8686,5 +8686,369 @@ body {
     .manual-action-btn {
         width: 100%;
         justify-content: center;
+    }
+    
+    .sidebar-section.primary {
+        margin: 0.5rem;
+        padding: 0.25rem;
+    }
+    
+    .sidebar-section .sidebar-tab {
+        margin: 0.125rem 0.25rem;
+    }
+}
+
+/* Sidebar Section Enhancements */
+.sidebar-section.primary {
+    background: linear-gradient(135deg, rgba(220, 38, 38, 0.1), rgba(239, 68, 68, 0.05));
+    border: 1px solid rgba(220, 38, 38, 0.2);
+    border-radius: 12px;
+    padding: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.sidebar-section.primary .sidebar-section-title {
+    color: var(--primary-color);
+    text-shadow: 0 0 8px rgba(220, 38, 38, 0.3);
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.sidebar-section.primary .sidebar-section-title i {
+    color: var(--primary-color);
+    filter: drop-shadow(0 0 4px rgba(220, 38, 38, 0.4));
+}
+
+.sidebar-section {
+    margin-bottom: 1rem;
+}
+
+.sidebar-section .sidebar-section-title {
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.75px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.sidebar-section .sidebar-section-title i {
+    font-size: 0.875rem;
+    opacity: 0.8;
+}
+
+.sidebar-section .sidebar-tab {
+    margin: 0.25rem 0.5rem;
+    border-radius: 8px;
+}
+
+.sidebar-section.primary .sidebar-tab {
+    border: 1px solid rgba(220, 38, 38, 0.15);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.sidebar-section.primary .sidebar-tab:hover {
+    border-color: rgba(220, 38, 38, 0.3);
+    background: rgba(220, 38, 38, 0.1);
+}
+
+.sidebar-section.primary .sidebar-tab.active {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    border-color: var(--primary-color);
+    box-shadow: 0 0 15px rgba(220, 38, 38, 0.4);
+}
+
+/* Enhanced divider styling */
+.sidebar-divider {
+    margin: 1rem 0.75rem;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(107, 114, 128, 0.3), transparent);
+    position: relative;
+}
+
+.sidebar-divider::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: -2px;
+    transform: translateX(-50%);
+    width: 4px;
+    height: 4px;
+    background: var(--primary-color);
+    border-radius: 50%;
+    box-shadow: 0 0 6px rgba(220, 38, 38, 0.4);
+}
+
+/* Manual Data Entry Modal Styles */
+#manualDataEntryModal .large-modal {
+    max-width: 900px;
+    width: 90vw;
+}
+
+#manualDataEntryModal .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+#manualDataEntryModal .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+#manualDataEntryModal .form-group.full-width {
+    grid-column: 1 / -1;
+}
+
+#manualDataEntryModal .form-group label {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+#manualDataEntryModal .form-control {
+    padding: 10px 12px;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#manualDataEntryModal .form-control:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+    background: var(--bg-primary);
+}
+
+#manualDataEntryModal .modal-header h3 {
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0;
+}
+
+#manualDataEntryModal .modal-header h3 i {
+    color: var(--primary-color);
+}
+
+/* Responsive design for smaller screens */
+@media (max-width: 768px) {
+    #manualDataEntryModal .large-modal {
+        width: 95vw;
+        margin: 20px auto;
+    }
+    
+    #manualDataEntryModal .form-grid {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+}
+
+/* Modal Vehicle Data Table Styles */
+.vehicle-preview-section {
+    background: var(--bg-primary);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.vehicle-preview-section .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.vehicle-preview-section .section-header h3 {
+    margin: 0;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.vehicle-preview-section .section-header h3 i {
+    color: var(--primary-color);
+}
+
+.preview-stats {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.vehicle-count-badge {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.vehicle-data-table-container {
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+.vehicle-data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.vehicle-data-table thead th {
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    font-weight: 600;
+    padding: 1rem 0.75rem;
+    text-align: left;
+    border-bottom: 2px solid var(--border-color);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.vehicle-data-table tbody tr {
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.2s ease;
+}
+
+.vehicle-data-table tbody tr:hover {
+    background: var(--bg-hover);
+}
+
+.vehicle-data-table tbody td {
+    padding: 0.75rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.btn-edit {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-edit:hover {
+    background: var(--dark-red);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+}
+
+.stock-badge {
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.85rem;
+    border: 1px solid var(--border-color);
+}
+
+/* Inline editing styles */
+.editable-cell {
+    position: relative;
+}
+
+.editable-cell .edit-input {
+    width: 100%;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 2px solid var(--primary-color);
+    border-radius: 4px;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.9rem;
+    font-family: inherit;
+    transition: all 0.2s ease;
+}
+
+.editable-cell .edit-input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    background: var(--bg-surface);
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+}
+
+/* Editing state styling */
+.vehicle-data-table tbody tr[data-editing="true"] {
+    background: rgba(220, 38, 38, 0.05);
+    border-left: 3px solid var(--primary-color);
+}
+
+.vehicle-data-table tbody tr[data-editing="true"] td {
+    padding: 0.5rem 0.75rem;
+}
+
+.vin-display {
+    font-family: monospace;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    background: var(--bg-surface);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+
+.qr-status {
+    color: var(--success-green);
+    font-size: 1.1rem;
+}
+
+.no-data-placeholder {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: var(--text-muted);
+}
+
+.no-data-placeholder i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.no-data-placeholder h4 {
+    margin: 0.5rem 0;
+    color: var(--text-secondary);
+}
+
+/* Responsive table */
+@media (max-width: 768px) {
+    .vehicle-data-table {
+        font-size: 0.8rem;
+    }
+    
+    .vehicle-data-table th,
+    .vehicle-data-table td {
+        padding: 0.5rem;
+    }
+    
+    .btn-edit {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.75rem;
     }
 }
