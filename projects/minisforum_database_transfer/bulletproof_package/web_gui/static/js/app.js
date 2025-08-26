@@ -13,6 +13,7 @@ class MinisFornumApp {
         this.scraperRunning = false;
         this.currentTab = 'scraper';
         this.currentDealership = null;
+        this.currentImportMethod = 'csv'; // Default to CSV import method
         
         // New queue management properties
         this.processingQueue = new Map(); // Store queue items with their settings
@@ -125,6 +126,9 @@ class MinisFornumApp {
         
         // Bind event listeners
         this.bindEventListeners();
+        
+        // Initialize manual VIN entry functionality
+        this.initializeManualVinEntry();
         
         // Load initial data
         try {
@@ -649,7 +653,7 @@ class MinisFornumApp {
         if (!dealership) return;
         
         // Populate modal with current settings
-        document.getElementById('modalTitle').textContent = `${dealershipName} Settings`;
+        document.getElementById('modalTitle').textContent = dealershipName;
         
         const filteringRules = dealership.filtering_rules || {};
         const excludeConditions = filteringRules.exclude_conditions || [];
@@ -663,6 +667,14 @@ class MinisFornumApp {
         document.getElementById('minPrice').value = filteringRules.min_price || '';
         document.getElementById('maxPrice').value = filteringRules.max_price || '';
         document.getElementById('minYear').value = filteringRules.min_year || '';
+        
+        // Set order type (default to CAO if not specified)
+        const orderType = filteringRules.order_type || 'cao';
+        if (orderType === 'list') {
+            document.getElementById('orderTypeList').checked = true;
+        } else {
+            document.getElementById('orderTypeCao').checked = true;
+        }
         
         this.showModal('dealershipModal');
     }
@@ -691,6 +703,17 @@ class MinisFornumApp {
             if (maxPrice) filteringRules.max_price = maxPrice;
             if (minYear) filteringRules.min_year = minYear;
             
+            // Add order type from radio buttons
+            const orderTypeRadios = document.getElementsByName('order_type');
+            let selectedOrderType = 'cao'; // default
+            for (const radio of orderTypeRadios) {
+                if (radio.checked) {
+                    selectedOrderType = radio.value;
+                    break;
+                }
+            }
+            filteringRules.order_type = selectedOrderType;
+            
             // Send update to server
             const response = await fetch(`/api/dealerships/${this.currentDealership}`, {
                 method: 'POST',
@@ -708,7 +731,24 @@ class MinisFornumApp {
             if (result.success) {
                 this.addTerminalMessage(`Updated settings for ${this.currentDealership}`, 'success');
                 this.closeModal('dealershipModal');
-                this.loadDealerships(); // Refresh the grid
+                
+                // Update just this dealership's data
+                await this.loadDealerships(); // Refresh the grid
+                
+                // Update just this dealership's default in memory and queue
+                const dealership = this.dealerships.find(d => d.name === this.currentDealership);
+                if (dealership) {
+                    const orderType = dealership.filtering_rules?.order_type || 'cao';
+                    this.dealershipDefaults.set(dealership.name, orderType.toUpperCase());
+                    
+                    // Update only this dealership's queue item if it exists
+                    if (this.processingQueue.has(dealership.name)) {
+                        const item = this.processingQueue.get(dealership.name);
+                        item.orderType = orderType.toUpperCase();
+                        this.processingQueue.set(dealership.name, item);
+                        this.renderQueue(); // Re-render to show updated selection
+                    }
+                }
             } else {
                 this.addTerminalMessage(`Failed to update ${this.currentDealership}: ${result.message}`, 'error');
             }
@@ -1962,65 +2002,48 @@ class MinisFornumApp {
                     </h3>
                     <div class="dealer-status">
                         <div class="status-indicator ${isActive ? '' : 'offline'}"></div>
-                        <span class="vehicle-count-badge">${vehicleCount} vehicles</span>
+                        <span class="order-type-badge-header">
+                            <i class="fas fa-${dealer.filtering_rules?.order_type === 'list' ? 'list' : 'search'}"></i>
+                            ${(dealer.filtering_rules?.order_type || 'cao').toUpperCase()}
+                        </span>
                     </div>
                 </div>
                 <div class="settings-card-body">
-                    <div class="setting-group">
-                        <label class="setting-label">Vehicle Types:</label>
-                        <div class="checkbox-group">
-                            <label class="checkbox-label">
-                                <input type="checkbox" value="new" ${vehicleTypes.includes('new') ? 'checked' : ''}>
-                                <span>New</span>
-                            </label>
-                            <label class="checkbox-label">
-                                <input type="checkbox" value="used" ${vehicleTypes.includes('used') ? 'checked' : ''}>
-                                <span>Used</span>
-                            </label>
-                            <label class="checkbox-label">
-                                <input type="checkbox" value="certified" ${vehicleTypes.includes('certified') ? 'checked' : ''}>
-                                <span>Certified</span>
+                    <div class="status-section">
+                        <div class="status-toggle">
+                            <input type="checkbox" class="modern-toggle" id="toggle-${dealer.id}" ${isActive ? 'checked' : ''}>
+                            <label for="toggle-${dealer.id}" class="toggle-label">
+                                <span class="toggle-slider"></span>
+                                <span class="toggle-text">
+                                    <i class="fas fa-${isActive ? 'check-circle' : 'times-circle'}"></i>
+                                    ${isActive ? 'Active' : 'Inactive'}
+                                </span>
                             </label>
                         </div>
                     </div>
                     
-                    <div class="setting-group">
-                        <label class="setting-label">Price Range:</label>
-                        <div style="display: flex; gap: 12px;">
-                            <input type="number" class="setting-input" placeholder="Min Price" 
-                                   value="${dealer.filtering_rules?.min_price || ''}" 
-                                   style="flex: 1;">
-                            <input type="number" class="setting-input" placeholder="Max Price" 
-                                   value="${dealer.filtering_rules?.max_price || ''}" 
-                                   style="flex: 1;">
+                    <div class="metrics-section">
+                        <div class="metric-item">
+                            <i class="fas fa-car"></i>
+                            <span class="metric-number">${vehicleCount}</span>
+                            <span class="metric-label">vehicles</span>
                         </div>
-                    </div>
-                    
-                    <div class="setting-group">
-                        <label>
-                            <input type="checkbox" class="active-toggle" ${isActive ? 'checked' : ''}>
-                            Active Dealership
-                        </label>
-                        <div class="config-details" style="margin-top: 8px;">
-                            <span class="config-item">
-                                <i class="fas fa-calendar"></i>
-                                Updated: ${dealer.updated_at ? new Date(dealer.updated_at).toLocaleDateString() : 'Never'}
-                            </span>
+                        <div class="metric-item">
+                            <i class="fas fa-clock"></i>
+                            <span class="metric-date">${dealer.updated_at ? new Date(dealer.updated_at).toLocaleDateString() : 'Never'}</span>
                         </div>
                     </div>
                 </div>
                 
                 <div class="card-actions">
-                    <button class="card-action-btn btn-test" onclick="app.testDealerConnection('${dealer.name}')">
-                        <i class="fas fa-play"></i>
-                        Test
+                    <button class="modern-btn test-btn" onclick="app.testDealerConnection('${dealer.name}')" title="Test Connection">
+                        <i class="fas fa-play-circle"></i>
                     </button>
-                    <button class="card-action-btn btn-configure" onclick="app.editDealershipSettings('${dealer.name}')">
-                        <i class="fas fa-cog"></i>
+                    <button class="modern-btn settings-btn" onclick="app.editDealershipSettings('${dealer.name}')" title="Settings">
+                        <i class="fas fa-cogs"></i>
                     </button>
-                    <button class="card-action-btn btn-status" onclick="app.toggleDealershipActive('${dealer.name}', ${!isActive})">
-                        <i class="fas fa-${isActive ? 'power-off' : 'unlock'}"></i>
-                        ${isActive ? 'Disable' : 'Enable'}
+                    <button class="modern-btn history-btn" onclick="app.showDealershipVinLog('${dealer.name}')" title="View VIN History">
+                        <i class="fas fa-history"></i>
                     </button>
                 </div>
             </div>
@@ -2240,21 +2263,19 @@ class MinisFornumApp {
         // Set modal title
         const modalTitle = document.getElementById('modalTitle');
         if (modalTitle) {
-            modalTitle.textContent = `Settings - ${dealership.name}`;
+            modalTitle.textContent = dealership.name;
         }
         
         // Get filtering rules
         const filteringRules = dealership.filtering_rules || {};
-        const vehicleTypes = filteringRules.vehicle_types || ['new', 'used', 'certified'];
+        const vehicleTypes = filteringRules.vehicle_types || ['new', 'used'];
         
         // Update vehicle type checkboxes
         const newCheckbox = document.getElementById('vehicleNew');
         const usedCheckbox = document.getElementById('vehicleUsed');
-        const certifiedCheckbox = document.getElementById('vehicleCertified');
         
         if (newCheckbox) newCheckbox.checked = vehicleTypes.includes('new');
-        if (usedCheckbox) usedCheckbox.checked = vehicleTypes.includes('used');
-        if (certifiedCheckbox) certifiedCheckbox.checked = vehicleTypes.includes('certified');
+        if (usedCheckbox) usedCheckbox.checked = vehicleTypes.includes('used') || vehicleTypes.includes('certified');
         
         // Update price filters if they exist
         const minPriceInput = document.getElementById('minPrice');
@@ -2297,7 +2318,6 @@ class MinisFornumApp {
             const vehicleTypes = [];
             if (newChecked) vehicleTypes.push('new');
             if (usedChecked) vehicleTypes.push('used');
-            if (certifiedChecked) vehicleTypes.push('certified');
             
             // Build filtering rules object
             const filteringRules = {
@@ -2347,32 +2367,12 @@ class MinisFornumApp {
                 const dealershipId = parseInt(card.dataset.dealershipId);
                 if (!dealershipId) return;
                 
-                // Get form values for this dealership
-                const newCheckbox = card.querySelector('input[value="new"]');
-                const usedCheckbox = card.querySelector('input[value="used"]');
-                const certifiedCheckbox = card.querySelector('input[value="certified"]');
+                // Get active toggle setting
+                const activeToggle = card.querySelector('.modern-toggle');
                 
-                // Build vehicle types array
-                const vehicleTypes = [];
-                if (newCheckbox && newCheckbox.checked) vehicleTypes.push('new');
-                if (usedCheckbox && usedCheckbox.checked) vehicleTypes.push('used');
-                if (certifiedCheckbox && certifiedCheckbox.checked) vehicleTypes.push('certified');
-                
-                // Get other settings
-                const minPriceInput = card.querySelector('input[placeholder="Min Price"]');
-                const maxPriceInput = card.querySelector('input[placeholder="Max Price"]');
-                const activeToggle = card.querySelector('.active-toggle');
-                
-                const filteringRules = {
-                    vehicle_types: vehicleTypes
-                };
-                
-                if (minPriceInput && minPriceInput.value) {
-                    filteringRules.min_price = parseFloat(minPriceInput.value);
-                }
-                if (maxPriceInput && maxPriceInput.value) {
-                    filteringRules.max_price = parseFloat(maxPriceInput.value);
-                }
+                // Keep existing filtering rules (will be managed via settings modal)
+                const existingDealer = this.dealerships.find(d => d.id === dealershipId);
+                const filteringRules = existingDealer?.filtering_rules || {};
                 
                 updates.push({
                     id: dealershipId,
@@ -2430,11 +2430,20 @@ class MinisFornumApp {
             
             // Refresh the settings display
             this.loadDealershipSettings();
+            // Refresh order type defaults for queue
+            this.loadDealershipDefaults();
             
         } catch (error) {
             console.error('Error saving all dealership settings:', error);
             this.addTerminalMessage(`Error saving dealership settings: ${error.message}`, 'error');
         }
+    }
+    
+    // Quick access to VIN log from dealership panel  
+    showDealershipVinLog(dealershipName) {
+        console.log('Opening VIN log for dealership:', dealershipName);
+        // Use the existing VIN log modal functionality from data tab
+        this.openVinLogModal(dealershipName);
     }
     
     closeDealershipModal() {
@@ -2828,28 +2837,38 @@ class MinisFornumApp {
     }
     
     async loadDealershipDefaults() {
-        // Set default order types for dealerships - Mix of CAO and LIST
-        this.dealershipDefaults.set('Columbia Honda', 'LIST');
-        this.dealershipDefaults.set('BMW of West St. Louis', 'CAO');
-        this.dealershipDefaults.set('Dave Sinclair Lincoln South', 'LIST');
-        this.dealershipDefaults.set('Suntrup Ford West', 'CAO');
-        this.dealershipDefaults.set('Joe Machens Toyota', 'LIST');
-        this.dealershipDefaults.set('Thoroughbred Ford', 'CAO');
-        this.dealershipDefaults.set('Suntrup Ford Kirkwood', 'LIST');
-        this.dealershipDefaults.set('Joe Machens Hyundai', 'CAO');
-        this.dealershipDefaults.set('Test Integration Dealer', 'LIST');
-        
-        // Set defaults for any other dealerships with a mix of both types
+        // Load order types from dealership settings
         if (this.dealerships) {
-            this.dealerships.forEach((dealership, index) => {
-                if (!this.dealershipDefaults.has(dealership.name)) {
-                    // Alternate between CAO and LIST for variety
-                    this.dealershipDefaults.set(dealership.name, index % 2 === 0 ? 'CAO' : 'LIST');
-                }
+            this.dealerships.forEach(dealership => {
+                // Get order type from dealership filtering rules, default to 'CAO' if not set
+                const orderType = dealership.filtering_rules?.order_type || 'cao';
+                // Convert to uppercase for consistency with queue system
+                this.dealershipDefaults.set(dealership.name, orderType.toUpperCase());
             });
         }
         
-        console.log('Dealership defaults loaded:', Array.from(this.dealershipDefaults.entries()));
+        console.log('Dealership defaults loaded from settings:', Array.from(this.dealershipDefaults.entries()));
+        
+        // Update any existing queue items to reflect new defaults
+        this.updateQueueItemsToDefaults();
+    }
+    
+    updateQueueItemsToDefaults() {
+        // Update existing queue items to match their dealership defaults
+        let updatedCount = 0;
+        this.processingQueue.forEach((item, dealershipName) => {
+            const newDefault = this.getDealershipDefault(dealershipName);
+            if (item.orderType !== newDefault) {
+                item.orderType = newDefault;
+                this.processingQueue.set(dealershipName, item);
+                updatedCount++;
+            }
+        });
+        
+        if (updatedCount > 0) {
+            console.log(`Updated ${updatedCount} queue items to match new defaults`);
+            this.renderQueue(); // Re-render to show updated selections
+        }
     }
     
     getDealershipDefault(dealershipName) {
@@ -6414,8 +6433,23 @@ class MinisFornumApp {
     }
     
     async startVinLogImport() {
-        if (!this.selectedVinLogFile || !this.currentDealership) {
-            this.addTerminalMessage('Missing file or dealership selection', 'error');
+        if (!this.currentDealership) {
+            this.addTerminalMessage('No dealership selected', 'error');
+            return;
+        }
+        
+        // Check which import method is active
+        const currentMethod = this.currentImportMethod || 'csv';
+        
+        if (currentMethod === 'manual') {
+            // Process manual entry
+            await this.processManualVinEntry();
+            return;
+        }
+        
+        // CSV import logic (existing)
+        if (!this.selectedVinLogFile) {
+            this.addTerminalMessage('No CSV file selected', 'error');
             return;
         }
         
@@ -7202,6 +7236,348 @@ Example:
     
     delay(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    
+    // Manual VIN Entry Functions
+    initializeManualVinEntry() {
+        // Set up tab switching
+        const csvImportTab = document.getElementById('csvImportTab');
+        const manualEntryTab = document.getElementById('manualEntryTab');
+        const csvSection = document.getElementById('csvImportSection');
+        const manualSection = document.getElementById('manualEntrySection');
+        
+        if (csvImportTab && manualEntryTab) {
+            csvImportTab.addEventListener('click', () => {
+                this.switchImportMethod('csv');
+            });
+            
+            manualEntryTab.addEventListener('click', () => {
+                this.switchImportMethod('manual');
+            });
+        }
+        
+        // Set up manual entry textarea monitoring
+        const textarea = document.getElementById('manualOrderEntry');
+        if (textarea) {
+            textarea.addEventListener('input', () => {
+                this.updateManualEntryStats();
+            });
+        }
+        
+        // Set up manual entry action buttons
+        const validateBtn = document.getElementById('validateManualEntry');
+        const clearBtn = document.getElementById('clearManualEntry');
+        
+        if (validateBtn) {
+            validateBtn.addEventListener('click', () => {
+                this.validateManualEntry();
+            });
+        }
+        
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                this.clearManualEntry();
+            });
+        }
+    }
+    
+    switchImportMethod(method) {
+        const csvImportTab = document.getElementById('csvImportTab');
+        const manualEntryTab = document.getElementById('manualEntryTab');
+        const csvSection = document.getElementById('csvImportSection');
+        const manualSection = document.getElementById('manualEntrySection');
+        const importButtonText = document.getElementById('importButtonText');
+        const importButtonIcon = document.getElementById('importButtonIcon');
+        
+        if (method === 'csv') {
+            csvImportTab?.classList.add('active');
+            manualEntryTab?.classList.remove('active');
+            if (csvSection) csvSection.style.display = 'block';
+            if (manualSection) manualSection.style.display = 'none';
+            
+            // Update button text and icon for CSV import
+            if (importButtonText) importButtonText.textContent = 'Import CSV';
+            if (importButtonIcon) {
+                importButtonIcon.className = 'fas fa-upload';
+            }
+        } else if (method === 'manual') {
+            csvImportTab?.classList.remove('active');
+            manualEntryTab?.classList.add('active');
+            if (csvSection) csvSection.style.display = 'none';
+            if (manualSection) manualSection.style.display = 'block';
+            
+            // Update button text and icon for manual entry
+            if (importButtonText) importButtonText.textContent = 'Import Orders';
+            if (importButtonIcon) {
+                importButtonIcon.className = 'fas fa-keyboard';
+            }
+            
+            // Initialize manual entry functionality if not already done
+            this.updateManualEntryStats();
+        }
+        
+        // Store current method for import processing
+        this.currentImportMethod = method;
+    }
+    
+    updateManualEntryStats() {
+        const textarea = document.getElementById('manualOrderEntry');
+        const orderCountEl = document.getElementById('manualOrderCount');
+        const vinCountEl = document.getElementById('manualVinCount');
+        const importBtn = document.getElementById('startVinLogImport');
+        
+        if (!textarea || !orderCountEl || !vinCountEl) return;
+        
+        const text = textarea.value.trim();
+        if (!text) {
+            orderCountEl.textContent = '0';
+            vinCountEl.textContent = '0';
+            
+            // Disable import button if no manual content and we're in manual mode
+            if (importBtn && this.currentImportMethod === 'manual') {
+                importBtn.disabled = true;
+            }
+            return;
+        }
+        
+        const parsed = this.parseManualEntry(text);
+        orderCountEl.textContent = parsed.orders.length;
+        vinCountEl.textContent = parsed.totalVins;
+        
+        // Enable import button if we have content and we're in manual mode
+        if (importBtn && this.currentImportMethod === 'manual' && parsed.orders.length > 0) {
+            importBtn.disabled = false;
+        }
+    }
+    
+    parseManualEntry(text) {
+        const lines = text.split('\n');
+        const orders = [];
+        let currentOrder = null;
+        let totalVins = 0;
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            
+            // Empty line indicates end of current order group
+            if (!line) {
+                if (currentOrder) {
+                    orders.push(currentOrder);
+                    currentOrder = null;
+                }
+                continue;
+            }
+            
+            // Check if this looks like a VIN (17 characters, alphanumeric)
+            const isVin = /^[A-HJ-NPR-Z0-9]{17}$/i.test(line);
+            
+            if (isVin) {
+                // This is a VIN
+                if (currentOrder) {
+                    currentOrder.vins.push(line.toUpperCase());
+                    totalVins++;
+                } else {
+                    // VIN without order number - this is an error
+                    console.warn(`VIN found without order number at line ${i + 1}: ${line}`);
+                }
+            } else {
+                // This should be an order number
+                if (currentOrder) {
+                    // Previous order wasn't closed with empty line
+                    orders.push(currentOrder);
+                }
+                currentOrder = {
+                    orderNumber: line,
+                    vins: [],
+                    lineNumber: i + 1
+                };
+            }
+        }
+        
+        // Don't forget the last order if text doesn't end with empty line
+        if (currentOrder) {
+            orders.push(currentOrder);
+        }
+        
+        return {
+            orders,
+            totalVins,
+            errors: []
+        };
+    }
+    
+    validateManualEntry() {
+        const textarea = document.getElementById('manualOrderEntry');
+        const resultsDiv = document.getElementById('manualValidationResults');
+        const contentDiv = document.getElementById('manualValidationContent');
+        
+        if (!textarea || !resultsDiv || !contentDiv) return;
+        
+        const text = textarea.value.trim();
+        if (!text) {
+            this.showManualValidationResults('Please enter order data to validate.', 'warning');
+            return;
+        }
+        
+        const parsed = this.parseManualEntry(text);
+        const errors = [];
+        const warnings = [];
+        
+        // Validate each order
+        parsed.orders.forEach((order, index) => {
+            // Check order number format
+            if (!order.orderNumber || order.orderNumber.length < 3) {
+                errors.push(`Order ${index + 1} (line ${order.lineNumber}): Order number too short or missing`);
+            }
+            
+            // Check for VINs
+            if (order.vins.length === 0) {
+                errors.push(`Order ${index + 1} (${order.orderNumber}): No VINs found`);
+            }
+            
+            // Validate VIN format
+            order.vins.forEach((vin, vinIndex) => {
+                if (!/^[A-HJ-NPR-Z0-9]{17}$/i.test(vin)) {
+                    errors.push(`Order ${index + 1} (${order.orderNumber}), VIN ${vinIndex + 1}: Invalid VIN format - ${vin}`);
+                }
+            });
+            
+            // Check for excessive VINs in one order
+            if (order.vins.length > 50) {
+                warnings.push(`Order ${index + 1} (${order.orderNumber}): Large number of VINs (${order.vins.length})`);
+            }
+        });
+        
+        // Check for duplicate order numbers
+        const orderNumbers = parsed.orders.map(o => o.orderNumber);
+        const duplicates = orderNumbers.filter((item, index) => orderNumbers.indexOf(item) !== index);
+        if (duplicates.length > 0) {
+            errors.push(`Duplicate order numbers found: ${[...new Set(duplicates)].join(', ')}`);
+        }
+        
+        // Check for duplicate VINs
+        const allVins = parsed.orders.flatMap(o => o.vins);
+        const duplicateVins = allVins.filter((item, index) => allVins.indexOf(item) !== index);
+        if (duplicateVins.length > 0) {
+            warnings.push(`Duplicate VINs found: ${[...new Set(duplicateVins)].join(', ')}`);
+        }
+        
+        // Generate results
+        let resultHtml = '';
+        
+        if (errors.length === 0 && warnings.length === 0) {
+            resultHtml = `
+                <div class="validation-success">
+                    <i class="fas fa-check-circle"></i>
+                    <strong>Validation Successful!</strong>
+                </div>
+                <div style="margin-top: 1rem;">
+                    <div><strong>Summary:</strong></div>
+                    <ul>
+                        <li>${parsed.orders.length} orders ready for import</li>
+                        <li>${parsed.totalVins} VINs total</li>
+                        <li>Average ${Math.round(parsed.totalVins / parsed.orders.length)} VINs per order</li>
+                    </ul>
+                </div>
+            `;
+        } else {
+            if (errors.length > 0) {
+                resultHtml += `
+                    <div class="validation-error">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Validation Errors (${errors.length}):</strong>
+                    </div>
+                    <ul style="margin: 0.5rem 0;">
+                        ${errors.map(error => `<li class="validation-error">${error}</li>`).join('')}
+                    </ul>
+                `;
+            }
+            
+            if (warnings.length > 0) {
+                resultHtml += `
+                    <div class="validation-warning" style="margin-top: 1rem;">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <strong>Warnings (${warnings.length}):</strong>
+                    </div>
+                    <ul style="margin: 0.5rem 0;">
+                        ${warnings.map(warning => `<li class="validation-warning">${warning}</li>`).join('')}
+                    </ul>
+                `;
+            }
+        }
+        
+        contentDiv.innerHTML = resultHtml;
+        resultsDiv.style.display = 'block';
+        
+        // Scroll to results
+        resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    
+    showManualValidationResults(message, type = 'info') {
+        const resultsDiv = document.getElementById('manualValidationResults');
+        const contentDiv = document.getElementById('manualValidationContent');
+        
+        if (resultsDiv && contentDiv) {
+            contentDiv.innerHTML = `<div class="validation-${type}">${message}</div>`;
+            resultsDiv.style.display = 'block';
+        }
+    }
+    
+    clearManualEntry() {
+        const textarea = document.getElementById('manualOrderEntry');
+        const resultsDiv = document.getElementById('manualValidationResults');
+        
+        if (textarea) {
+            textarea.value = '';
+            this.updateManualEntryStats();
+        }
+        
+        if (resultsDiv) {
+            resultsDiv.style.display = 'none';
+        }
+    }
+    
+    async processManualVinEntry() {
+        const textarea = document.getElementById('manualOrderEntry');
+        if (!textarea || !this.currentDealership) return;
+        
+        const text = textarea.value.trim();
+        if (!text) {
+            this.addTerminalMessage('No manual entry data to process', 'error');
+            return;
+        }
+        
+        const parsed = this.parseManualEntry(text);
+        
+        // Convert to CSV format for existing import function
+        let csvData = 'ORDER_NUMBER,VIN\n';
+        parsed.orders.forEach(order => {
+            // First line with order number and first VIN
+            if (order.vins.length > 0) {
+                csvData += `${order.orderNumber},${order.vins[0]}\n`;
+                
+                // Additional VINs with empty order number column
+                for (let i = 1; i < order.vins.length; i++) {
+                    csvData += `,${order.vins[i]}\n`;
+                }
+                
+                // Empty line to separate order groups
+                csvData += '\n';
+            }
+        });
+        
+        // Create blob and process through existing CSV import
+        const blob = new Blob([csvData], { type: 'text/csv' });
+        const formData = new FormData();
+        formData.append('file', blob, 'manual_entry.csv');
+        formData.append('dealership_name', this.currentDealership);
+        formData.append('skip_duplicates', document.getElementById('skipDuplicates')?.checked ? 'true' : 'false');
+        formData.append('update_existing', document.getElementById('updateExisting')?.checked ? 'true' : 'false');
+        
+        await this.processVinLogImport(formData);
+        
+        // Clear manual entry after successful import
+        this.clearManualEntry();
     }
     
 }
