@@ -211,7 +211,7 @@ class OrderProcessingWorkflow:
             if 'cpo' in vehicle_types:
                 type_conditions.append("type = 'Certified Pre-Owned'")
             if 'used' in vehicle_types:
-                type_conditions.append("type = 'Used'")
+                type_conditions.append("type IN ('Used', 'Pre-Owned', 'Certified Pre-Owned')")
             if 'po' in vehicle_types:  # Pre-owned
                 type_conditions.append("type IN ('Used', 'Pre-Owned')")
             
@@ -224,9 +224,9 @@ class OrderProcessingWorkflow:
             # Apply additional filters
             additional_filters = []
             
-            # Filter out missing stock numbers if configured
+            # Filter out missing stock numbers if configured (includes asterisk placeholders)
             if filtering_rules.get('exclude_missing_stock', True):
-                additional_filters.append("stock IS NOT NULL AND stock != ''")
+                additional_filters.append("stock IS NOT NULL AND stock != '' AND stock != '*'")
             
             # Apply require_status filter (highest priority)
             if filtering_rules.get('require_status'):
@@ -511,13 +511,17 @@ class OrderProcessingWorkflow:
         
         Args:
             dealership_name: Name of the dealership
-            vehicle_types: List of vehicle types to process (default: ['new', 'cpo', 'used'])
+            vehicle_types: List of vehicle types to process (default: use dealership config or ['new', 'cpo', 'used'])
             test_mode: If True, skip VIN logging to allow repeated testing
         """
         logger.info(f"[CAO ORDER] Processing {dealership_name} (Test Mode: {test_mode})")
         
+        # Use dealership-specific allowed vehicle types if not specified
         if vehicle_types is None:
-            vehicle_types = ['new', 'cpo', 'used']  # Default to all types
+            config = self.dealership_configs.get(dealership_name, {})
+            filtering_rules = config.get('filtering_rules', {})
+            vehicle_types = filtering_rules.get('allowed_vehicle_types', ['new', 'cpo', 'used'])
+            logger.info(f"[CAO ORDER] Using dealership-specific vehicle types for {dealership_name}: {vehicle_types}")
         
         try:
             # Step 1: Filter vehicles by type
@@ -765,20 +769,9 @@ class OrderProcessingWorkflow:
         for order in cao_orders:
             dealership_name = order['name']
             
-            # Determine vehicle types from dealership name
-            vehicle_types = []
-            if 'New' in dealership_name:
-                vehicle_types.append('new')
-            if 'Used' in dealership_name or 'Pre-Owned' in dealership_name:
-                vehicle_types.extend(['used', 'po'])
-            if 'Certified' in dealership_name:
-                vehicle_types.append('cpo')
-            
-            # Default to all types if not specified
-            if not vehicle_types:
-                vehicle_types = ['new', 'cpo', 'used']
-            
-            result = self.process_cao_order(dealership_name, vehicle_types)
+            # Use dealership-specific filtering rules (vehicle_types=None triggers auto-detection from database config)
+            logger.info(f"[DAILY CAO] Processing {dealership_name} with dealership-specific filtering rules")
+            result = self.process_cao_order(dealership_name, vehicle_types=None)
             results.append(result)
         
         # Summary

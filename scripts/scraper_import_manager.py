@@ -226,7 +226,7 @@ class ScraperImportManager:
                     count_result = db_manager.execute_query(f"""
                         SELECT 
                             COUNT(*) as vin_count,
-                            COUNT(DISTINCT order_number) as unique_orders,
+                            COUNT(DISTINCT order_type) as unique_orders,
                             MIN(processed_date) as earliest_date,
                             MAX(processed_date) as latest_date
                         FROM {table['table_name']}

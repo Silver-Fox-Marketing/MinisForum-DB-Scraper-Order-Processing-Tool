@@ -6,45 +6,1765 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title>QR Generation Wizard - Clean Build</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ v or range(1000, 9999) | random }}">
+    <title>Order Processing Wizard - Silver Fox Marketing</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ range(1000, 9999) | random }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Enhanced Wizard Styles - Modern Professional Design */
+        .wizard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--spacing-xl);
+            position: relative;
+        }
+        
+        .wizard-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 300px;
+            background: linear-gradient(135deg, #1a2332 0%, #2d3748 50%, #1a202c 100%);
+            z-index: -1;
+            border-radius: 0 0 50px 50px;
+        }
+        
+        /* VIN Entry Table Styles */
+        .vin-table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-md);
+            padding-bottom: var(--spacing-sm);
+            border-bottom: 2px solid var(--border-color);
+        }
+        
+        .vin-table-container {
+            border: 2px solid transparent;
+            background: linear-gradient(white, white) padding-box, 
+                       linear-gradient(135deg, var(--primary-red) 0%, var(--gold) 50%, var(--primary-red) 100%) border-box;
+            border-radius: 20px;
+            margin-bottom: var(--spacing-md);
+            box-shadow: 0 15px 35px rgba(34, 9, 1, 0.08);
+            overflow: hidden;
+        }
+        
+        .vin-entry-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
+            font-size: 0.95rem;
+        }
+        
+        .vin-entry-table th {
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--dark-red) 100%);
+            color: var(--white);
+            padding: var(--spacing-lg);
+            text-align: left;
+            font-weight: 700;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.9rem;
+        }
+        
+        .vin-entry-table td {
+            padding: var(--spacing-xs);
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .vin-row {
+            transition: all 0.3s ease;
+        }
+        
+        .vin-row.valid {
+            background-color: #f0f9ff;
+        }
+        
+        .vin-row.invalid {
+            background-color: #fef2f2;
+            border-left: 4px solid #dc2626;
+        }
+        
+        .vin-input {
+            width: 100%;
+            padding: var(--spacing-md);
+            border: 2px solid rgba(141, 141, 146, 0.2);
+            border-radius: 15px;
+            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        
+        .vin-input:focus {
+            outline: none;
+            border-color: var(--primary-red);
+            box-shadow: 0 0 0 4px rgba(253, 65, 13, 0.1), 0 8px 25px rgba(253, 65, 13, 0.15);
+            transform: translateY(-1px);
+            background: rgba(255, 255, 255, 0.95);
+        }
+        
+        .vin-input.valid {
+            border-color: #16a34a;
+            background-color: #f0fdf4;
+        }
+        
+        .vin-input.invalid {
+            border-color: #dc2626;
+            background-color: #fef2f2;
+        }
+        
+        .vin-status {
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .vin-status.valid {
+            color: #16a34a;
+        }
+        
+        .vin-status.invalid {
+            color: #dc2626;
+        }
+        
+        .vin-summary {
+            display: flex;
+            gap: var(--spacing-lg);
+            padding: var(--spacing-sm);
+            background: var(--light-gray);
+            border-radius: var(--radius-sm);
+            margin-top: var(--spacing-sm);
+        }
+        
+        .valid-count {
+            color: #16a34a;
+        }
+        
+        .invalid-count {
+            color: #dc2626;
+        }
+        
+        .table-controls {
+            display: flex;
+            gap: var(--spacing-sm);
+        }
+        
+        .wizard-header {
+            text-align: center;
+            margin-bottom: var(--spacing-xl);
+            background: transparent;
+            color: var(--white);
+            padding: var(--spacing-xl) var(--spacing-xl) 0;
+            position: relative;
+        }
+        
+        .header-logo-section {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--spacing-lg);
+            flex-wrap: wrap;
+        }
+        
+        .wizard-logo {
+            height: 80px;
+            width: 80px;
+            filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));
+            transition: transform 0.3s ease;
+        }
+        
+        .wizard-logo:hover {
+            transform: scale(1.05);
+        }
+        
+        .header-text {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            text-align: left;
+        }
+        
+        .wizard-title {
+            font-size: 3.5rem;
+            font-weight: 900;
+            margin: 0;
+            margin-bottom: var(--spacing-sm);
+            background: linear-gradient(45deg, var(--white) 0%, var(--gold) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        
+        .wizard-subtitle {
+            font-size: 1.3rem;
+            opacity: 0.95;
+            font-weight: 300;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            margin: 0;
+        }
+        
+        @media (max-width: 768px) {
+            .header-logo-section {
+                flex-direction: column;
+                gap: var(--spacing-md);
+            }
+            
+            .header-text {
+                align-items: center;
+                text-align: center;
+            }
+            
+            .wizard-title {
+                font-size: 2.5rem;
+            }
+            
+            .wizard-subtitle {
+                font-size: 1.1rem;
+            }
+        }
+        
+        .wizard-progress {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: var(--spacing-xl);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: var(--spacing-lg);
+            border-radius: 25px;
+            box-shadow: 0 20px 40px rgba(34, 9, 1, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .wizard-progress::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.5s;
+        }
+        
+        .wizard-progress:hover::before {
+            left: 100%;
+        }
+        
+        .progress-step {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-md) var(--spacing-xl);
+            border-radius: 20px;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            font-weight: 600;
+            background: rgba(245, 245, 245, 0.8);
+            color: var(--gray);
+            border: 2px solid transparent;
+        }
+        
+        .progress-step i {
+            font-size: 1.2rem;
+            transition: transform 0.3s ease;
+        }
+        
+        .progress-step.active {
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--dark-red) 100%);
+            color: var(--white);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(253, 65, 13, 0.4);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .progress-step.active i {
+            transform: scale(1.1);
+        }
+        
+        .progress-step.completed {
+            background: linear-gradient(135deg, var(--success-green) 0%, #1e7e34 100%);
+            color: var(--white);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .progress-step:hover {
+            transform: translateY(-1px);
+        }
+        
+        .progress-arrow {
+            color: var(--gray);
+            margin: 0 var(--spacing-md);
+        }
+        
+        .wizard-content {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 30px;
+            padding: 3rem;
+            box-shadow: 0 30px 60px rgba(34, 9, 1, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.2);
+            min-height: 600px;
+            position: relative;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            overflow: hidden;
+        }
+        
+        .wizard-content::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-red) 0%, var(--gold) 50%, var(--primary-red) 100%);
+            border-radius: 30px 30px 0 0;
+        }
+        
+        .wizard-step {
+            display: none;
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        
+        .wizard-step.active {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+            animation: slideInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .step-header {
+            text-align: center;
+            margin-bottom: var(--spacing-xl);
+            position: relative;
+        }
+        
+        .step-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--black);
+            margin-bottom: var(--spacing-md);
+            background: linear-gradient(135deg, var(--black) 0%, var(--primary-red) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .step-description {
+            color: var(--gray);
+            font-size: 1.2rem;
+            font-weight: 400;
+            line-height: 1.6;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .dealership-card {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 249, 250, 0.9) 100%);
+            border: 2px solid transparent;
+            background-clip: padding-box;
+            border-radius: 25px;
+            padding: 2rem;
+            margin-bottom: var(--spacing-xl);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        
+        .dealership-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            padding: 2px;
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--gold) 50%, var(--primary-red) 100%);
+            border-radius: 25px;
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: xor;
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+        }
+        
+        .dealership-card h3 {
+            color: var(--primary-red);
+            font-size: 1.5rem;
+            margin-bottom: var(--spacing-sm);
+        }
+        
+        .dealership-type {
+            background: var(--primary-red);
+            color: var(--white);
+            padding: var(--spacing-xs) var(--spacing-md);
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            display: inline-block;
+        }
+        
+        .vin-input-section {
+            margin-top: var(--spacing-xl);
+        }
+        
+        .vin-textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: var(--spacing-lg);
+            border: 2px solid #e1e5e9;
+            border-radius: var(--radius-md);
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            resize: vertical;
+        }
+        
+        .vin-textarea:focus {
+            outline: none;
+            border-color: var(--primary-red);
+            box-shadow: 0 0 0 3px rgba(253, 65, 13, 0.1);
+        }
+        
+        .vin-help {
+            background: linear-gradient(135deg, rgba(240, 249, 255, 0.9) 0%, rgba(255, 255, 255, 0.9) 100%);
+            border: 2px solid transparent;
+            background-clip: padding-box;
+            border-radius: 20px;
+            padding: var(--spacing-xl);
+            margin-top: var(--spacing-md);
+            position: relative;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        
+        .vin-help::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            padding: 2px;
+            background: linear-gradient(135deg, #0ea5e9 0%, var(--primary-red) 100%);
+            border-radius: 20px;
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: xor;
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+        }
+        
+        .output-preview {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-xl);
+            margin-top: var(--spacing-xl);
+        }
+        
+        .preview-section {
+            background: #f8f9fa;
+            border: 1px solid #e1e5e9;
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+        }
+        
+        .preview-section h4 {
+            color: var(--black);
+            margin-bottom: var(--spacing-md);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+        
+        .file-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+        }
+        
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--white);
+            padding: var(--spacing-md);
+            border-radius: var(--radius-md);
+            border: 1px solid #e1e5e9;
+        }
+        
+        .file-name {
+            font-weight: 500;
+            color: var(--black);
+        }
+        
+        .file-size {
+            color: var(--gray);
+            font-size: 0.9rem;
+        }
+        
+        .download-btn {
+            background: var(--primary-red);
+            color: var(--white);
+            border: none;
+            padding: var(--spacing-xs) var(--spacing-md);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        
+        .adobe-readiness {
+            background: var(--white);
+            border: 2px solid #e1e5e9;
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-xl);
+            margin-top: var(--spacing-xl);
+            text-align: center;
+        }
+        
+        .readiness-question {
+            font-size: 1.2rem;
+            color: var(--black);
+            margin-bottom: var(--spacing-lg);
+        }
+        
+        .readiness-actions {
+            display: flex;
+            justify-content: center;
+            gap: var(--spacing-lg);
+        }
+        
+        .wizard-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: var(--spacing-xl);
+            padding-top: var(--spacing-xl);
+            border-top: 2px solid rgba(253, 65, 13, 0.1);
+            position: relative;
+        }
+        
+        .wizard-actions::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 2px;
+            background: linear-gradient(90deg, var(--primary-red), var(--gold));
+            border-radius: 2px;
+        }
+        
+        .btn-wizard {
+            padding: var(--spacing-lg) var(--spacing-xl);
+            font-weight: 700;
+            border-radius: 20px;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-wizard::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.5s;
+        }
+        
+        .btn-wizard:hover::before {
+            left: 100%;
+        }
+        
+        .btn-wizard.primary {
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--dark-red) 100%);
+            color: var(--white);
+            box-shadow: 0 8px 25px rgba(253, 65, 13, 0.3);
+        }
+        
+        .btn-wizard.primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 35px rgba(253, 65, 13, 0.4);
+        }
+        
+        .btn-wizard.secondary {
+            background: rgba(255, 255, 255, 0.9);
+            color: var(--gray);
+            border: 2px solid rgba(141, 141, 146, 0.2);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        
+        .btn-wizard.secondary:hover {
+            background: rgba(248, 249, 250, 0.95);
+            color: var(--black);
+            transform: translateY(-2px);
+            border-color: var(--primary-red);
+        }
+        
+        .btn-wizard.success {
+            background: var(--success-green);
+            color: var(--white);
+        }
+        
+        .btn-wizard.warning {
+            background: var(--warning-orange);
+            color: var(--white);
+        }
+        
+        .completion-summary {
+            text-align: center;
+            padding: var(--spacing-xl);
+            position: relative;
+        }
+        
+        .completion-icon {
+            font-size: 6rem;
+            background: linear-gradient(135deg, var(--success-green) 0%, #1e7e34 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: var(--spacing-lg);
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+        }
+        
+        .completion-title {
+            font-size: 3rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, var(--black) 0%, var(--primary-red) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: var(--spacing-md);
+        }
+        
+        .completion-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: var(--spacing-lg);
+            margin-top: var(--spacing-xl);
+        }
+        
+        .stat-card {
+            background: #f8f9fa;
+            padding: var(--spacing-lg);
+            border-radius: var(--radius-md);
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary-red);
+        }
+        
+        .stat-label {
+            color: var(--gray);
+            font-weight: 500;
+        }
+        
+        /* Data Editor Styles */
+        .editor-controls {
+            margin-bottom: var(--spacing-xl);
+        }
+        
+        .editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            background: #f8f9fa;
+            padding: var(--spacing-lg);
+            border-radius: var(--radius-lg);
+            border: 1px solid #e1e5e9;
+        }
+        
+        .editor-info h4 {
+            margin: 0 0 var(--spacing-sm) 0;
+            color: var(--black);
+        }
+        
+        .editor-info p {
+            margin: 0;
+            color: var(--gray);
+            font-size: 0.9rem;
+        }
+        
+        .editor-actions {
+            display: flex;
+            gap: var(--spacing-sm);
+        }
+        
+        .data-editor-container {
+            background: var(--white);
+            border: 1px solid #e1e5e9;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+        
+        .editor-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f8f9fa;
+            padding: var(--spacing-md) var(--spacing-lg);
+            border-bottom: 1px solid #e1e5e9;
+        }
+        
+        .editor-stats {
+            display: flex;
+            gap: var(--spacing-lg);
+        }
+        
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            font-size: 0.9rem;
+            color: var(--gray);
+        }
+        
+        .stat-item i {
+            color: var(--primary-red);
+        }
+        
+        .editor-search {
+            display: flex;
+            gap: var(--spacing-xs);
+        }
+        
+        .search-input {
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border: 1px solid #e1e5e9;
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            width: 200px;
+        }
+        
+        .search-btn {
+            padding: var(--spacing-xs) var(--spacing-sm);
+            background: var(--primary-red);
+            color: var(--white);
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+        }
+        
+        .data-table-container {
+            max-height: 500px;
+            overflow: auto;
+        }
+        
+        .data-editor-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        
+        .data-editor-table th {
+            background: var(--primary-red);
+            color: var(--white);
+            padding: var(--spacing-sm);
+            text-align: left;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .data-editor-table td {
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-bottom: 1px solid #e1e5e9;
+            vertical-align: top;
+        }
+        
+        .data-editor-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .data-editor-table .editable-cell {
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .data-editor-table .editable-cell:hover {
+            background: #fff3cd;
+        }
+        
+        .data-editor-table .editing {
+            background: #d1ecf1;
+        }
+        
+        .cell-input {
+            width: 100%;
+            padding: 2px 4px;
+            border: 2px solid var(--primary-red);
+            border-radius: 2px;
+            font-size: 0.85rem;
+            background: var(--white);
+        }
+        
+        .cell-error {
+            background: #f8d7da !important;
+            border: 1px solid #dc3545;
+        }
+        
+        .cell-changed {
+            background: #d4edda !important;
+            border-left: 3px solid var(--success-green);
+        }
+        
+        .row-actions {
+            display: flex;
+            gap: var(--spacing-xs);
+        }
+        
+        .row-btn {
+            padding: 2px 6px;
+            border: none;
+            border-radius: 2px;
+            cursor: pointer;
+            font-size: 0.7rem;
+        }
+        
+        .row-btn.delete {
+            background: #dc3545;
+            color: var(--white);
+        }
+        
+        .row-btn.duplicate {
+            background: var(--primary-red);
+            color: var(--white);
+        }
+        
+        .editor-validation {
+            margin-top: var(--spacing-lg);
+            background: #f8f9fa;
+            padding: var(--spacing-lg);
+            border-radius: var(--radius-lg);
+            border: 1px solid #e1e5e9;
+        }
+        
+        .editor-validation h4 {
+            margin: 0 0 var(--spacing-md) 0;
+            color: var(--black);
+        }
+        
+        .validation-results {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--spacing-md);
+        }
+        
+        .validation-item {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-sm);
+            background: var(--white);
+            border-radius: var(--radius-sm);
+            border: 1px solid #e1e5e9;
+        }
+        
+        .validation-item.error {
+            border-color: #dc3545;
+            background: #f8d7da;
+        }
+        
+        .validation-item.warning {
+            border-color: #ffc107;
+            background: #fff3cd;
+        }
+        
+        .validation-item.success {
+            border-color: var(--success-green);
+            background: #d4edda;
+        }
+        
+        .validation-icon {
+            font-size: 1.2rem;
+        }
+        
+        .validation-item.error .validation-icon {
+            color: #dc3545;
+        }
+        
+        .validation-item.warning .validation-icon {
+            color: #ffc107;
+        }
+        
+        .validation-item.success .validation-icon {
+            color: var(--success-green);
+        }
+        
+        /* QR URL Editor Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .qr-url-modal {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            border-radius: 30px;
+            box-shadow: 0 40px 80px rgba(34, 9, 1, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.3);
+            width: 90%;
+            max-width: 1200px;
+            max-height: 85vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+        }
+        
+        .qr-url-modal::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-red) 0%, var(--gold) 50%, var(--primary-red) 100%);
+            border-radius: 30px 30px 0 0;
+        }
+        
+        .modal-header {
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--dark-red) 100%);
+            color: var(--white);
+            padding: var(--spacing-xl);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+        }
+        
+        .modal-header h3 {
+            font-size: 1.8rem;
+            font-weight: 800;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .modal-header h3 {
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--white);
+            cursor: pointer;
+            padding: var(--spacing-xs);
+            border-radius: var(--radius-sm);
+            transition: background 0.2s ease;
+        }
+        
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .modal-body {
+            padding: var(--spacing-lg);
+            flex: 1;
+            overflow: auto;
+        }
+        
+        .qr-url-info {
+            background: #f0f9ff;
+            border: 1px solid #0ea5e9;
+            border-radius: var(--radius-md);
+            padding: var(--spacing-md);
+            margin-bottom: var(--spacing-lg);
+        }
+        
+        .url-editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-lg);
+            background: #f8f9fa;
+            padding: var(--spacing-md);
+            border-radius: var(--radius-md);
+        }
+        
+        .bulk-actions {
+            display: flex;
+            gap: var(--spacing-sm);
+            align-items: center;
+        }
+        
+        .bulk-url-input {
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border: 1px solid #e1e5e9;
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            width: 300px;
+        }
+        
+        .url-stats {
+            display: flex;
+            gap: var(--spacing-md);
+        }
+        
+        .url-stat {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            color: var(--gray);
+            font-size: 0.9rem;
+        }
+        
+        .url-stat i {
+            color: var(--primary-red);
+        }
+        
+        .url-list-container {
+            border: 1px solid #e1e5e9;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+        
+        .url-list-header {
+            display: grid;
+            grid-template-columns: 100px 200px 1fr 100px;
+            background: var(--primary-red);
+            color: var(--white);
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        
+        .url-list-header > div {
+            padding: var(--spacing-sm);
+            border-right: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .url-list-header > div:last-child {
+            border-right: none;
+        }
+        
+        .url-list-body {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .url-row {
+            display: grid;
+            grid-template-columns: 100px 200px 1fr 100px;
+            border-bottom: 1px solid #e1e5e9;
+            font-size: 0.85rem;
+        }
+        
+        .url-row:hover {
+            background: #f8f9fa;
+        }
+        
+        .url-cell {
+            padding: var(--spacing-sm);
+            border-right: 1px solid #e1e5e9;
+            display: flex;
+            align-items: center;
+        }
+        
+        .url-cell:last-child {
+            border-right: none;
+        }
+        
+        .url-input {
+            width: 100%;
+            padding: 2px 4px;
+            border: 1px solid #e1e5e9;
+            border-radius: 2px;
+            font-size: 0.85rem;
+        }
+        
+        .url-input:focus {
+            border-color: var(--primary-red);
+            outline: none;
+        }
+        
+        .url-preview {
+            text-align: center;
+        }
+        
+        .qr-preview-btn {
+            padding: 2px 6px;
+            background: var(--primary-red);
+            color: var(--white);
+            border: none;
+            border-radius: 2px;
+            cursor: pointer;
+            font-size: 0.7rem;
+        }
+        
+        .qr-preview-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .modal-footer {
+            background: #f8f9fa;
+            padding: var(--spacing-lg);
+            border-top: 1px solid #e1e5e9;
+            display: flex;
+            justify-content: flex-end;
+            gap: var(--spacing-md);
+        }
+        
+        .btn {
+            padding: var(--spacing-xs) var(--spacing-md);
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+        }
+        
+        .btn.btn-secondary {
+            background: #6c757d;
+            color: var(--white);
+        }
+        
+        .btn.btn-success {
+            background: var(--success-green);
+            color: var(--white);
+        }
+        
+        .vehicle-info {
+            font-size: 0.8rem;
+            color: var(--gray);
+        }
+        
+        /* Enhanced CSV Spreadsheet Preview Styles */
+        .csv-preview-section {
+            margin: var(--spacing-xl) 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 2px solid transparent;
+            background-clip: padding-box;
+            border-radius: 25px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(34, 9, 1, 0.1);
+            position: relative;
+        }
+        
+        .csv-preview-section::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            padding: 2px;
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--gold) 50%, var(--primary-red) 100%);
+            border-radius: 25px;
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: xor;
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+        }
+        
+        .csv-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--spacing-xl);
+            background: linear-gradient(135deg, rgba(248, 249, 250, 0.95) 0%, rgba(255, 255, 255, 0.95) 100%);
+            border-bottom: 2px solid rgba(253, 65, 13, 0.1);
+            position: relative;
+        }
+        
+        .csv-header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 2px;
+            background: linear-gradient(90deg, var(--primary-red), var(--gold));
+            border-radius: 2px;
+        }
+        
+        .csv-header h4 {
+            margin: 0;
+            color: var(--primary-red);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+        
+        .csv-controls {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-md);
+        }
+        
+        .csv-stats {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            color: var(--gray);
+            font-size: 0.9rem;
+        }
+        
+        .csv-spreadsheet-container {
+            position: relative;
+            max-height: 500px;
+            overflow: auto;
+        }
+        
+        .spreadsheet-wrapper {
+            min-width: 100%;
+        }
+        
+        .csv-spreadsheet {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
+        }
+        
+        .csv-spreadsheet th {
+            background: linear-gradient(135deg, rgba(248, 249, 250, 0.95) 0%, rgba(255, 255, 255, 0.95) 100%);
+            color: var(--black);
+            font-weight: 700;
+            padding: var(--spacing-lg) var(--spacing-md);
+            text-align: left;
+            border-bottom: 2px solid rgba(253, 65, 13, 0.2);
+            border-right: 1px solid rgba(225, 229, 233, 0.5);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.85rem;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        
+        .csv-spreadsheet td {
+            padding: var(--spacing-md) var(--spacing-md);
+            border-bottom: 1px solid rgba(241, 243, 244, 0.8);
+            border-right: 1px solid rgba(241, 243, 244, 0.5);
+            vertical-align: top;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            transition: all 0.3s ease;
+        }
+        
+        .csv-spreadsheet tr:hover {
+            background: rgba(253, 65, 13, 0.05);
+            transform: scale(1.01);
+        }
+        
+        .csv-spreadsheet tr:hover td {
+            border-color: rgba(253, 65, 13, 0.2);
+        }
+        
+        .csv-spreadsheet tr.editing {
+            background: #fff3cd;
+        }
+        
+        .row-actions {
+            display: flex;
+            gap: var(--spacing-xs);
+            align-items: center;
+        }
+        
+        .row-edit-btn {
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--dark-red) 100%);
+            color: var(--white);
+            border: none;
+            padding: 8px 12px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 12px rgba(253, 65, 13, 0.3);
+        }
+        
+        .row-edit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(253, 65, 13, 0.4);
+        }
+        
+        .row-save-btn {
+            background: var(--success-green);
+            color: var(--white);
+            border: none;
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.75rem;
+        }
+        
+        .row-cancel-btn {
+            background: var(--gray);
+            color: var(--white);
+            border: none;
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.75rem;
+        }
+        
+        .cell-edit-input {
+            width: 100%;
+            padding: 2px 4px;
+            border: 1px solid var(--primary-red);
+            border-radius: 2px;
+            font-size: 0.85rem;
+            background: var(--white);
+        }
+        
+        .spreadsheet-placeholder {
+            text-align: center;
+            padding: var(--spacing-xl) var(--spacing-lg);
+            color: var(--gray);
+        }
+        
+        .spreadsheet-placeholder i {
+            font-size: 3rem;
+            margin-bottom: var(--spacing-md);
+            opacity: 0.5;
+        }
+        
+        .qr-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: var(--spacing-md);
+            padding: var(--spacing-lg);
+        }
+        
+        .qr-item {
+            text-align: center;
+            background: var(--white);
+            border: 1px solid #e1e5e9;
+            border-radius: var(--radius-sm);
+            padding: var(--spacing-sm);
+        }
+        
+        .qr-item img {
+            width: 80px;
+            height: 80px;
+            margin-bottom: var(--spacing-xs);
+        }
+        
+        .qr-label {
+            font-size: 0.75rem;
+            color: var(--gray);
+            word-break: break-all;
+        }
+        
+        /* Modern Glass Morphism Effects */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 20px 40px rgba(34, 9, 1, 0.1);
+        }
+        
+        .glass-border {
+            position: relative;
+            border: 2px solid transparent;
+            background-clip: padding-box;
+        }
+        
+        .glass-border::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            padding: 2px;
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--gold) 50%, var(--primary-red) 100%);
+            border-radius: inherit;
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: xor;
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+        }
+        
+        /* Enhanced Hover Effects */
+        .hover-lift {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .hover-lift:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 20px 40px rgba(34, 9, 1, 0.15);
+        }
+        
+        /* Gradient Text Effects */
+        .gradient-text {
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--gold) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(141, 141, 146, 0.1);
+            border-radius: 10px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, var(--primary-red) 0%, var(--dark-red) 100%);
+            border-radius: 10px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, var(--dark-red) 0%, var(--primary-red) 100%);
+        }
+    </style>
 </head>
 <body>
-    <div id="app" class="wizard-container">
+    <div class="wizard-container custom-scrollbar">
+        <!-- Wizard Header -->
         <div class="wizard-header">
-            <h1><i class="fas fa-qrcode"></i> QR Code Generation Wizard</h1>
-            <div class="version-badge">CLEAN BUILD - NO DATA EDITOR</div>
+            <div class="header-logo-section">
+                <img src="{{ url_for('static', filename='images/LS_GLYPH-PRIMARY.svg') }}" alt="LotSherpa" class="wizard-logo">
+                <div class="header-text">
+                    <h1 class="wizard-title">Order Processing System</h1>
+                    <p class="wizard-subtitle">Guided workflow for processing dealership orders</p>
+                </div>
+            </div>
         </div>
         
-        <div id="wizardContent" class="wizard-content">
-            <div class="loading-message">
-                <i class="fas fa-spinner fa-spin"></i>
-                <p>Initializing QR Generation System...</p>
-                <p class="small-text">Clean build - Data editor functionality completely removed</p>
+        <!-- Progress Indicator -->
+        <div class="wizard-progress" id="wizardProgress">
+            <div class="progress-step active" id="step-initialize">
+                <i class="fas fa-play"></i>
+                <span>Initialize</span>
+            </div>
+            <i class="fas fa-chevron-right progress-arrow"></i>
+            <div class="progress-step" id="step-cao">
+                <i class="fas fa-robot"></i>
+                <span>Auto Process</span>
+            </div>
+            <i class="fas fa-chevron-right progress-arrow"></i>
+            <div class="progress-step" id="step-list">
+                <i class="fas fa-list"></i>
+                <span>VIN Entry</span>
+            </div>
+            <i class="fas fa-chevron-right progress-arrow"></i>
+            <div class="progress-step" id="step-review">
+                <i class="fas fa-eye"></i>
+                <span>Review</span>
+            </div>
+            <i class="fas fa-chevron-right progress-arrow"></i>
+            <div class="progress-step" id="step-order-number">
+                <i class="fas fa-hashtag"></i>
+                <span>Order #</span>
+            </div>
+            <i class="fas fa-chevron-right progress-arrow"></i>
+            <div class="progress-step" id="step-complete">
+                <i class="fas fa-check"></i>
+                <span>Complete</span>
+            </div>
+        </div>
+        
+        <!-- Wizard Content -->
+        <div class="wizard-content">
+            <!-- Step 1: Initialize -->
+            <div class="wizard-step active" id="initializeStep">
+                <div class="step-header">
+                    <h2 class="step-title">Processing Queue Initialized</h2>
+                    <p class="step-description">Ready to process <span id="totalDealerships">0</span> dealerships from your queue</p>
+                </div>
+                
+                <div class="queue-summary" id="queueSummaryDisplay">
+                    <!-- Will be populated dynamically -->
+                </div>
+                
+                <div class="wizard-actions">
+                    <div></div>
+                    <button class="btn-wizard primary" onclick="wizard.startProcessing()">
+                        <i class="fas fa-play"></i>
+                        Start Processing
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Step 2: CAO Processing -->
+            <div class="wizard-step" id="caoStep">
+                <div class="step-header">
+                    <h2 class="step-title">Auto-Processing CAO Orders</h2>
+                    <p class="step-description">Automatic processing of CAO dealerships (no user input required)</p>
+                </div>
+                
+                <div class="processing-status" id="caoProcessingStatus">
+                    <!-- Will show CAO processing progress -->
+                </div>
+                
+                <!-- Testing Mode Option for CAO -->
+                <div class="testing-mode-option" style="margin: 20px 0; padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px;">
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                        <input type="checkbox" id="skipVinLogging" style="margin-right: 10px;">
+                        <strong>Testing Mode:</strong> Skip VIN logging (for testing without affecting production VIN logs)
+                    </label>
+                    <p style="margin: 10px 0 0 0; font-size: 0.9rem; color: #666;">
+                        When enabled, processed VINs will NOT be added to the VIN history. Use this for testing or when reprocessing orders.
+                    </p>
+                </div>
+                
+                <div class="wizard-actions">
+                    <button class="btn-wizard secondary" onclick="wizard.previousStep()">
+                        <i class="fas fa-arrow-left"></i>
+                        Back
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Step 3: List Processing -->
+            <div class="wizard-step" id="listStep">
+                <div class="step-header">
+                    <h2 class="step-title">VIN Entry for List Orders</h2>
+                    <p class="step-description">Enter VINs for list-based dealership orders</p>
+                </div>
+                
+                <div class="current-dealership" id="currentDealershipCard">
+                    <!-- Will be populated with current dealership info -->
+                </div>
+                
+                <div class="vin-input-section">
+                    <div class="vin-table-header">
+                        <h3><i class="fas fa-list-ol"></i> VIN Entry Table</h3>
+                        <div class="table-controls">
+                            <button class="btn btn-secondary btn-sm" onclick="wizard.addVinRow()">
+                                <i class="fas fa-plus"></i> Add Row
+                            </button>
+                            <button class="btn btn-secondary btn-sm" onclick="wizard.removeLastRow()">
+                                <i class="fas fa-minus"></i> Remove Row
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="vin-table-container">
+                        <table class="vin-entry-table" id="vinEntryTable">
+                            <thead>
+                                <tr>
+                                    <th style="width: 80px;">Row #</th>
+                                    <th>VIN # (17 Characters Required)</th>
+                                    <th style="width: 100px;">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="vinTableBody">
+                                <!-- Initial rows will be generated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="vin-help">
+                        <h4><i class="fas fa-info-circle"></i> VIN Entry Guidelines</h4>
+                        <ul>
+                            <li><strong>17 Characters Required:</strong> Each VIN must be exactly 17 characters</li>
+                            <li><strong>Real-time Validation:</strong> Invalid VINs will turn red immediately</li>
+                            <li><strong>No Spaces:</strong> VINs should not contain spaces or special characters</li>
+                            <li><strong>Visual Feedback:</strong> Green checkmark = valid, Red X = invalid</li>
+                        </ul>
+                        <div class="vin-summary" id="vinSummary">
+                            <span class="valid-count">Valid VINs: <strong id="validCount">0</strong></span>
+                            <span class="invalid-count">Invalid VINs: <strong id="invalidCount">0</strong></span>
+                            <span class="total-count">Total VINs: <strong id="totalCount">0</strong></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="wizard-actions">
+                    <button class="btn-wizard secondary" onclick="wizard.previousStep()">
+                        <i class="fas fa-arrow-left"></i>
+                        Back
+                    </button>
+                    <button class="btn-wizard primary" onclick="wizard.processListVins()">
+                        <i class="fas fa-arrow-right"></i>
+                        Process VINs
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Step 4: Review -->
+            <div class="wizard-step" id="reviewStep">
+                <div class="step-header">
+                    <h2 class="step-title">Review Order Data</h2>
+                    <p class="step-description">Review and verify the vehicle data before generating QR codes</p>
+                </div>
+                
+                <!-- CSV Preview Section -->
+                <div class="csv-preview-section">
+                    <div class="csv-header">
+                        <h4><i class="fas fa-table"></i> Vehicle Data Preview</h4>
+                        <div class="csv-controls">
+                            <div class="csv-stats">
+                                <i class="fas fa-car"></i>
+                                <span id="vehicleCount">0 vehicles</span>
+                            </div>
+                            <button class="btn btn-secondary" onclick="wizard.downloadCsv()">
+                                <i class="fas fa-download"></i>
+                                Download CSV
+                            </button>
+                        </div>
+                    </div>
+                    <div class="csv-spreadsheet-container custom-scrollbar">
+                        <div class="spreadsheet-placeholder" id="csvPlaceholder">
+                            <i class="fas fa-table"></i>
+                            <p>Loading vehicle data...</p>
+                        </div>
+                        <div class="spreadsheet-wrapper">
+                            <table class="csv-spreadsheet hover-lift" id="csvTable" style="display: none;">
+                                <!-- Will be populated with CSV data -->
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="wizard-actions">
+                    <button class="btn-wizard secondary" onclick="wizard.previousStep()">
+                        <i class="fas fa-arrow-left"></i>
+                        Back
+                    </button>
+                    <button class="btn-wizard primary" onclick="wizard.proceedToQRGeneration()">
+                        <i class="fas fa-qrcode"></i>
+                        Generate QR Codes
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Step 5: Order Number Input -->
+            <div class="wizard-step" id="orderNumberStep">
+                <div class="step-header">
+                    <h2 class="step-title">Enter Order Number</h2>
+                    <p class="step-description">Provide the order number for file organization and tracking</p>
+                </div>
+                
+                <div class="order-input-section">
+                    <div class="input-group" style="max-width: 400px; margin: 0 auto;">
+                        <label for="orderNumberInput" style="display: block; margin-bottom: 10px; font-weight: 600; color: var(--black);">Order Number:</label>
+                        <input type="text" id="orderNumberInput" style="width: 100%; padding: 15px; border: 2px solid #e1e5e9; border-radius: 8px; font-size: 1.1rem; text-align: center;" placeholder="Enter order number...">
+                    </div>
+                    
+                    <div class="order-help" style="margin-top: 20px; background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 8px; padding: 15px; max-width: 500px; margin-left: auto; margin-right: auto;">
+                        <h4><i class="fas fa-info-circle"></i> Order Number Guidelines</h4>
+                        <ul>
+                            <li>Use a unique identifier for this order</li>
+                            <li>This will be used in file names and folder organization</li>
+                            <li>Recommended format: ABC123 or similar</li>
+                            <li>Avoid special characters or spaces</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="wizard-actions">
+                    <button class="btn-wizard secondary" onclick="wizard.previousStep()">
+                        <i class="fas fa-arrow-left"></i>
+                        Back
+                    </button>
+                    <button class="btn-wizard primary" onclick="wizard.generateFinalOutput()">
+                        <i class="fas fa-check"></i>
+                        Complete Order
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Step 6: Complete -->
+            <div class="wizard-step" id="completeStep">
+                <div class="completion-summary">
+                    <div class="completion-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <h2 class="completion-title">Order Processing Complete!</h2>
+                    <p>Your order has been processed successfully. All files are ready for download.</p>
+                    
+                    <div class="completion-stats" id="completionStats">
+                        <!-- Will be populated with processing statistics -->
+                    </div>
+                    
+                    <div class="output-preview" id="outputPreview">
+                        <!-- Will be populated with file links -->
+                    </div>
+                </div>
+                
+                <div class="wizard-actions">
+                    <button class="btn-wizard secondary" onclick="wizard.viewOrderFolder()">
+                        <i class="fas fa-folder-open"></i>
+                        View Folder
+                    </button>
+                    <button class="btn-wizard primary" onclick="wizard.startNewOrder()">
+                        <i class="fas fa-plus"></i>
+                        New Order
+                    </button>
+                </div>
             </div>
         </div>
     </div>
-
-    <!-- Load only VERSION 2.1 JavaScript with disabled data editor -->
-    <script src="{{ url_for('static', filename='js/order_wizard.js') }}?v={{ v or range(1000, 9999) | random }}"></script>
+    
+    <!-- Load JavaScript -->
+    <script src="{{ url_for('static', filename='js/order_wizard.js') }}?v={{ range(1000, 9999) | random }}"></script>
     <script>
-        console.log('🆕 COMPLETELY FRESH QR WIZARD TEMPLATE');
-        console.log('🎯 NO VERSION 2.0 CODE POSSIBLE');
-        console.log('✅ Only QR Generation → Order Number → VIN Log workflow');
-        
-        // Ensure page is ready
+        // Initialize wizard when page loads
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('📄 Clean template loaded successfully');
-            console.log('🚫 Zero possibility of data editor button');
-            
-            // Remove the loading message once wizard initializes
-            setTimeout(() => {
-                const loadingMsg = document.querySelector('.loading-message');
-                if (loadingMsg && window.wizard) {
-                    loadingMsg.style.display = 'none';
-                }
-            }, 1000);
+            console.log('🚀 Initializing Order Processing Wizard...');
+            window.wizard = new OrderWizard();
+            console.log('✅ Order Processing Wizard initialized successfully');
         });
     </script>
 </body>

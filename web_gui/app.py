@@ -40,6 +40,10 @@ try:
     from order_processing_workflow import OrderProcessingWorkflow
     print("OK OrderProcessingWorkflow imported successfully")
     
+    print("Attempting to import CorrectOrderProcessor...")
+    from correct_order_processing import CorrectOrderProcessor
+    print("OK CorrectOrderProcessor imported successfully")
+    
     print("Attempting to import RealScraperIntegration...")
     from real_scraper_integration import RealScraperIntegration
     print("OK RealScraperIntegration imported successfully")
@@ -113,6 +117,7 @@ class ScraperController:
             configs = db_manager.execute_query("""
                 SELECT name, filtering_rules, output_rules, qr_output_path, is_active, updated_at
                 FROM dealership_configs 
+                WHERE is_active = true
                 ORDER BY name
             """)
             
@@ -377,8 +382,9 @@ class ScraperController:
 # Global scraper controller
 scraper_controller = ScraperController(socketio)
 
-# Global order processor - using the working workflow logic
-order_processor = OrderProcessingWorkflow()
+# Global order processor - using the CORRECT processor with updated filtering logic
+from correct_order_processing import CorrectOrderProcessor
+order_processor = CorrectOrderProcessor()
 
 # Global queue manager
 queue_manager = OrderQueueManager()
@@ -785,11 +791,9 @@ def process_cao_orders():
         
         results = []
         for dealership in dealerships:
-            # Use shortcut_pack as default template - can be made configurable
-            template_type = data.get('template_type', 'shortcut_pack')
-            # Convert to vehicle_types list and use test_mode instead of skip_vin_logging
-            vehicle_types = vehicle_types if vehicle_types else ['new', 'used', 'cpo']
-            result = order_processor.process_cao_order(dealership, vehicle_types, test_mode=skip_vin_logging)
+            # CorrectOrderProcessor uses template_type and skip_vin_logging parameters
+            # The filtering is handled automatically using dealership configs in the database
+            result = order_processor.process_cao_order(dealership, template_type="shortcut_pack", skip_vin_logging=skip_vin_logging)
             
             # Transform result for web interface compatibility
             if result.get('success') and result.get('csv_file'):
@@ -1637,6 +1641,7 @@ def search_vehicle_data():
                     SELECT 
                         r.vin, r.stock, r.location, r.year, r.make, r.model,
                         r.trim, r.ext_color as exterior_color, r.price, r.type as vehicle_type,
+                        r.normalized_type, r.on_lot_status,
                         r.import_timestamp, 'raw' as data_source,
                         COUNT(*) OVER (PARTITION BY r.vin) as scrape_count,
                         MIN(r.import_timestamp) OVER (PARTITION BY r.vin) as first_scraped,
@@ -1644,7 +1649,8 @@ def search_vehicle_data():
                     FROM raw_vehicle_data r
                 )
                 SELECT vin, stock, location, year, make, model, trim, 
-                       exterior_color, price, vehicle_type, import_timestamp, data_source, scrape_count, first_scraped
+                       exterior_color, price, vehicle_type, normalized_type, on_lot_status,
+                       import_timestamp, data_source, scrape_count, first_scraped
                 FROM ranked_vehicles
                 WHERE rn = 1
             """
@@ -1672,12 +1678,14 @@ def search_vehicle_data():
                     SELECT 
                         r.vin, r.stock, r.location, r.year, r.make, r.model,
                         r.trim, r.ext_color as exterior_color, r.price, r.type as vehicle_type,
+                        r.normalized_type, r.on_lot_status,
                         r.import_timestamp, 'raw' as data_source, r.id
                     FROM raw_vehicle_data r
                     UNION ALL
                     SELECT 
                         n.vin, n.stock, n.location, n.year, n.make, n.model,
                         n.trim, '' as exterior_color, n.price, n.vehicle_condition as vehicle_type,
+                        '' as normalized_type, '' as on_lot_status,
                         r.import_timestamp, 'normalized' as data_source, n.id
                     FROM normalized_vehicle_data n
                     JOIN raw_vehicle_data r ON n.raw_data_id = r.id
@@ -1685,14 +1693,16 @@ def search_vehicle_data():
                 ranked_vehicles AS (
                     SELECT 
                         vin, stock, location, year, make, model, trim, 
-                        exterior_color, price, vehicle_type, import_timestamp, data_source,
+                        exterior_color, price, vehicle_type, normalized_type, on_lot_status,
+                        import_timestamp, data_source,
                         COUNT(*) OVER (PARTITION BY vin) as scrape_count,
                         MIN(import_timestamp) OVER (PARTITION BY vin) as first_scraped,
                         ROW_NUMBER() OVER (PARTITION BY vin ORDER BY import_timestamp DESC, id DESC) as rn
                     FROM all_vehicles
                 )
                 SELECT vin, stock, location, year, make, model, trim, 
-                       exterior_color, price, vehicle_type, import_timestamp, data_source, scrape_count, first_scraped
+                       exterior_color, price, vehicle_type, normalized_type, on_lot_status,
+                       import_timestamp, data_source, scrape_count, first_scraped
                 FROM ranked_vehicles
                 WHERE rn = 1
             """
@@ -2772,10 +2782,10 @@ def process_csv_import():
             skip_vin_logging = False  # Default to false, let the wizard control this
             
             if order_type == 'cao':
-                # CAO processing - compare against VIN history
-                logger.info(f"Processing CAO order for {dealership_name} (skip_vin_logging: {skip_vin_logging})")
-                # Use working vehicle types logic (new and used, matching our successful command line test)
-                result = order_processor.process_cao_order(dealership_name, ['new', 'used'], test_mode=skip_vin_logging)
+                # CAO processing - compare against VIN history with dealership-specific filtering
+                logger.info(f"Processing CAO order for {dealership_name} (test_mode: {skip_vin_logging})")
+                # Use CorrectOrderProcessor with dealership-specific filtering
+                result = order_processor.process_cao_order(dealership_name, template_type="shortcut_pack", skip_vin_logging=skip_vin_logging)
             else:
                 # LIST processing - process specific VIN list
                 logger.info(f"Processing LIST order for {dealership_name} with {len(imported_vins)} VINs (skip_vin_logging: {skip_vin_logging})")
@@ -3945,11 +3955,37 @@ def search_vehicle_direct():
 
 @app.route('/api/dealership-vin-logs')
 def get_dealership_vin_logs():
-    """Get list of all dealership VIN log tables"""
+    """Get list of all dealership VIN log tables with last updated timestamps"""
     try:
         from scraper_import_manager import import_manager
         
         vin_logs = import_manager.get_dealership_vin_logs()
+        
+        # Add last updated timestamp for each dealership
+        for log in vin_logs:
+            try:
+                # Use the table name directly from import_manager instead of reconstructing it
+                table_name = log['table_name']
+                
+                # Get last updated timestamp from the table
+                timestamp_query = f"""
+                    SELECT MAX(processed_date) as last_updated,
+                           COUNT(*) as total_vins
+                    FROM {table_name}
+                """
+                
+                result = db_manager.execute_query(timestamp_query)
+                if result and result[0]['last_updated']:
+                    log['last_updated'] = result[0]['last_updated'].isoformat() if hasattr(result[0]['last_updated'], 'isoformat') else str(result[0]['last_updated'])
+                    log['total_vins'] = result[0]['total_vins']
+                else:
+                    log['last_updated'] = None
+                    log['total_vins'] = 0
+                    
+            except Exception as e:
+                logger.warning(f"Could not get timestamp for {log['dealership_name']} (table: {log.get('table_name', 'unknown')}): {e}")
+                log['last_updated'] = None
+                log['total_vins'] = 0
         
         return jsonify({
             'success': True,
@@ -3987,15 +4023,15 @@ def get_dealership_vin_history(dealership_name):
         if date_to:
             history = [h for h in history if str(h['processed_date']) <= date_to]
         
-        # Calculate stats
-        unique_orders = list(set([h.get('order_number', '') for h in history if h.get('order_number', '')]))
+        # Calculate stats with null checking
+        unique_orders = list(set([h.get('order_number', '') for h in history if h.get('order_number')]))
         stats = {
             'total_vins': len(history),
             'unique_orders': len(unique_orders),
             'first_date': min([h['processed_date'] for h in history]) if history else None,
             'last_date': max([h['processed_date'] for h in history]) if history else None,
-            'cao_count': len([h for h in history if h.get('order_number', '').startswith('CAO') or h.get('order_number', '').find('_CAO_') > 0]),
-            'list_count': len([h for h in history if h.get('order_number', '').startswith('LIST') or h.get('order_number', '').find('_LIST_') > 0])
+            'cao_count': len([h for h in history if h.get('order_number') and (h.get('order_number', '').startswith('CAO') or h.get('order_number', '').find('_CAO_') > 0)]),
+            'list_count': len([h for h in history if h.get('order_number') and (h.get('order_number', '').startswith('LIST') or h.get('order_number', '').find('_LIST_') > 0)])
         }
         
         # Paginate

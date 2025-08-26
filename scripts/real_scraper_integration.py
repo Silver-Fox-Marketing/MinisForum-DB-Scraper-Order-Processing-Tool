@@ -35,6 +35,7 @@ sys.path.insert(0, str(scrapers_path))
 
 from database_connection import db_manager
 from realtime_scraper_progress import ScraperProgressReporter
+from scraper_data_normalizer import normalizer
 
 class RealScraperIntegration:
     """Integration system for real working scrapers"""
@@ -315,6 +316,12 @@ class RealScraperIntegration:
                     )
                     
                     if existing:
+                        # Apply normalization
+                        raw_type = vehicle.get('condition', '') or vehicle.get('type', '')
+                        raw_status = vehicle.get('status', '') or vehicle.get('condition', '')
+                        normalized_type = normalizer.normalize_vehicle_type(raw_type)
+                        lot_status = normalizer.normalize_lot_status(raw_status)
+                        
                         # Update existing vehicle
                         db_manager.execute_query("""
                             UPDATE raw_vehicle_data SET
@@ -337,6 +344,8 @@ class RealScraperIntegration:
                                 country = %s,
                                 location = %s,
                                 vehicle_url = %s,
+                                normalized_type = %s,
+                                on_lot_status = %s,
                                 import_timestamp = CURRENT_TIMESTAMP
                             WHERE vin = %s
                         """, (
@@ -359,10 +368,18 @@ class RealScraperIntegration:
                             vehicle.get('country', ''),
                             vehicle.get('location', ''),
                             vehicle.get('url', ''),
+                            normalized_type,
+                            lot_status,
                             vehicle['vin']
                         ))
                         updated_count += 1
                     else:
+                        # Apply normalization
+                        raw_type = vehicle.get('condition', '') or vehicle.get('type', '')
+                        raw_status = vehicle.get('status', '') or vehicle.get('condition', '')
+                        normalized_type = normalizer.normalize_vehicle_type(raw_type)
+                        lot_status = normalizer.normalize_lot_status(raw_status)
+                        
                         # Insert new vehicle
                         db_manager.execute_query("""
                             INSERT INTO raw_vehicle_data (
@@ -370,10 +387,10 @@ class RealScraperIntegration:
                                 ext_color, status, price, msrp,
                                 body_style, fuel_type, street_address, locality,
                                 postal_code, region, country, location, vehicle_url,
-                                import_timestamp
+                                normalized_type, on_lot_status, import_timestamp
                             ) VALUES (
                                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                                %s, %s, %s, %s, %s, CURRENT_TIMESTAMP
+                                %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP
                             )
                         """, (
                             vehicle['vin'],
@@ -395,7 +412,9 @@ class RealScraperIntegration:
                             vehicle.get('region', ''),
                             vehicle.get('country', ''),
                             vehicle.get('location', ''),
-                            vehicle.get('url', '')
+                            vehicle.get('url', ''),
+                            normalized_type,
+                            lot_status
                         ))
                         imported_count += 1
                         

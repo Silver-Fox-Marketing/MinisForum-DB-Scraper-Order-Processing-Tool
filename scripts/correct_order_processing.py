@@ -25,7 +25,9 @@ class CorrectOrderProcessor:
     """Order processing that matches our exact reference logic"""
     
     def __init__(self):
-        self.output_base = Path("orders")
+        # Use absolute path to main project orders folder
+        project_root = Path(__file__).parent.parent
+        self.output_base = project_root / "orders"
         self.output_base.mkdir(exist_ok=True)
         
         # Map dealership config names to actual data location names
@@ -33,7 +35,8 @@ class CorrectOrderProcessor:
             'Dave Sinclair Lincoln South': 'Dave Sinclair Lincoln',
             'BMW of West St. Louis': 'BMW of West St. Louis', 
             'Columbia Honda': 'Columbia Honda',
-            'South County Dodge Chrysler Jeep RAM': 'South County Dodge Chrysler Jeep RAM'
+            'South County Dodge Chrysler Jeep RAM': 'South County Dodge Chrysler Jeep RAM',
+            'South County DCJR': 'South County Dodge Chrysler Jeep RAM'
         }
         
         # Reverse mapping for VIN history lookups
@@ -116,16 +119,8 @@ class CorrectOrderProcessor:
             # Step 5: Generate Adobe CSV in EXACT format we need
             csv_path = self._generate_adobe_csv(new_vehicles, dealership_name, template_type, order_folder, qr_paths)
             
-            # Step 5.5: Generate Billing CSV for tracking
-            # For CAO orders, ordered = current inventory, produced = new vehicles actually processed
-            order_date = datetime.now().strftime('%#m.%#d') if os.name == 'nt' else datetime.now().strftime('%-m.%-d')
-            billing_csv_path = self._generate_billing_csv(
-                ordered_vehicles=current_vehicles,  # All vehicles in current inventory
-                produced_vehicles=new_vehicles,      # Only new vehicles we're processing
-                dealership_name=dealership_name,
-                order_date=order_date,
-                output_folder=order_folder
-            )
+            # Step 5.5: Generate billing sheet CSV automatically after QR codes
+            billing_csv_path = self._generate_billing_sheet_csv(new_vehicles, dealership_name, order_folder, timestamp)
             
             # Step 6: CRITICAL - Log processed vehicle VINs to history database (unless testing)
             if skip_vin_logging:
@@ -143,9 +138,9 @@ class CorrectOrderProcessor:
                 'qr_codes_generated': len(qr_paths),
                 'qr_folder': str(qr_folder),
                 'csv_file': str(csv_path),
-                'billing_csv': str(billing_csv_path),
                 'download_csv': f"/download_csv/{csv_path.name}",
-                'download_billing': f"/download_csv/{billing_csv_path.name}",
+                'billing_csv_file': str(billing_csv_path),
+                'download_billing_csv': f"/download_csv/{billing_csv_path.name}",
                 'timestamp': timestamp,
                 'vins_logged_to_history': vin_logging_result['vins_logged'],
                 'duplicate_vins_skipped': vin_logging_result['duplicates_skipped'],
@@ -203,16 +198,8 @@ class CorrectOrderProcessor:
             # Generate Adobe CSV - use filtered vehicles
             csv_path = self._generate_adobe_csv(filtered_vehicles, dealership_name, template_type, order_folder, qr_paths)
             
-            # Generate Billing CSV for tracking
-            # For LIST orders, ordered = requested VINs, produced = filtered vehicles actually processed
-            order_date = datetime.now().strftime('%#m.%#d') if os.name == 'nt' else datetime.now().strftime('%-m.%-d')
-            billing_csv_path = self._generate_billing_csv(
-                ordered_vehicles=vehicles,          # All vehicles requested (from VIN list)
-                produced_vehicles=filtered_vehicles, # Vehicles that passed filters and were processed
-                dealership_name=dealership_name,
-                order_date=order_date,
-                output_folder=order_folder
-            )
+            # Generate billing sheet CSV automatically after QR codes
+            billing_csv_path = self._generate_billing_sheet_csv(filtered_vehicles, dealership_name, order_folder, timestamp)
             
             # CRITICAL: Log processed vehicle VINs to history database for future order accuracy - use filtered vehicles (unless testing)
             if skip_vin_logging:
@@ -231,9 +218,9 @@ class CorrectOrderProcessor:
                 'qr_codes_generated': len(qr_paths),
                 'qr_folder': str(qr_folder),
                 'csv_file': str(csv_path),
-                'billing_csv': str(billing_csv_path),
                 'download_csv': f"/download_csv/{csv_path.name}",
-                'download_billing': f"/download_csv/{billing_csv_path.name}",
+                'billing_csv_file': str(billing_csv_path),
+                'download_billing_csv': f"/download_csv/{billing_csv_path.name}",
                 'timestamp': timestamp,
                 'vins_logged_to_history': vin_logging_result['vins_logged'],
                 'duplicate_vins_skipped': vin_logging_result['duplicates_skipped'],
@@ -349,21 +336,38 @@ class CorrectOrderProcessor:
                 filtering_rules = json.loads(filtering_rules)
         
         # Build query with filters - use actual location name for data lookup
-        query = "SELECT * FROM raw_vehicle_data WHERE location = %s"
+        # CRITICAL: Only process vehicles from the ACTIVE scraper import that are physically on the lot
+        # Use normalized_vehicle_data for proper vehicle type filtering (po, cpo, new instead of raw values)
+        query = """
+            SELECT nvd.* FROM normalized_vehicle_data nvd
+            WHERE nvd.location = %s 
+            AND nvd.on_lot_status = 'on lot'
+        """
         params = [actual_location_name]
         
-        # Apply vehicle type filter
-        vehicle_types = filtering_rules.get('vehicle_types', ['new', 'used', 'certified'])
+        # Apply vehicle type filter - NORMALIZED DATA APPROACH
+        vehicle_types = filtering_rules.get('allowed_vehicle_types', filtering_rules.get('vehicle_types', ['new', 'used']))
         if vehicle_types and 'all' not in vehicle_types:
-            type_conditions = []
+            # Build conditions for normalized vehicle_condition values
+            allowed_conditions = []
             for vtype in vehicle_types:
-                if vtype == 'certified':
-                    type_conditions.append("(type ILIKE '%certified%' OR type ILIKE '%cpo%')")
-                else:
-                    type_conditions.append("type ILIKE %s")
-                    params.append(f'%{vtype}%')
-            if type_conditions:
-                query += f" AND ({' OR '.join(type_conditions)})"
+                if vtype == 'new':
+                    allowed_conditions.append('new')
+                elif vtype == 'used':
+                    # UMBRELLA TERM: "used" includes both po (Pre-Owned) AND cpo (Certified Pre-Owned)
+                    allowed_conditions.extend(['po', 'cpo'])
+                elif vtype in ['certified', 'cpo']:
+                    allowed_conditions.append('cpo')
+                elif vtype in ['po', 'pre-owned']:
+                    allowed_conditions.append('po')
+            
+            if allowed_conditions:
+                # Remove duplicates
+                allowed_conditions = list(set(allowed_conditions))
+                # Create IN clause for exact matches on normalized values
+                placeholders = ', '.join(['%s'] * len(allowed_conditions))
+                query += f" AND nvd.vehicle_condition IN ({placeholders})"
+                params.extend(allowed_conditions)
         
         # Apply year filter
         min_year = filtering_rules.get('min_year')
@@ -371,36 +375,38 @@ class CorrectOrderProcessor:
             query += " AND year >= %s"
             params.append(min_year)
         
-        # Apply require_status filter (highest priority)
+        # Apply require_status filter (highest priority - checks the 'type' column)
         require_statuses = filtering_rules.get('require_status')
         if require_statuses:
             if isinstance(require_statuses, list):
                 status_conditions = []
                 for status in require_statuses:
-                    status_conditions.append("status = %s")
-                    params.append(status)
+                    status_conditions.append("rvd.type ILIKE %s")
+                    params.append(f"%{status}%")
                 query += f" AND ({' OR '.join(status_conditions)})"
             else:
-                query += " AND status = %s"
-                params.append(require_statuses)
+                query += " AND rvd.type ILIKE %s"
+                params.append(f"%{require_statuses}%")
         
-        # Apply exclude_status filter
+        # Apply exclude_status filter (checks the 'type' column for raw status values)
         exclude_statuses = filtering_rules.get('exclude_status')
         if exclude_statuses:
             if isinstance(exclude_statuses, list):
                 for status in exclude_statuses:
-                    query += " AND status != %s"
-                    params.append(status)
+                    # Use ILIKE for case-insensitive matching against the 'type' column
+                    query += " AND rvd.type NOT ILIKE %s"
+                    params.append(f"%{status}%")
             else:
-                query += " AND status != %s"
-                params.append(exclude_statuses)
+                query += " AND rvd.type NOT ILIKE %s"
+                params.append(f"%{exclude_statuses}%")
         
-        # Apply stock number filter
+        # Apply stock number filter (exclude missing and asterisk placeholders)
         if filtering_rules.get('exclude_missing_stock', True):
-            query += " AND stock IS NOT NULL AND stock != ''"
+            query += " AND stock IS NOT NULL AND stock != %s AND stock != %s"
+            params.extend(['', '*'])
             
-        # Apply price filter  
-        if filtering_rules.get('exclude_missing_price', True):
+        # Apply price filter - ONLY for Glendale by default
+        if filtering_rules.get('exclude_missing_price', False):
             query += " AND price IS NOT NULL AND price > 0"
         
         query += " ORDER BY import_timestamp DESC"
@@ -409,14 +415,24 @@ class CorrectOrderProcessor:
         logger.info(f"Params: {params}")
         
         try:
-            result = db_manager.execute_query(query, tuple(params))
+            # Ensure params is properly formatted as tuple for database query
+            query_params = tuple(params) if params else None
+            logger.info(f"Final query params as tuple: {query_params}")
+            result = db_manager.execute_query(query, query_params)
             logger.info(f"Query returned {len(result)} vehicles")
             return result
         except Exception as e:
             logger.error(f"Database query failed: {e}")
             logger.error("Attempting simplified query without problematic constraints...")
             # Try a simplified query without filtering if the main query fails
-            simplified_query = "SELECT * FROM raw_vehicle_data WHERE location = %s ORDER BY import_timestamp DESC"
+            # CRITICAL: Still only process vehicles from ACTIVE import that are on the lot
+            # Use normalized_vehicle_data for consistent data structure
+            simplified_query = """
+                SELECT nvd.* FROM normalized_vehicle_data nvd
+                WHERE nvd.location = %s 
+                AND nvd.on_lot_status = 'on lot'
+                ORDER BY nvd.updated_at DESC
+            """
             try:
                 result = db_manager.execute_query(simplified_query, (actual_location_name,))
                 logger.info(f"Simplified query returned {len(result)} vehicles")
@@ -443,8 +459,8 @@ class CorrectOrderProcessor:
             if isinstance(filtering_rules, str):
                 filtering_rules = json.loads(filtering_rules)
         
-        # Get allowed vehicle types
-        vehicle_types = filtering_rules.get('vehicle_types', ['new', 'used', 'certified'])
+        # Get allowed vehicle types using the new 'allowed_vehicle_types' field
+        vehicle_types = filtering_rules.get('allowed_vehicle_types', filtering_rules.get('vehicle_types', ['new', 'used']))
         
         # Filter vehicles based on type
         filtered_vehicles = []
@@ -457,8 +473,19 @@ class CorrectOrderProcessor:
                 type_matches = True
             else:
                 for allowed_type in vehicle_types:
-                    if allowed_type == 'certified':
-                        if 'certified' in vehicle_type or 'cpo' in vehicle_type:
+                    if allowed_type == 'used':
+                        # CRITICAL: "used" is UMBRELLA term for Pre-Owned AND Certified Pre-Owned
+                        if any(keyword in vehicle_type for keyword in ['used', 'pre-owned', 'pre owned', 'certified', 'cpo']):
+                            type_matches = True
+                            break
+                    elif allowed_type in ['certified', 'cpo']:
+                        # Handle both 'certified' and 'cpo' config values  
+                        if any(keyword in vehicle_type for keyword in ['certified', 'cpo']):
+                            type_matches = True
+                            break
+                    elif allowed_type in ['po', 'pre-owned']:
+                        # Handle pre-owned variants
+                        if any(keyword in vehicle_type for keyword in ['pre-owned', 'pre owned']):
                             type_matches = True
                             break
                     elif allowed_type in vehicle_type:
@@ -519,90 +546,6 @@ class CorrectOrderProcessor:
         logger.info(f"Previous order had {len(previous_vin_set)} VINs, current has {len(current_vin_set)}, {len(new_vins)} are NEW")
         
         return new_vins
-    
-    def _generate_billing_csv(self, ordered_vehicles: List[Dict], produced_vehicles: List[Dict], 
-                              dealership_name: str, order_date: str, output_folder: Path) -> Path:
-        """Generate billing CSV in the format required for billing tracking
-        
-        Format includes:
-        - Summary statistics (left section)
-        - ORDERED vs PRODUCED VIN lists (right section)
-        - Duplicate tracking
-        - New vs Used breakdown
-        """
-        import csv
-        from collections import Counter
-        
-        # Clean dealership name for filename
-        clean_name = dealership_name.replace(' ', '_').replace('.', '').replace("'", '')
-        
-        # Create filename with SCP (Shortcut Pack) notation
-        # Format: DEALERSHIP_SCP_M.DD - BILLING.csv
-        date_str = order_date if order_date else datetime.now().strftime('%-m.%-d') if os.name != 'nt' else datetime.now().strftime('%#m.%#d')
-        filename = f"{clean_name.upper()}_SCP_{date_str} - BILLING.csv"
-        billing_path = output_folder / filename
-        
-        # Extract VINs
-        ordered_vins = [v.get('vin', '') for v in ordered_vehicles]
-        produced_vins = [v.get('vin', '') for v in produced_vehicles]
-        
-        # Count vehicle types
-        new_count = sum(1 for v in produced_vehicles if self._get_type_prefix(v.get('type', '')) == 'NEW')
-        used_count = sum(1 for v in produced_vehicles if self._get_type_prefix(v.get('type', '')) in ['PO', 'CPO'])
-        
-        # Find duplicates
-        ordered_counter = Counter(ordered_vins)
-        produced_counter = Counter(produced_vins)
-        ordered_duplicates = [vin for vin, count in ordered_counter.items() if count > 1]
-        produced_duplicates = [vin for vin, count in produced_counter.items() if count > 1]
-        
-        # Count duplicates by type
-        new_duplicates = sum(1 for v in produced_vehicles 
-                            if v.get('vin') in produced_duplicates 
-                            and self._get_type_prefix(v.get('type', '')) == 'NEW')
-        used_duplicates = sum(1 for v in produced_vehicles 
-                             if v.get('vin') in produced_duplicates 
-                             and self._get_type_prefix(v.get('type', '')) in ['PO', 'CPO'])
-        
-        # Write the billing CSV
-        with open(billing_path, 'w', newline='', encoding='utf-8') as csvfile:
-            writer = csv.writer(csvfile)
-            
-            # Write headers and summary section with VIN lists side by side
-            # Row 1: Headers
-            writer.writerow(['Totals:', '', '', 'DUPLICATES', '', '', '', 'ORDERED', 'PRODUCED'])
-            
-            # Rows 2-9: Statistics with VINs starting from row 2
-            rows_data = [
-                ['Total Ordered', len(ordered_vins), '', '', '', '', ''],
-                ['Total Produced:', len(produced_vins), '', '', '', '', ''],
-                ['Total New:', new_count, '', '', '', '', ''],
-                ['Total Used:', used_count, '', '', '', '', ''],
-                ['', '', '', '', '', '', ''],
-                ['Used Duplicates:', used_duplicates, '', '', '', '', ''],
-                ['New Duplicates', new_duplicates, '', '', '', '', ''],
-                ['Duplicates:', len(produced_duplicates), '', '', '', '', '']
-            ]
-            
-            # Add VINs to the rows (starting from row 2, index 0)
-            for i in range(max(len(ordered_vins), len(produced_vins))):
-                if i < len(rows_data):
-                    # Add to existing summary rows
-                    rows_data[i].append(ordered_vins[i] if i < len(ordered_vins) else '')
-                    rows_data[i].append(produced_vins[i] if i < len(produced_vins) else '')
-                else:
-                    # Add new rows for remaining VINs
-                    row = ['', '', '', '', '', '', '', 
-                           ordered_vins[i] if i < len(ordered_vins) else '',
-                           produced_vins[i] if i < len(produced_vins) else '']
-                    rows_data.append(row)
-            
-            # Write all rows
-            for row in rows_data:
-                writer.writerow(row)
-        
-        logger.info(f"Generated billing CSV: {billing_path}")
-        return billing_path
     
     def _generate_qr_codes(self, vehicles: List[Dict], dealership_name: str, output_folder: Path) -> List[str]:
         """Generate QR codes for vehicle-specific information"""
@@ -859,6 +802,86 @@ class CorrectOrderProcessor:
         else:
             return 'USED'
     
+    def _generate_billing_sheet_csv(self, vehicles: List[Dict], dealership_name: str, output_folder: Path, timestamp: str) -> Path:
+        """Generate billing sheet CSV automatically after QR codes - matches exact format from examples"""
+        
+        # File naming pattern: [DEALERSHIP NAME] [DATE] - BILLING.csv
+        clean_name = dealership_name.upper().replace(' ', '')
+        date_str = datetime.now().strftime('%m-%d')  # Format: 8-19
+        filename = f"{clean_name}_{date_str} - BILLING.csv"
+        billing_path = output_folder / filename
+        
+        logger.info(f"Generating billing sheet CSV: {billing_path}")
+        
+        # Count vehicle types
+        new_count = 0
+        used_count = 0
+        cpo_count = 0
+        
+        vehicle_lines = []
+        vin_list = []
+        
+        for vehicle in vehicles:
+            year = vehicle.get('year', '')
+            make = vehicle.get('make', '')
+            model = vehicle.get('model', '')
+            stock = vehicle.get('stock', '')
+            vin = vehicle.get('vin', '')
+            vtype = vehicle.get('type', '').lower()
+            
+            # Determine vehicle type for billing
+            if 'new' in vtype:
+                billing_type = 'New'
+                new_count += 1
+            elif 'certified' in vtype or 'cpo' in vtype or 'pre-owned' in vtype:
+                billing_type = 'Pre-Owned'
+                cpo_count += 1
+            else:
+                billing_type = 'Used'
+                used_count += 1
+            
+            # Format vehicle line: "Year Make Model - Stock - VIN"
+            vehicle_line = f"{year} {make} {model} - {stock} - {vin}"
+            vehicle_lines.append([vehicle_line, billing_type])
+            vin_list.append(vin)
+        
+        total_vehicles = len(vehicles)
+        
+        # Write billing CSV in exact format from examples
+        with open(billing_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            
+            # Header row - matches format from examples
+            writer.writerow(['Printed Vehicles:', '', 'TOTALS:', '', 'VINLOG:', '', 'Duplicates:'])
+            
+            # Vehicle lines with summary statistics in right columns
+            for i, (vehicle_line, vehicle_type) in enumerate(vehicle_lines):
+                if i == 0:
+                    # First row includes New count
+                    writer.writerow([vehicle_line, vehicle_type, 'New:', new_count, vin_list[i] if i < len(vin_list) else '', '', 'No Dupes'])
+                elif i == 1:
+                    # Second row includes Used count
+                    writer.writerow([vehicle_line, vehicle_type, 'Used:', used_count, vin_list[i] if i < len(vin_list) else '', '', ''])
+                elif i == 2:
+                    # Third row includes Pre-Owned count
+                    writer.writerow([vehicle_line, vehicle_type, 'Pre-Owned:', cpo_count, vin_list[i] if i < len(vin_list) else '', '', ''])
+                elif i == 3:
+                    # Fourth row includes Total
+                    writer.writerow([vehicle_line, vehicle_type, 'Total:', total_vehicles, vin_list[i] if i < len(vin_list) else '', '', ''])
+                elif i == 4:
+                    # Fifth row includes Duplicates count (always 0 for new orders)
+                    writer.writerow([vehicle_line, vehicle_type, 'Duplicates:', 0, vin_list[i] if i < len(vin_list) else '', '', ''])
+                else:
+                    # Remaining rows just have vehicle info and VIN
+                    writer.writerow([vehicle_line, vehicle_type, '', '', vin_list[i] if i < len(vin_list) else '', '', ''])
+            
+            # Add empty rows if needed (billing sheets typically have some padding)
+            for _ in range(3):
+                writer.writerow(['', '', '', '', '', '', ''])
+        
+        logger.info(f"Generated billing sheet CSV: {billing_path}")
+        return billing_path
+    
     def _update_vin_history(self, dealership_name: str, vins: List[str]):
         """Update VIN history for next comparison"""
         try:
@@ -905,11 +928,10 @@ class CorrectOrderProcessor:
                 
             # Check this dealership's VIN log ONLY
             history_query = f"""
-                SELECT order_type, processed_date,
-                       (CURRENT_DATE - processed_date) as days_ago
+                SELECT order_type, processed_date
                 FROM {vin_log_table}
                 WHERE vin = %s 
-                ORDER BY processed_date DESC 
+                ORDER BY created_at DESC 
                 LIMIT 5
             """
             
@@ -921,10 +943,10 @@ class CorrectOrderProcessor:
                 # VIN exists in this dealership's history - skip it (already processed)
                 most_recent = history[0]
                 prev_order_type = most_recent['order_type'] or 'unknown'
-                days_ago = most_recent['days_ago']
+                processed_date = most_recent['processed_date']
                 
                 # If VIN is in the log, it's been processed before - skip it
-                logger.info(f"Skipping {vin}: Previously processed as {prev_order_type} {days_ago} days ago")
+                logger.info(f"Skipping {vin}: Previously processed as {prev_order_type} on {processed_date}")
                 should_process = False
             else:
                 # No history in this dealership's log = definitely new

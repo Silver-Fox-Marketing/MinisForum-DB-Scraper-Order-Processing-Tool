@@ -1,40 +1,14 @@
 /**
- * Order Processing Wizard - JavaScript Controller v2.1 FINAL
+ * Order Processing Wizard - JavaScript Controller
  * Silver Fox Marketing - Guided Order Processing Interface
- * 
- * UPDATED: Continue to Data Editor button DISABLED
- * WORKFLOW: QR Generation → Enter Order Number → VIN Logging
- * VERSION: 2025-08-19 17:25 - BUTTON ELIMINATION COMPLETE
  * 
  * Handles wizard-style order processing with step-by-step workflow
  */
 
-// FORCE CACHE REFRESH - DISABLE DATA EDITOR WORKFLOW
-console.log('🔥 ORDER WIZARD v2.1 LOADED - DATA EDITOR DISABLED');
-console.log('✅ Correct workflow: QR Generation → Enter Order Number → VIN Log');
-console.log('❌ Continue to Data Editor button functionality ELIMINATED');
-
-// GLOBAL FUNCTION to handle ANY calls to proceedToDataEditor (even from cached templates)
-window.proceedToDataEditor = function() {
-    console.log('❌ proceedToDataEditor() called but DISABLED - redirecting to QR generation');
-    alert('Data Editor workflow has been disabled.\n\nCorrect workflow: QR Generation → Enter Order Number → VIN Logging');
-    
-    // Find wizard instance and redirect to correct workflow
-    if (window.wizard && typeof window.wizard.proceedToQRGeneration === 'function') {
-        window.wizard.proceedToQRGeneration();
-    } else {
-        console.error('Could not find wizard instance for redirect');
-    }
-    return false;
-};
-
-// GLOBAL wizard reference for proceedToDataEditor function
-window.wizard = null;
-
 class OrderWizard {
     constructor() {
         this.currentStep = 0;
-        this.steps = ['initialize', 'cao', 'list', 'review', 'qr-generation', 'order-number', 'complete'];
+        this.steps = ['initialize', 'cao', 'list', 'review', 'order-number', 'complete'];
         this.queueData = [];
         this.caoOrders = [];
         this.listOrders = [];
@@ -56,9 +30,6 @@ class OrderWizard {
     
     init() {
         console.log('Initializing Order Processing Wizard...');
-        
-        // Make wizard instance globally available for proceedToDataEditor override
-        window.wizard = this;
         
         // Load queue data from localStorage
         this.loadQueueData();
@@ -267,7 +238,7 @@ class OrderWizard {
             },
             body: JSON.stringify({
                 dealerships: [dealershipName],
-                vehicle_types: ['new', 'cpo', 'used'],
+                vehicle_types: null,  // Use dealership-specific filtering rules from database
                 skip_vin_logging: skipVinLogging
             })
         });
@@ -401,655 +372,62 @@ class OrderWizard {
     
     showReviewStep(dealershipName, result) {
         this.updateProgress('review');
+        this.showStep('reviewStep');
         
+        // Update dealership name
+        const reviewDealershipEl = document.getElementById('reviewDealershipName');
+        if (reviewDealershipEl) {
+            reviewDealershipEl.textContent = dealershipName;
+        }
+        
+        // Show generated files
+        this.renderOutputFiles(result);
+    }
+    
+    renderOutputFiles(result) {
         // Store the result for later use
         this.currentOrderResult = result;
         
-        // Get container and create review step HTML with progress tracker
-        let container = document.getElementById('wizardContent') || 
-                       document.getElementById('app') || 
-                       document.querySelector('.wizard-container') ||
-                       document.body;
-        
-        container.innerHTML = `
-            <!-- Progress Tracker -->
-            <div class="wizard-header">
-                <h1 class="wizard-title">
-                    <i class="fas fa-edit"></i>
-                    Order Processing Wizard
-                </h1>
-                <p class="wizard-subtitle">Guided workflow for processing dealership orders</p>
-            </div>
-            
-            <div class="wizard-progress">
-                <div class="progress-step completed">
-                    <i class="fas fa-play"></i>
-                    <span>Initialize</span>
-                </div>
-                <i class="fas fa-chevron-right progress-arrow"></i>
-                <div class="progress-step completed">
-                    <i class="fas fa-cog"></i>
-                    <span>Auto Process</span>
-                </div>
-                <i class="fas fa-chevron-right progress-arrow"></i>
-                <div class="progress-step completed">
-                    <i class="fas fa-list"></i>
-                    <span>VIN Entry</span>
-                </div>
-                <i class="fas fa-chevron-right progress-arrow"></i>
-                <div class="progress-step active">
-                    <i class="fas fa-eye"></i>
-                    <span>Review</span>
-                </div>
-                <i class="fas fa-chevron-right progress-arrow"></i>
-                <div class="progress-step">
-                    <i class="fas fa-qrcode"></i>
-                    <span>QR Codes</span>
-                </div>
-                <i class="fas fa-chevron-right progress-arrow"></i>
-                <div class="progress-step">
-                    <i class="fas fa-hashtag"></i>
-                    <span>Order #</span>
-                </div>
-                <i class="fas fa-chevron-right progress-arrow"></i>
-                <div class="progress-step">
-                    <i class="fas fa-check"></i>
-                    <span>Complete</span>
-                </div>
-            </div>
-            
-            <div class="wizard-step active" id="reviewStep">
-                <div class="step-header">
-                    <h2 class="step-title"><i class="fas fa-eye"></i> Review Output</h2>
-                    <p class="step-description">Inspect generated files for ${dealershipName}</p>
-                </div>
-                
-                <div class="review-section">
-                    <div class="csv-preview-card">
-                        <div class="card-header">
-                            <div class="header-left">
-                                <i class="fas fa-table"></i>
-                                <span class="header-title">CSV Data Preview</span>
-                            </div>
-                            <div class="header-right">
-                                <span class="vehicle-badge"><span id="csvVehicleCount">0</span> vehicles</span>
-                                <button class="btn btn-secondary" onclick="wizard.downloadCSV()">
-                                    <i class="fas fa-download"></i>
-                                    Download CSV
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div class="csv-table-container">
-                            <table class="data-table" id="csvSpreadsheet" style="display: none;">
-                                <thead id="csvTableHead">
-                                    <!-- Will be populated by renderSpreadsheet -->
-                                </thead>
-                                <tbody id="csvTableBody">
-                                    <!-- Will be populated by renderSpreadsheet -->
-                                </tbody>
-                            </table>
-                            <div class="csv-placeholder" id="csvPlaceholder" style="display: block;">
-                                <i class="fas fa-file-csv"></i>
-                                <p>Loading CSV data...</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="review-actions">
-                    <p>Ready to proceed to QR code generation?</p>
-                    <div class="action-buttons">
-                        <button class="btn-wizard primary" onclick="wizard.proceedToQRGeneration()">
-                            <i class="fas fa-arrow-right"></i>
-                            Looks Good - Continue
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        // Load CSV data into the table
+        // Load CSV data into spreadsheet view
         this.loadCSVIntoSpreadsheet(result);
-    }
-    
-    
-    // Navigate from CSV review to QR generation
-    proceedToQRGeneration() {
-        if (!this.currentOrderResult) {
-            console.error('No current order result available for QR generation');
-            return;
-        }
         
-        this.showQRGenerationStep(this.currentOrderResult.dealership, this.currentOrderResult);
-    }
-    
-    // Navigate from QR generation to order number entry
-    proceedToOrderNumber() {
-        console.log('🔍 DEBUG: proceedToOrderNumber called');
-        console.log('🔍 DEBUG: currentOrderResult:', !!this.currentOrderResult);
-        console.log('🔍 DEBUG: currentQRResult:', !!this.currentQRResult);
-        
-        if (!this.currentOrderResult) {
-            console.error('No current order result available for order number entry');
-            return;
-        }
-        
-        // Ensure QR result is available for the order number step
-        if (!this.currentQRResult && this.currentOrderResult) {
-            console.log('🔍 DEBUG: Using currentOrderResult as QR result');
-            this.currentQRResult = this.currentOrderResult;
-        }
-        
-        this.showOrderNumberStep(this.currentOrderResult.dealership, this.currentOrderResult);
-    }
-    
-    showQRGenerationStep(dealershipName, result) {
-        console.log('🆕 CLEAN QR GENERATION STEP - NO DATA EDITOR POSSIBLE');
-        this.updateProgress('qr-generation');
-        
-        // FIND THE CORRECT CONTAINER - TRY MULTIPLE POSSIBLE IDs
-        let container = document.getElementById('wizardContent') || 
-                       document.getElementById('app') || 
-                       document.querySelector('.wizard-container') ||
-                       document.querySelector('.container') ||
-                       document.body;
-        
-        if (!container) {
-            console.error('❌ Could not find container element');
-            alert('Container element not found - cannot display QR generation step');
-            return;
-        }
-        
-        console.log('✅ Found container:', container.id || container.className || container.tagName);
-        
-        // COMPLETELY RECREATE THE QR GENERATION HTML - NO DATA EDITOR BUTTON
-        container.innerHTML = `
-            <!-- Progress Tracker -->
-            <div class="wizard-header">
-                <h1 class="wizard-title">
-                    <i class="fas fa-edit"></i>
-                    Order Processing Wizard
-                </h1>
-                <p class="wizard-subtitle">Guided workflow for processing dealership orders</p>
-            </div>
-            
-            <div class="wizard-progress">
-                <div class="progress-step completed">
-                    <i class="fas fa-play"></i>
-                    <span>Initialize</span>
-                </div>
-                <i class="fas fa-chevron-right progress-arrow"></i>
-                <div class="progress-step completed">
-                    <i class="fas fa-cog"></i>
-                    <span>Auto Process</span>
-                </div>
-                <i class="fas fa-chevron-right progress-arrow"></i>
-                <div class="progress-step completed">
-                    <i class="fas fa-list"></i>
-                    <span>VIN Entry</span>
-                </div>
-                <i class="fas fa-chevron-right progress-arrow"></i>
-                <div class="progress-step completed">
-                    <i class="fas fa-eye"></i>
-                    <span>Review</span>
-                </div>
-                <i class="fas fa-chevron-right progress-arrow"></i>
-                <div class="progress-step active">
-                    <i class="fas fa-qrcode"></i>
-                    <span>QR Codes</span>
-                </div>
-                <i class="fas fa-chevron-right progress-arrow"></i>
-                <div class="progress-step">
-                    <i class="fas fa-hashtag"></i>
-                    <span>Order #</span>
-                </div>
-                <i class="fas fa-chevron-right progress-arrow"></i>
-                <div class="progress-step">
-                    <i class="fas fa-check"></i>
-                    <span>Complete</span>
-                </div>
-            </div>
-            
-            <div class="wizard-step active" id="qrGenerationStep">
-                <div class="step-header">
-                    <h2 class="step-title"><i class="fas fa-qrcode"></i> QR Code Generation</h2>
-                    <p class="step-description">Generate QR codes for ${dealershipName} vehicles</p>
-                </div>
-                
-                <div class="qr-status-card">
-                    <div class="status-header">
-                        <i class="fas fa-info-circle"></i>
-                        <span>Ready to generate QR codes for <strong>${result.vehicles_processed || 0}</strong> vehicles</span>
-                    </div>
-                    <div class="status-details">
-                        <p>CSV File: ${result.download_csv ? result.download_csv.split('/').pop() : 'Available'}</p>
-                        <p>Dealership: ${dealershipName}</p>
-                    </div>
-                </div>
-                
-                <!-- Progress Section -->
-                <div class="progress-section" id="qrProgressSection" style="display: none;">
-                    <div class="progress-header">
-                        <h3><i class="fas fa-spinner fa-spin"></i> Generating QR Codes...</h3>
-                        <p id="qrProgressText">Initializing QR code generation...</p>
-                    </div>
-                    <div class="progress-container">
-                        <div class="progress-bar">
-                            <div class="progress-fill" id="qrProgressBar" style="width: 0%"></div>
-                        </div>
-                        <span class="progress-percentage" id="qrProgressPercentage">0%</span>
-                    </div>
-                </div>
-                
-                <div class="qr-results" id="qrResults" style="display: none;">
-                    <div class="success-message">
-                        <i class="fas fa-check-circle"></i>
-                        <span>QR codes generated successfully!</span>
-                    </div>
-                </div>
-                
-                <!-- CLEAN ACTION BUTTONS - NO DATA EDITOR -->
-                <div class="wizard-actions">
-                    <button class="btn-wizard secondary" onclick="wizard.backToCsvReview()">
-                        <i class="fas fa-arrow-left"></i>
-                        Back to CSV Review
-                    </button>
-                    <button class="btn-wizard primary" onclick="wizard.generateQRCodes()" id="generateQRBtn">
-                        <i class="fas fa-qrcode"></i>
-                        Generate QR Codes
-                    </button>
-                    <button class="btn-wizard primary" onclick="wizard.proceedToOrderNumber()" id="qrProceedBtn" style="display: none;">
-                        <i class="fas fa-hashtag"></i>
-                        Enter Order Number
-                    </button>
-                </div>
-            </div>
-        `;
-        
-        console.log('✅ QR Generation HTML recreated - ONLY "Enter Order Number" button exists');
-    }
-    
-    setupQRGenerationDetails(dealershipName, result) {
-        // Update QR generation details
-        const qrCsvFileName = document.getElementById('qrCsvFileName');
-        const qrVehicleCount = document.getElementById('qrVehicleCount');
-        const qrOrderNumber = document.getElementById('qrOrderNumber');
-        const qrOutputFolder = document.getElementById('qrOutputFolder');
-        
-        if (qrCsvFileName && result.download_csv) {
-            // Extract filename from download path
-            const filename = result.download_csv.split('/').pop();
-            qrCsvFileName.textContent = filename;
-        }
-        
-        if (qrVehicleCount) {
-            qrVehicleCount.textContent = result.vehicles_processed || 0;
-        }
-        
-        if (qrOrderNumber) {
-            // Try to get order number from current context or show as "Auto-Generated"
-            qrOrderNumber.textContent = this.currentOrderNumber || 'Auto-Generated';
-        }
-        
-        if (qrOutputFolder) {
-            // Show expected output folder pattern
-            const cleanDealership = dealershipName.replace(/[^a-zA-Z0-9]/g, '_');
-            const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-            qrOutputFolder.textContent = `${cleanDealership}_${today}_QRCodes/`;
-        }
-    }
-    
-    toggleTechnicalDetails() {
-        const details = document.getElementById('qrTechnicalDetails');
-        const toggleBtn = document.getElementById('qrToggleBtn');
-        
-        if (details.style.display === 'none') {
-            details.style.display = 'block';
-            toggleBtn.innerHTML = '<i class="fas fa-chevron-up"></i> Hide Technical Details';
-        } else {
-            details.style.display = 'none';
-            toggleBtn.innerHTML = '<i class="fas fa-chevron-down"></i> Show Technical Details';
-        }
-    }
-    
-    toggleQRFileList() {
-        const fileList = document.getElementById('qrFileList');
-        const toggleBtn = document.getElementById('qrPreviewToggle');
-        
-        if (fileList.style.display === 'none') {
-            fileList.style.display = 'block';
-            toggleBtn.innerHTML = '<i class="fas fa-chevron-up"></i> Hide Details';
-        } else {
-            fileList.style.display = 'none';
-            toggleBtn.innerHTML = '<i class="fas fa-chevron-down"></i> Show Details';
-        }
-    }
-    
-    async generateQRCodes() {
-        console.log('🆕 CLEAN QR GENERATION - NO DATA EDITOR WORKFLOW');
-        
-        if (!this.currentOrderResult) {
-            console.error('No current order result available');
-            return;
-        }
-        
-        const generateQRBtn = document.getElementById('generateQRBtn');
-        const qrProceedBtn = document.getElementById('qrProceedBtn');
-        const qrResults = document.getElementById('qrResults');
-        const qrProgressSection = document.getElementById('qrProgressSection');
-        const qrProgressBar = document.getElementById('qrProgressBar');
-        const qrProgressPercentage = document.getElementById('qrProgressPercentage');
-        const qrProgressText = document.getElementById('qrProgressText');
-        
-        try {
-            // Show progress and disable button
-            generateQRBtn.disabled = true;
-            generateQRBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
-            qrResults.style.display = 'none';
-            qrProgressSection.style.display = 'block';
-            
-            // Extract CSV filename from the result
-            let csvFilename = '';
-            if (this.currentOrderResult.download_csv) {
-                csvFilename = this.currentOrderResult.download_csv.split('/').pop();
-            } else if (this.currentOrderResult.csv_file) {
-                csvFilename = this.currentOrderResult.csv_file.split('/').pop().replace(/\\\\/g, '/').split('/').pop();
-            }
-            
-            if (!csvFilename) {
-                throw new Error('No CSV file available for QR generation');
-            }
-            
-            console.log('[QR GENERATION] Starting with CSV file:', csvFilename);
-            
-            // Update progress
-            qrProgressText.textContent = 'Preparing QR code generation...';
-            qrProgressBar.style.width = '10%';
-            qrProgressPercentage.textContent = '10%';
-            
-            // Call the QR generation API
-            const response = await fetch('/api/qr/generate-from-csv', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    csv_filename: csvFilename,
-                    dealership_name: this.currentOrderResult.dealership,
-                    order_number: this.currentOrderNumber || ''
-                })
-            });
-            
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'QR generation failed');
-            }
-            
-            const result = await response.json();
-            console.log('[QR GENERATION] Success:', result);
-            
-            // Update progress to completion
-            qrProgressText.textContent = 'QR codes generated successfully!';
-            qrProgressBar.style.width = '100%';
-            qrProgressPercentage.textContent = '100%';
-            
-            // Wait for progress animation to complete
-            setTimeout(() => {
-                // Hide progress and show success
-                qrProgressSection.style.display = 'none';
-                qrResults.style.display = 'block';
-                
-                // Show proceed button
-                qrProceedBtn.style.display = 'inline-flex';
-                
-                // Update generate button to show success
-                generateQRBtn.disabled = false;
-                const billingText = result.billing_csv_generated ? ' + Billing CSV' : '';
-                generateQRBtn.innerHTML = `<i class="fas fa-check"></i> QR Codes Generated${billingText}`;
-                generateQRBtn.style.background = '#28a745';
-                
-                // Store result for order number step
-                this.currentQRResult = result;
-                
-            }, 1000);
-            
-            // FORCE SHOW THE BUTTON - MULTIPLE METHODS
-            setTimeout(() => {
-                let orderBtn = document.getElementById('qrProceedBtn');
-                if (orderBtn) {
-                    orderBtn.style.display = 'inline-flex';
-                    orderBtn.style.visibility = 'visible';
-                    orderBtn.style.opacity = '1';
-                    console.log('✅ Made existing Order Number button visible');
-                } else {
-                    // Create it again if it doesn't exist
-                    const newBtn = document.createElement('button');
-                    newBtn.id = 'qrProceedBtn';
-                    newBtn.className = 'btn-wizard primary';
-                    newBtn.style.cssText = 'margin-left: 20px; display: inline-flex !important; visibility: visible !important; opacity: 1 !important;';
-                    newBtn.onclick = () => this.proceedToOrderNumber();
-                    newBtn.innerHTML = '<i class="fas fa-hashtag"></i> Enter Order Number';
-                    generateQRBtn.parentElement.appendChild(newBtn);
-                    console.log('🚨 EMERGENCY: Re-created Order Number button');
-                }
-                
-                // Also add a bright red emergency button as backup
-                const emergencyBtn = document.createElement('button');
-                emergencyBtn.className = 'btn-wizard';
-                emergencyBtn.style.cssText = 'background: red !important; color: white !important; margin-left: 20px !important; display: inline-flex !important;';
-                emergencyBtn.onclick = () => {
-                    alert('Emergency Order Number Entry');
-                    this.proceedToOrderNumber();
-                };
-                emergencyBtn.innerHTML = '🚨 EMERGENCY: Enter Order Number';
-                generateQRBtn.parentElement.appendChild(emergencyBtn);
-                console.log('🚨 Created bright red emergency button as backup');
-                
-            }, 500);
-            
-            // Handle case where QR codes already exist
-            if (result.qr_codes_exist) {
-                // Hide progress and show results immediately
-                qrProgress.style.display = 'none';
-                qrResults.style.display = 'block';
-                
-                // Update result stats for existing QR codes
-                const qrGeneratedCount = document.getElementById('qrGeneratedCount');
-                const qrFolderName = document.getElementById('qrFolderName');
-                const qrVehicleCount = document.getElementById('qrVehicleCount');
-                
-                if (qrGeneratedCount) qrGeneratedCount.textContent = result.vehicles_with_urls || result.total_vehicles || 'N/A';
-                if (qrFolderName) qrFolderName.textContent = 'Previously Generated';
-                if (qrVehicleCount) qrVehicleCount.textContent = result.total_vehicles || 'N/A';
-                
-                // Show message that QR codes already exist
-                const qrStatusCard = document.querySelector('.qr-status-card');
-                if (qrStatusCard) {
-                    qrStatusCard.innerHTML = `
-                        <div class="qr-info">
-                            <h4><i class="fas fa-check-circle"></i> QR Codes Already Generated</h4>
-                            <p>${result.message}</p>
-                            <p><strong>Total Vehicles:</strong> ${result.total_vehicles}</p>
-                            ${result.vehicles_with_urls ? `<p><strong>Vehicles with URLs:</strong> ${result.vehicles_with_urls}</p>` : ''}
-                            ${result.vehicles_without_urls ? `<p><strong>Vehicles without URLs:</strong> ${result.vehicles_without_urls}</p>` : ''}
-                        </div>
-                    `;
-                }
-                
-                // Store result and show proceed button
-                this.currentQRResult = result;
-                
-                // Show proceed button or create one if it doesn't exist
-                if (qrProceedBtn) {
-                    qrProceedBtn.style.display = 'inline-flex';
-                } else {
-                    // Create the Enter Order Number button if it doesn't exist
-                    const actionsContainer = document.querySelector('.wizard-actions') || 
-                                           document.querySelector('.qr-actions') ||
-                                           generateQRBtn.parentElement;
-                    
-                    if (actionsContainer) {
-                        const newButton = document.createElement('button');
-                        newButton.className = 'btn-wizard primary';
-                        newButton.id = 'qrProceedBtn';
-                        newButton.onclick = () => this.proceedToOrderNumber();
-                        newButton.innerHTML = '<i class="fas fa-hashtag"></i> Enter Order Number';
-                        actionsContainer.appendChild(newButton);
-                        console.log('✅ Created "Enter Order Number" button');
-                    }
-                }
-                
-            } else {
-                // Normal QR generation flow
-                // Update progress to 100%
-                const progressFill = document.getElementById('qrProgressFill');
-                const progressCount = document.getElementById('qrProgressCount');
-                if (progressFill) progressFill.style.width = '100%';
-                if (progressCount) progressCount.textContent = `${result.qr_codes_generated}/${result.qr_codes_generated}`;
-                
-                // Hide progress and show results
-                setTimeout(() => {
-                    qrProgress.style.display = 'none';
-                    qrResults.style.display = 'block';
-                    
-                    // Update result stats
-                    const qrGeneratedCount = document.getElementById('qrGeneratedCount');
-                    const qrFolderName = document.getElementById('qrFolderName');
-                    
-                    if (qrGeneratedCount) qrGeneratedCount.textContent = result.qr_codes_generated;
-                    if (qrFolderName) qrFolderName.textContent = result.qr_folder_name;
-                    
-                    // Render QR file list
-                    this.renderQRFileList(result.qr_files);
-                    
-                    // Store QR result for later use
-                    this.currentQRResult = result;
-                    
-                    // Show proceed button or create one if it doesn't exist
-                    if (qrProceedBtn) {
-                        qrProceedBtn.style.display = 'inline-flex';
-                    } else {
-                        // Create the Enter Order Number button if it doesn't exist
-                        const actionsContainer = document.querySelector('.wizard-actions') || 
-                                               document.querySelector('.qr-actions') ||
-                                               generateQRBtn.parentElement;
-                        
-                        if (actionsContainer) {
-                            const newButton = document.createElement('button');
-                            newButton.className = 'btn-wizard primary';
-                            newButton.id = 'qrProceedBtn';
-                            newButton.onclick = () => this.proceedToOrderNumber();
-                            newButton.innerHTML = '<i class="fas fa-hashtag"></i> Enter Order Number';
-                            actionsContainer.appendChild(newButton);
-                            console.log('✅ Created "Enter Order Number" button');
-                        }
-                    }
-                    
-                }, 1000);
-            }
-            
-        } catch (error) {
-            console.error('[QR GENERATION] Error:', error);
-            
-            // Hide progress and show error
-            qrProgressSection.style.display = 'none';
-            
-            // Reset generate button
-            generateQRBtn.disabled = false;
-            generateQRBtn.innerHTML = '<i class="fas fa-qrcode"></i> Generate QR Codes';
-            generateQRBtn.style.background = '';
-            
-            // Show error message
-            this.showMessage(`QR Generation Error: ${error.message}`, 'error');
-        }
-    }
-    
-    renderQRFileList(qrFiles) {
-        const qrFileList = document.getElementById('qrFileList');
-        if (!qrFileList || !qrFiles || qrFiles.length === 0) return;
-        
-        // Clear and populate with a cleaner layout
-        qrFileList.innerHTML = '';
-        
-        const fileListContainer = document.createElement('div');
-        fileListContainer.className = 'qr-file-grid';
-        fileListContainer.style.padding = 'var(--spacing-md)';
-        
-        // Show first few files as preview, with option to show all
-        const previewCount = Math.min(3, qrFiles.length);
-        const filesToShow = qrFiles.slice(0, previewCount);
-        
-        filesToShow.forEach((file, index) => {
-            const fileItem = document.createElement('div');
-            fileItem.className = 'qr-file-item';
-            fileItem.innerHTML = `
-                <div class="qr-file-header">
-                    <span class="file-number">#${index + 1}</span>
-                    <strong class="filename">${file.filename}</strong>
-                </div>
-                <div class="qr-vehicle-info">
-                    <span class="vin"><i class="fas fa-barcode"></i> ${file.vin}</span>
-                    <span class="vehicle"><i class="fas fa-car"></i> ${file.vehicle_info}</span>
-                    ${file.stock ? `<span class="stock"><i class="fas fa-tag"></i> Stock: ${file.stock}</span>` : ''}
-                </div>
-                <div class="qr-file-url">
-                    <i class="fas fa-link"></i>
-                    <span class="url-text">${this.truncateUrl(file.url)}</span>
-                </div>
-            `;
-            fileListContainer.appendChild(fileItem);
-        });
-        
-        // If there are more files, show a summary
-        if (qrFiles.length > previewCount) {
-            const moreInfo = document.createElement('div');
-            moreInfo.className = 'qr-more-info';
-            moreInfo.innerHTML = `
-                <i class="fas fa-ellipsis-h"></i>
-                <span>+ ${qrFiles.length - previewCount} more QR codes generated</span>
-            `;
-            fileListContainer.appendChild(moreInfo);
-        }
-        
-        qrFileList.appendChild(fileListContainer);
-    }
-    
-    truncateUrl(url) {
-        if (url.length <= 50) return url;
-        return url.substring(0, 25) + '...' + url.substring(url.length - 20);
-    }
-    
-    backToCsvReview() {
-        this.updateProgress('review');
-        this.showStep('reviewStep');
+        // Load QR codes into preview grid
+        this.loadQRCodesIntoGrid(result);
     }
     
     approveOutput() {
-        // Navigate to QR generation step after CSV review
-        this.proceedToQRGeneration();
+        // Check if we need order number for current dealership
+        if (this.processedOrders.length > 0) {
+            // Get the last processed order
+            const lastOrder = this.processedOrders[this.processedOrders.length - 1];
+            this.showOrderNumberStep(lastOrder.dealership, lastOrder.result);
+        } else {
+            // Move to next dealership or complete
+            this.currentListIndex++;
+            
+            if (this.currentListIndex < this.listOrders.length) {
+                // Show next dealership
+                this.updateProgress('list');
+                this.showStep('listStep');
+                this.showCurrentListOrder();
+            } else {
+                // All list orders complete
+                this.completeProcessing();
+            }
+        }
     }
     
     showDataEditor() {
-        // DISABLED: This function creates the "Continue to Data Editor" button
-        // User explicitly requested this workflow be removed
-        console.log('❌ showDataEditor() DISABLED - redirecting to QR generation');
-        
-        // Redirect to proper workflow: QR Generation → Order Number → VIN Log
-        this.proceedToQRGeneration();
-        return;
-        
-        // OLD CODE COMMENTED OUT:
         // Initialize data editor
-        // this.currentEditingData = null;
-        // this.dataEditorChanges = new Map();
-        // this.currentEditingFile = null;
-        // 
+        this.currentEditingData = null;
+        this.dataEditorChanges = new Map();
+        this.currentEditingFile = null;
+        
         // Show the data editor step
-        // this.showStep('dataEditorStep');
-        // 
+        this.showStep('dataEditorStep');
+        
         // Load CSV data for editing
-        // this.loadCSVDataForEditing();
+        this.loadCSVDataForEditing();
     }
     
     async loadCSVDataForEditing() {
@@ -1878,162 +1256,98 @@ class OrderWizard {
         if (targetStep) {
             targetStep.classList.add('active');
         }
+        
+        // Initialize VIN table when showing list step
+        if (stepId === 'listStep') {
+            console.log('List step is active, initializing VIN table...');
+            // Small delay to ensure DOM is ready
+            setTimeout(() => {
+                this.initializeVinTable();
+            }, 100);
+        }
+        
+        // Always ensure VIN table is properly initialized for list step
+        if (stepId === 'listStep') {
+            setTimeout(() => {
+                const vinTableBody = document.getElementById('vinTableBody');
+                console.log('Checking VIN table status...');
+                console.log('VIN table body element:', vinTableBody);
+                console.log('VIN table body children count:', vinTableBody ? vinTableBody.children.length : 'N/A');
+                
+                if (!vinTableBody) {
+                    console.error('VIN table body not found - DOM issue!');
+                } else if (vinTableBody.children.length === 0) {
+                    console.log('VIN table is empty, forcing initialization...');
+                    this.initializeVinTable();
+                } else {
+                    console.log('VIN table already has content, ensuring focus...');
+                    const firstInput = document.getElementById('vin-input-1');
+                    if (firstInput) {
+                        firstInput.focus();
+                    }
+                }
+            }, 250);
+        }
     }
     
     // ========== ORDER NUMBER STEP METHODS ==========
     
     showOrderNumberStep(dealershipName, orderResult) {
-        console.log('🎯 SHOWING ORDER NUMBER STEP for:', dealershipName);
+        console.log('Showing order number step for:', dealershipName);
         
-        // Update progress tracker
+        // Update progress
         this.updateProgress('order-number');
+        this.showStep('orderNumberStep');
         
         // Store current order info
         this.currentOrderDealership = dealershipName;
         this.currentOrderVins = orderResult.processed_vins || [];
         
-        // Debug what QR result data we have
-        console.log('🔍 DEBUG: QR Result available:', !!this.currentQRResult);
-        if (this.currentQRResult) {
-            console.log('🔍 DEBUG: QR Result keys:', Object.keys(this.currentQRResult));
-            console.log('🔍 DEBUG: CSV file in QR result:', this.currentQRResult.csv_file);
-            console.log('🔍 DEBUG: qr_codes_generated value:', this.currentQRResult.qr_codes_generated);
-            console.log('🔍 DEBUG: vehicles_processed value:', this.currentQRResult.vehicles_processed);
-            console.log('🔍 DEBUG: files_generated value:', this.currentQRResult.files_generated);
+        // Update UI elements
+        const dealershipDisplay = document.getElementById('orderNumberDealershipDisplay');
+        const orderDealershipName = document.getElementById('orderDealershipName');
+        const vinCountDisplay = document.getElementById('orderVinCount');
+        const orderNumberInput = document.getElementById('orderNumberInput');
+        const applyOrderNumberBtn = document.getElementById('applyOrderNumberBtn');
+        const vinPreviewList = document.getElementById('vinPreviewList');
+        
+        if (dealershipDisplay) {
+            dealershipDisplay.textContent = dealershipName;
         }
         
-        // If no VINs in orderResult, get them from the QR generation result
-        if (this.currentOrderVins.length === 0 && this.currentQRResult) {
-            // The QR result should contain the original CSV data with VINs
-            if (this.currentQRResult.csv_data && Array.isArray(this.currentQRResult.csv_data)) {
-                this.currentOrderVins = this.currentQRResult.csv_data.map(row => row.VIN || row.vin).filter(vin => vin);
-                console.log(`📊 Extracted ${this.currentOrderVins.length} VINs from CSV data for order processing`);
-            }
-            // Alternative: extract from vehicle data if available
-            else if (this.currentQRResult.vehicles && Array.isArray(this.currentQRResult.vehicles)) {
-                this.currentOrderVins = this.currentQRResult.vehicles.map(v => v.VIN || v.vin).filter(vin => vin);
-                console.log(`📊 Extracted ${this.currentOrderVins.length} VINs from vehicle data for order processing`);
-            }
-            // Last resort: read from the CSV file that was processed
-            else if (this.currentQRResult.csv_file) {
-                console.log(`📊 Will extract VINs from CSV file: ${this.currentQRResult.csv_file}`);
-                // Set a flag that we need to extract VINs from CSV file
-                this.currentOrderVins = ['EXTRACT_FROM_CSV'];
-                this.csvFileForVinExtraction = this.currentQRResult.csv_file;
-            }
+        if (orderDealershipName) {
+            orderDealershipName.textContent = dealershipName;
         }
         
-        // Calculate display values for debugging
-        const vehiclesProcessed = this.currentQRResult?.qr_codes_generated || this.currentQRResult?.vehicles_processed || orderResult?.vehicles_processed || 0;
-        const qrCodesGenerated = this.currentQRResult?.qr_codes_generated || this.currentQRResult?.files_generated || (this.currentQRResult?.qr_files?.length) || orderResult?.qr_codes_generated || 0;
+        if (vinCountDisplay) {
+            vinCountDisplay.textContent = this.currentOrderVins.length;
+        }
         
-        console.log('🔍 DEBUG: Display values being used:');
-        console.log('   - Vehicles Processed:', vehiclesProcessed);
-        console.log('   - QR Codes Generated:', qrCodesGenerated);
+        // Generate suggested order number
+        const currentDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const dealershipSlug = dealershipName.toUpperCase().replace(/[^A-Z0-9]/g, '_').replace(/_{2,}/g, '_').replace(/^_|_$/g, '');
+        const orderType = orderResult.order_type || 'CAO';
+        const suggestedOrderNumber = `${dealershipSlug}_${orderType}_${currentDate}_001`;
         
-        // FIND CONTAINER AND CREATE ORDER NUMBER HTML
-        let container = document.getElementById('wizardContent') || 
-                       document.getElementById('app') || 
-                       document.querySelector('.wizard-container') ||
-                       document.body;
-        
-        // CREATE ORDER NUMBER STEP HTML
-        container.innerHTML = `
-            <!-- Progress Tracker -->
-            <div class="wizard-header">
-                <h1 class="wizard-title">
-                    <i class="fas fa-edit"></i>
-                    Order Processing Wizard
-                </h1>
-                <p class="wizard-subtitle">Guided workflow for processing dealership orders</p>
-            </div>
-            
-            <div class="wizard-progress">
-                <div class="progress-step completed">
-                    <i class="fas fa-play"></i>
-                    <span>Initialize</span>
-                </div>
-                <i class="fas fa-chevron-right progress-arrow"></i>
-                <div class="progress-step completed">
-                    <i class="fas fa-cog"></i>
-                    <span>Auto Process</span>
-                </div>
-                <i class="fas fa-chevron-right progress-arrow"></i>
-                <div class="progress-step completed">
-                    <i class="fas fa-list"></i>
-                    <span>VIN Entry</span>
-                </div>
-                <i class="fas fa-chevron-right progress-arrow"></i>
-                <div class="progress-step completed">
-                    <i class="fas fa-eye"></i>
-                    <span>Review</span>
-                </div>
-                <i class="fas fa-chevron-right progress-arrow"></i>
-                <div class="progress-step completed">
-                    <i class="fas fa-qrcode"></i>
-                    <span>QR Codes</span>
-                </div>
-                <i class="fas fa-chevron-right progress-arrow"></i>
-                <div class="progress-step active">
-                    <i class="fas fa-hashtag"></i>
-                    <span>Order #</span>
-                </div>
-                <i class="fas fa-chevron-right progress-arrow"></i>
-                <div class="progress-step">
-                    <i class="fas fa-check"></i>
-                    <span>Complete</span>
-                </div>
-            </div>
-            
-            <div class="wizard-step active" id="orderNumberStep">
-                <div class="step-header">
-                    <h2 class="step-title">📝 Enter Order Number</h2>
-                    <p class="step-description">Apply order number to processed vehicles for ${dealershipName}</p>
-                </div>
+        if (orderNumberInput) {
+            orderNumberInput.value = suggestedOrderNumber;
+            orderNumberInput.addEventListener('input', () => {
+                const hasValue = orderNumberInput.value.trim().length > 0;
+                applyOrderNumberBtn.disabled = !hasValue;
                 
-                <div class="order-info-card">
-                    <div class="info-row">
-                        <strong>Dealership:</strong> ${dealershipName}
-                    </div>
-                    <div class="info-row">
-                        <strong>Vehicles Processed:</strong> ${vehiclesProcessed}
-                    </div>
-                    <div class="info-row">
-                        <strong>QR Codes Generated:</strong> ${qrCodesGenerated}
-                    </div>
-                    ${this.currentQRResult?.billing_csv_generated ? `
-                    <div class="info-row">
-                        <strong>Billing CSV Generated:</strong> ✅ Yes
-                    </div>` : ''}
-                </div>
-                
-                <div class="order-input-section">
-                    <label for="orderNumberInput" class="input-label">Order Number:</label>
-                    <input type="text" id="orderNumberInput" class="form-control" 
-                           placeholder="Enter order number (e.g., ORD-12345)" 
-                           style="margin: 10px 0; padding: 12px; font-size: 16px; width: 100%; border: 2px solid #ddd; border-radius: 8px;">
-                    
-                    <div class="order-actions">
-                        <button class="btn-wizard secondary" onclick="wizard.backToQRGeneration()">
-                            <i class="fas fa-arrow-left"></i>
-                            Back to QR Generation
-                        </button>
-                        <button class="btn-wizard primary" onclick="wizard.applyOrderNumber()" id="applyOrderNumberBtn">
-                            <i class="fas fa-check"></i>
-                            Apply Order Number & Complete
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        console.log('✅ ORDER NUMBER STEP HTML CREATED SUCCESSFULLY');
-        
-        // Focus on the input field
-        setTimeout(() => {
-            const input = document.getElementById('orderNumberInput');
-            if (input) input.focus();
-        }, 100);
+                if (hasValue) {
+                    this.showVinPreview();
+                } else {
+                    document.getElementById('orderNumberPreview').style.display = 'none';
+                }
+            });
+            
+            // Trigger initial preview
+            if (suggestedOrderNumber) {
+                this.showVinPreview();
+                applyOrderNumberBtn.disabled = false;
+            }
+        }
     }
     
     showVinPreview() {
@@ -2074,38 +1388,9 @@ class OrderWizard {
             return;
         }
         
-        // Use QR result data if currentOrderVins is empty
-        let vinsToUpdate = this.currentOrderVins;
-        
-        // Determine actual number of vehicles to be processed
-        let actualVehicleCount = this.currentQRResult?.qr_codes_generated || this.currentQRResult?.vehicles_processed || 0;
-        
-        console.log(`📊 Starting order number application:`);
-        console.log(`   - Vehicles to process: ${actualVehicleCount} (from QR generation)`);
-        console.log(`   - Current VINs: ${vinsToUpdate.length} (${vinsToUpdate.slice(0, 2).join(', ')}${vinsToUpdate.length > 2 ? '...' : ''})`);
-        console.log(`   - CSV file available: ${this.csvFileForVinExtraction || 'none'}`);
-        
-        if (vinsToUpdate.length === 0 && this.currentQRResult) {
-            // Extract VINs from QR result or use the CSV file data  
-            vinsToUpdate = this.currentQRResult.qr_files?.map(f => f.vin).filter(vin => vin) || [];
-            console.log('📊 Extracted VINs from QR result:', vinsToUpdate.length);
-        }
-        
-        if (!this.currentOrderDealership) {
-            this.showMessage('No dealership selected', 'error');
+        if (!this.currentOrderDealership || this.currentOrderVins.length === 0) {
+            this.showMessage('No order data found to update', 'error');
             return;
-        }
-        
-        if (vinsToUpdate.length === 0) {
-            // Last attempt: ask backend to extract VINs from CSV file
-            if (this.currentQRResult?.csv_file) {
-                console.log('📊 Requesting VIN extraction from CSV file:', this.currentQRResult.csv_file);
-                // Set flag to tell backend to extract VINs from CSV file
-                vinsToUpdate = ['EXTRACT_FROM_CSV'];
-            } else {
-                console.log('No specific VINs found, creating generic order for dealership');
-                vinsToUpdate = ['GENERIC_ORDER'];
-            }
         }
         
         // Disable button during processing
@@ -2113,8 +1398,7 @@ class OrderWizard {
         applyOrderNumberBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Applying...';
         
         try {
-            const displayCount = vinsToUpdate.includes('EXTRACT_FROM_CSV') ? actualVehicleCount : vinsToUpdate.length;
-            console.log('Applying order number:', orderNumber, 'to', displayCount, 'VINs for', this.currentOrderDealership);
+            console.log('Applying order number:', orderNumber, 'to', this.currentOrderVins.length, 'VINs for', this.currentOrderDealership);
             
             // Call backend to apply order number to VIN log
             const response = await fetch('/api/orders/apply-order-number', {
@@ -2125,9 +1409,7 @@ class OrderWizard {
                 body: JSON.stringify({
                     dealership_name: this.currentOrderDealership,
                     order_number: orderNumber,
-                    vins: vinsToUpdate,
-                    csv_file: this.csvFileForVinExtraction || this.currentQRResult?.csv_file || null,
-                    qr_codes_generated: this.currentQRResult?.qr_codes_generated || 0
+                    vins: this.currentOrderVins
                 })
             });
             
@@ -2138,11 +1420,10 @@ class OrderWizard {
             const result = await response.json();
             
             if (result.success) {
-                // Use backend result first, then fall back to QR generation count, never use currentOrderVins.length for EXTRACT_FROM_CSV case
-                const actualCount = result.updated_vins || this.currentQRResult?.qr_codes_generated || this.currentQRResult?.vehicles_processed || 'unknown number of';
+                this.showMessage(`Order number ${orderNumber} applied to ${result.updated_vins || this.currentOrderVins.length} VINs`, 'success');
                 
-                // Show comprehensive completion screen instead of simple message
-                this.showOrderCompletionScreen(orderNumber, actualCount, this.currentOrderDealership);
+                // Continue to next dealership or completion
+                this.continueAfterOrderNumber();
             } else {
                 throw new Error(result.error || 'Unknown error applying order number');
             }
@@ -2180,10 +1461,8 @@ class OrderWizard {
     }
     
     backToDataEditor() {
-        // DISABLED: Redirect to proper review step instead of data editor
-        console.log('❌ backToDataEditor() DISABLED - redirecting to review');
         this.updateProgress('review');
-        this.showStep('reviewStep');
+        this.showStep('dataEditorStep');
     }
 
     showError(message) {
@@ -2199,161 +1478,6 @@ class OrderWizard {
         document.body.appendChild(errorDiv);
     }
     
-    showOrderCompletionScreen(orderNumber, vinCount, dealershipName) {
-        // Update progress to completion
-        this.updateProgress('complete');
-        
-        // Get current timestamp
-        const now = new Date();
-        const timestamp = now.toLocaleString();
-        
-        // Calculate file outputs
-        const qrCodes = this.currentQRResult?.qr_codes_generated || 0;
-        const csvGenerated = this.currentQRResult?.csv_file ? 1 : 0;
-        const billingGenerated = this.currentQRResult?.billing_csv_generated ? 1 : 0;
-        
-        // Find container and create completion screen
-        let container = document.getElementById('wizardContent') || 
-                       document.getElementById('app') || 
-                       document.querySelector('.wizard-container') ||
-                       document.body;
-        
-        container.innerHTML = `
-            <div class="wizard-step active" id="orderCompletionStep">
-                <div class="completion-header">
-                    <div class="completion-icon">
-                        <i class="fas fa-check-circle"></i>
-                    </div>
-                    <h1 class="completion-title">Order Processing Complete!</h1>
-                    <p class="completion-subtitle">Order ${orderNumber} successfully processed for ${dealershipName}</p>
-                </div>
-                
-                <div class="completion-details">
-                    <div class="detail-card primary">
-                        <div class="detail-icon">
-                            <i class="fas fa-hashtag"></i>
-                        </div>
-                        <div class="detail-content">
-                            <h3>Order Number Applied</h3>
-                            <p class="detail-value">${orderNumber}</p>
-                            <p class="detail-description">Applied to ${vinCount} vehicles</p>
-                        </div>
-                    </div>
-                    
-                    <div class="detail-card">
-                        <div class="detail-icon">
-                            <i class="fas fa-building"></i>
-                        </div>
-                        <div class="detail-content">
-                            <h3>Dealership</h3>
-                            <p class="detail-value">${dealershipName}</p>
-                            <p class="detail-description">Processing completed at ${timestamp}</p>
-                        </div>
-                    </div>
-                    
-                    <div class="detail-card">
-                        <div class="detail-icon">
-                            <i class="fas fa-qrcode"></i>
-                        </div>
-                        <div class="detail-content">
-                            <h3>QR Codes Generated</h3>
-                            <p class="detail-value">${qrCodes}</p>
-                            <p class="detail-description">High-resolution PNG files (388x388)</p>
-                        </div>
-                    </div>
-                    
-                    <div class="detail-card">
-                        <div class="detail-icon">
-                            <i class="fas fa-file-csv"></i>
-                        </div>
-                        <div class="detail-content">
-                            <h3>Files Generated</h3>
-                            <p class="detail-value">${csvGenerated + billingGenerated} CSV + ${qrCodes} QR</p>
-                            <p class="detail-description">Adobe VDP CSV${billingGenerated ? ' + Billing CSV' : ''} + QR Codes</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="completion-outputs">
-                    <h3><i class="fas fa-folder-open"></i> Output Files</h3>
-                    <div class="output-grid">
-                        <div class="output-item">
-                            <i class="fas fa-qrcode"></i>
-                            <span>QR Codes</span>
-                            <small>${qrCodes} PNG files</small>
-                        </div>
-                        <div class="output-item">
-                            <i class="fas fa-file-csv"></i>
-                            <span>Adobe VDP CSV</span>
-                            <small>Variable data processing</small>
-                        </div>
-                        ${billingGenerated ? `
-                        <div class="output-item">
-                            <i class="fas fa-receipt"></i>
-                            <span>Billing CSV</span>
-                            <small>Ordered vs Produced</small>
-                        </div>
-                        ` : ''}
-                        <div class="output-item">
-                            <i class="fas fa-database"></i>
-                            <span>VIN Log Updated</span>
-                            <small>Dealership history</small>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="completion-actions">
-                    <button class="btn-wizard secondary" onclick="wizard.viewOrderFolder()">
-                        <i class="fas fa-folder-open"></i>
-                        View Output Folder
-                    </button>
-                    <button class="btn-wizard primary" onclick="wizard.startNewOrder()">
-                        <i class="fas fa-plus"></i>
-                        Process Another Order
-                    </button>
-                    <button class="btn-wizard success" onclick="wizard.finishSession()">
-                        <i class="fas fa-check"></i>
-                        Finish Session
-                    </button>
-                </div>
-            </div>
-        `;
-    }
-
-    viewOrderFolder() {
-        // Try to open the order folder
-        if (this.currentQRResult?.output_folder) {
-            // For now, just show an alert with the folder path
-            alert(`Order files saved to:\n${this.currentQRResult.output_folder}`);
-        } else {
-            alert('Order folder path not available');
-        }
-    }
-
-    startNewOrder() {
-        // Check if there are more orders to process
-        if (this.currentListIndex < this.listOrders.length - 1) {
-            // Continue to next dealership
-            this.continueAfterOrderNumber();
-        } else {
-            // Start fresh
-            location.reload();
-        }
-    }
-
-    finishSession() {
-        // Complete the session
-        if (this.currentListIndex < this.listOrders.length - 1) {
-            // There are more orders, but user wants to finish
-            if (confirm('There are more orders to process. Are you sure you want to finish?')) {
-                this.completeProcessing();
-            }
-        } else {
-            // All orders complete
-            this.completeProcessing();
-        }
-    }
-
     showMessage(message, type = 'info') {
         const messageDiv = document.createElement('div');
         messageDiv.className = `wizard-message wizard-${type}`;
@@ -2381,38 +1505,6 @@ class OrderWizard {
         }
         
         document.body.appendChild(messageDiv);
-    }
-
-    // Completion screen action methods
-    viewOrderFolder() {
-        if (this.currentQRResult?.qr_folder) {
-            // Show folder path and inform user
-            const folderPath = this.currentQRResult.qr_folder;
-            this.showMessage(`Order files are located at: ${folderPath}`, 'info');
-        } else {
-            this.showMessage('Output folder information not available', 'warning');
-        }
-    }
-    
-    startNewOrder() {
-        // Reset wizard state and start fresh
-        this.currentStep = 0;
-        this.currentOrderResult = null;
-        this.currentQRResult = null;
-        this.currentOrderDealership = null;
-        this.currentOrderVins = [];
-        
-        // Return to main interface
-        window.location.reload();
-    }
-    
-    finishSession() {
-        // Close the wizard or return to main dashboard
-        if (window.opener) {
-            window.close();
-        } else {
-            window.location.href = '/';
-        }
     }
 
     showSuccess(message) {
@@ -2458,9 +1550,9 @@ class OrderWizard {
     // =============================================================================
     
     async loadCSVIntoSpreadsheet(result) {
-        const spreadsheetContainer = document.getElementById('csvSpreadsheet');
+        const spreadsheetContainer = document.getElementById('csvTable');
         const placeholder = document.getElementById('csvPlaceholder');
-        const vehicleCount = document.getElementById('csvVehicleCount');
+        const vehicleCount = document.getElementById('vehicleCount');
         
         if (!result.download_csv) {
             // Show placeholder if no CSV available
@@ -2540,26 +1632,31 @@ class OrderWizard {
     }
     
     renderSpreadsheet(headers, rows) {
-        const thead = document.getElementById('csvTableHead');
-        const tbody = document.getElementById('csvTableBody');
+        const table = document.getElementById('csvTable');
         
-        if (!thead || !tbody) return;
+        if (!table) return;
         
-        // Render headers
+        // Clear existing table content
+        table.innerHTML = '';
+        
+        // Create table header
+        const thead = document.createElement('thead');
         thead.innerHTML = `
             <tr>
                 <th style="width: 80px;">Actions</th>
                 ${headers.map(header => `<th>${this.escapeHtml(header)}</th>`).join('')}
             </tr>
         `;
+        table.appendChild(thead);
         
-        // Render rows
+        // Create table body
+        const tbody = document.createElement('tbody');
         tbody.innerHTML = rows.map((row, rowIndex) => {
             return `
                 <tr data-row-index="${rowIndex}">
                     <td>
                         <div class="row-actions">
-                            <button class="row-edit-btn" onclick="wizard.editRow(${rowIndex})">
+                            <button class="row-edit-btn" onclick="wizard.editRowWithModal(${rowIndex})">
                                 <i class="fas fa-edit"></i> Edit
                             </button>
                         </div>
@@ -2570,6 +1667,69 @@ class OrderWizard {
                 </tr>
             `;
         }).join('');
+        table.appendChild(tbody);
+    }
+    
+    editRowWithModal(rowIndex) {
+        if (!this.currentCSVData || !this.currentCSVData.rows[rowIndex]) {
+            console.error('No CSV data available for editing');
+            return;
+        }
+        
+        const row = this.currentCSVData.rows[rowIndex];
+        const headers = this.currentCSVData.headers;
+        
+        // Convert CSV row data to vehicle object format
+        const vehicleData = this.csvRowToVehicleObject(row, headers);
+        
+        // Store the review data globally for the modal functions
+        if (!reviewVehicleData[rowIndex]) {
+            reviewVehicleData[rowIndex] = vehicleData;
+        }
+        
+        // Open the modal
+        openManualDataModal(rowIndex, vehicleData);
+    }
+    
+    csvRowToVehicleObject(row, headers) {
+        const vehicle = {};
+        
+        // Map CSV columns to vehicle properties
+        headers.forEach((header, index) => {
+            const value = row[index] || '';
+            const headerLower = header.toLowerCase();
+            
+            // Map headers to standard vehicle properties
+            if (headerLower.includes('year')) {
+                vehicle.year = value;
+            } else if (headerLower.includes('make')) {
+                vehicle.make = value;
+            } else if (headerLower.includes('model')) {
+                vehicle.model = value;
+            } else if (headerLower.includes('trim')) {
+                vehicle.trim = value;
+            } else if (headerLower.includes('stock')) {
+                vehicle.stock = value;
+            } else if (headerLower.includes('vin')) {
+                vehicle.vin = value;
+            } else if (headerLower.includes('price')) {
+                vehicle.price = value;
+            } else if (headerLower.includes('type')) {
+                vehicle.type = value;
+            } else if (headerLower.includes('color')) {
+                vehicle.ext_color = value;
+            } else if (headerLower.includes('mileage') || headerLower.includes('miles')) {
+                vehicle.mileage = value;
+            } else if (headerLower.includes('fuel')) {
+                vehicle.fuel_type = value;
+            } else if (headerLower.includes('transmission')) {
+                vehicle.transmission = value;
+            } else if (headerLower.includes('url')) {
+                vehicle.vehicle_url = value;
+            }
+        });
+        
+        return vehicle;
     }
     
     editRow(rowIndex) {
@@ -2708,6 +1868,16 @@ class OrderWizard {
         }
     }
     
+    proceedToQRGeneration() {
+        // Move to order number step (QR generation will happen in final step)
+        if (this.processedOrders.length > 0) {
+            const lastOrder = this.processedOrders[this.processedOrders.length - 1];
+            this.showOrderNumberStep(lastOrder.dealership, lastOrder.result);
+        } else {
+            this.showError('No processed orders found');
+        }
+    }
+
     downloadCSV() {
         if (this.currentOrderResult && this.currentOrderResult.download_csv) {
             window.open(this.currentOrderResult.download_csv, '_blank');
@@ -2716,12 +1886,847 @@ class OrderWizard {
         }
     }
     
+    previousStep() {
+        // Navigate to previous step in the wizard
+        const currentStepIndex = this.steps.indexOf(this.getCurrentStep());
+        if (currentStepIndex > 0) {
+            const previousStep = this.steps[currentStepIndex - 1];
+            this.updateProgress(previousStep);
+            this.showStep(previousStep + 'Step');
+        }
+    }
+
+    getCurrentStep() {
+        // Find current active step
+        const activeStep = document.querySelector('.wizard-step.active');
+        if (activeStep) {
+            const stepId = activeStep.id;
+            return stepId.replace('Step', '');
+        }
+        return 'initialize';
+    }
+
+    processListVins() {
+        // Get VINs from the table instead of textarea
+        const vins = this.getAllVinsFromTable();
+        
+        if (vins.length === 0) {
+            this.showError('Please enter at least one VIN for processing');
+            return;
+        }
+
+        // Validate all VINs before processing
+        const invalidVins = vins.filter(vin => !this.isValidVin(vin));
+        if (invalidVins.length > 0) {
+            this.showError(`Please correct the following invalid VINs: ${invalidVins.join(', ')}`);
+            return;
+        }
+
+        // Get current list order
+        const currentOrder = this.listOrders[this.currentListIndex];
+        if (!currentOrder) {
+            this.showError('No current dealership found');
+            return;
+        }
+
+        // Process the VINs
+        this.processListOrder(currentOrder.name, vins)
+            .then(result => {
+                // Store result and show review
+                this.processedOrders.push({
+                    dealership: currentOrder.name,
+                    type: 'list',
+                    vins: vins,
+                    result: result
+                });
+
+                this.showReviewStep(currentOrder.name, result);
+            })
+            .catch(error => {
+                this.showError('Error processing VINs: ' + error.message);
+            });
+    }
+
+    generateFinalOutput() {
+        const orderNumberInput = document.getElementById('orderNumberInput');
+        const orderNumber = orderNumberInput?.value.trim();
+        
+        if (!orderNumber) {
+            this.showError('Please enter an order number');
+            return;
+        }
+
+        // Apply order number and complete processing
+        this.applyOrderNumber()
+            .then(() => {
+                this.completeProcessing();
+            })
+            .catch(error => {
+                this.showError('Error completing order: ' + error.message);
+            });
+    }
+
+    viewOrderFolder() {
+        // Show information about where files are located
+        this.showMessage('Order files are available in the designated output folders. Check the completion summary for specific paths.', 'info');
+    }
+
+    startNewOrder() {
+        // Reset wizard and redirect to main page
+        if (confirm('Start a new order? This will reset the current wizard.')) {
+            window.location.href = '/';
+        }
+    }
+
     escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
     }
+
+    // =============================================================================
+    // VIN TABLE MANAGEMENT FUNCTIONS
+    // =============================================================================
+
+    initializeVinTable() {
+        const tableBody = document.getElementById('vinTableBody');
+        
+        if (!tableBody) {
+            console.error('VIN table body not found! Retrying...');
+            
+            // Retry after a delay if table body not found
+            setTimeout(() => {
+                this.initializeVinTable();
+            }, 300);
+            return;
+        }
+
+        // Clear existing rows and add initial 5 rows
+        tableBody.innerHTML = '';
+        
+        // Create all rows synchronously first, then attach event listeners
+        const rowsToCreate = 5;
+        
+        for (let i = 0; i < rowsToCreate; i++) {
+            const rowNumber = i + 1;
+            this.createVinRowElement(rowNumber);
+        }
+        
+        // After all rows are created, attach event listeners with a delay
+        setTimeout(() => {
+            this.attachAllEventListeners();
+            this.updateVinCounts();
+            
+            // Focus on first input
+            const firstInput = document.getElementById('vin-input-1');
+            if (firstInput) {
+                firstInput.focus();
+            }
+        }, 100);
+    }
+    
+    createVinRowElement(rowNumber) {
+        const tableBody = document.getElementById('vinTableBody');
+        if (!tableBody) return;
+
+        const row = document.createElement('tr');
+        row.className = 'vin-row';
+        row.id = `vin-row-${rowNumber}`;
+
+        row.innerHTML = `
+            <td class="row-number">${rowNumber}</td>
+            <td>
+                <input type="text" 
+                       class="vin-input" 
+                       id="vin-input-${rowNumber}"
+                       placeholder="Enter 17-character VIN"
+                       maxlength="17"
+                       data-row-number="${rowNumber}"
+                       autocomplete="off"
+                       spellcheck="false">
+            </td>
+            <td class="vin-status" id="vin-status-${rowNumber}">
+                <i class="fas fa-minus-circle" style="color: #9ca3af;"></i>
+            </td>
+        `;
+
+        tableBody.appendChild(row);
+        console.log(`Created VIN row element ${rowNumber}`);
+    }
+    
+    attachAllEventListeners() {
+        console.log('Attaching event listeners to all VIN inputs...');
+        const inputs = document.querySelectorAll('.vin-input');
+        
+        inputs.forEach(input => {
+            const rowNumber = parseInt(input.getAttribute('data-row-number'));
+            if (rowNumber && !input.hasAttribute('data-listeners-attached')) {
+                // Use arrow functions to maintain 'this' context
+                input.addEventListener('input', (event) => {
+                    this.filterVinInput(event, rowNumber);
+                    this.validateVin(rowNumber);
+                });
+                
+                input.addEventListener('paste', (event) => {
+                    this.handleVinPaste(event, rowNumber);
+                });
+                
+                input.addEventListener('keydown', (event) => {
+                    this.handleVinKeydown(event, rowNumber);
+                });
+                
+                input.addEventListener('keypress', (event) => {
+                    this.handleVinKeypress(event, rowNumber);
+                });
+                
+                // Mark as having listeners attached to prevent double-binding
+                input.setAttribute('data-listeners-attached', 'true');
+                console.log(`Event listeners attached for VIN input row ${rowNumber}`);
+            }
+        });
+    }
+
+    addVinRow() {
+        const tableBody = document.getElementById('vinTableBody');
+        if (!tableBody) return;
+
+        const rowNumber = tableBody.rows.length + 1;
+        
+        // Create the row element
+        this.createVinRowElement(rowNumber);
+        
+        // Attach event listeners for the new row with a small delay
+        setTimeout(() => {
+            const input = document.getElementById(`vin-input-${rowNumber}`);
+            if (input && !input.hasAttribute('data-listeners-attached')) {
+                // Use arrow functions to maintain 'this' context
+                input.addEventListener('input', (event) => {
+                    this.filterVinInput(event, rowNumber);
+                    this.validateVin(rowNumber);
+                });
+                
+                input.addEventListener('paste', (event) => {
+                    this.handleVinPaste(event, rowNumber);
+                });
+                
+                input.addEventListener('keydown', (event) => {
+                    this.handleVinKeydown(event, rowNumber);
+                });
+                
+                input.addEventListener('keypress', (event) => {
+                    this.handleVinKeypress(event, rowNumber);
+                });
+                
+                // Mark as having listeners attached
+                input.setAttribute('data-listeners-attached', 'true');
+                console.log(`Event listeners added for new VIN input row ${rowNumber}`);
+            } else if (input) {
+                console.log(`Row ${rowNumber} already has event listeners attached`);
+            } else {
+                console.error(`Failed to find input element for new row ${rowNumber}`);
+            }
+            
+            this.updateVinCounts();
+        }, 50);
+    }
+
+    removeLastRow() {
+        const tableBody = document.getElementById('vinTableBody');
+        if (!tableBody || tableBody.rows.length <= 1) return;
+
+        tableBody.removeChild(tableBody.lastElementChild);
+        this.updateVinCounts();
+    }
+
+    validateVin(rowNumber) {
+        console.log(`Validating VIN for row ${rowNumber}`);
+        
+        // Wait a moment for DOM to be ready if called immediately after element creation
+        if (!document.getElementById(`vin-input-${rowNumber}`)) {
+            console.log(`Element not ready for row ${rowNumber}, scheduling retry...`);
+            setTimeout(() => {
+                this.validateVin(rowNumber);
+            }, 50);
+            return;
+        }
+        
+        // Use more robust element selection with multiple fallback strategies
+        let input = document.getElementById(`vin-input-${rowNumber}`);
+        let status = document.getElementById(`vin-status-${rowNumber}`);
+        let row = document.getElementById(`vin-row-${rowNumber}`);
+        
+        // Additional fallback strategies
+        if (!input) {
+            input = document.querySelector(`input[data-row-number="${rowNumber}"]`);
+            console.log(`Fallback querySelector found input for row ${rowNumber}: ${!!input}`);
+        }
+        if (!status) {
+            status = document.querySelector(`#vin-status-${rowNumber}, .vin-status:nth-child(${rowNumber})`);
+        }
+        if (!row) {
+            row = document.querySelector(`#vin-row-${rowNumber}`);
+        }
+        
+        if (!input || !status || !row) {
+            console.error(`Missing elements for row ${rowNumber}:`, {
+                input: !!input,
+                status: !!status, 
+                row: !!row,
+                availableInputs: document.querySelectorAll('.vin-input').length,
+                targetId: `vin-input-${rowNumber}`
+            });
+            
+            // Final retry attempt
+            setTimeout(() => {
+                console.log('Final retry attempt for validation...');
+                this.validateVinRetry(rowNumber);
+            }, 150);
+            return;
+        }
+
+        const vin = input.value.trim().toUpperCase();
+        input.value = vin; // Convert to uppercase
+        
+        console.log(`Row ${rowNumber} VIN: "${vin}" (length: ${vin.length})`);
+
+        // Remove previous validation classes
+        input.classList.remove('valid', 'invalid');
+        status.classList.remove('valid', 'invalid');
+        row.classList.remove('valid', 'invalid');
+
+        if (vin.length === 0) {
+            // Empty VIN
+            status.innerHTML = '<i class="fas fa-minus-circle" style="color: #9ca3af;"></i>';
+            console.log(`Row ${rowNumber}: Empty VIN`);
+        } else {
+            const isValid = this.isValidVin(vin);
+            console.log(`Row ${rowNumber}: VIN validation result:`, isValid);
+            
+            if (isValid) {
+                // Valid VIN
+                input.classList.add('valid');
+                status.classList.add('valid');
+                row.classList.add('valid');
+                status.innerHTML = '<i class="fas fa-check-circle"></i>';
+                console.log(`Row ${rowNumber}: VIN marked as VALID`);
+            } else {
+                // Invalid VIN
+                input.classList.add('invalid');
+                status.classList.add('invalid');
+                row.classList.add('invalid');
+                status.innerHTML = '<i class="fas fa-times-circle"></i>';
+                console.log(`Row ${rowNumber}: VIN marked as INVALID`);
+                
+                // Show notification for invalid length
+                if (vin.length !== 17) {
+                    this.showVinError(rowNumber, `VIN must be exactly 17 characters (currently ${vin.length})`);
+                }
+            }
+        }
+
+        this.updateVinCounts();
+    }
+    
+    validateVinRetry(rowNumber) {
+        // Retry validation with fresh element lookup
+        const input = document.getElementById(`vin-input-${rowNumber}`);
+        if (input) {
+            console.log(`Retry validation successful for row ${rowNumber}`);
+            this.validateVin(rowNumber);
+        } else {
+            console.error(`Retry validation failed - still cannot find input for row ${rowNumber}`);
+        }
+    }
+
+    isValidVin(vin) {
+        if (!vin || typeof vin !== 'string') return false;
+        
+        // Check length
+        if (vin.length !== 17) return false;
+        
+        // Check for invalid characters (VINs don't contain I, O, Q)
+        if (/[IOQ]/.test(vin)) return false;
+        
+        // Check for valid alphanumeric characters only
+        if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)) return false;
+        
+        return true;
+    }
+
+    showVinError(rowNumber, message) {
+        // Create temporary notification
+        const notification = document.createElement('div');
+        notification.className = 'vin-error-notification';
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #fef2f2;
+            border: 2px solid #dc2626;
+            color: #dc2626;
+            padding: 12px 16px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10000;
+            max-width: 300px;
+            font-weight: 500;
+        `;
+        notification.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <i class="fas fa-exclamation-triangle"></i>
+                <div>
+                    <strong>Row ${rowNumber}:</strong><br>
+                    ${message}
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(notification);
+
+        // Remove notification after 3 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 3000);
+    }
+
+    filterVinInput(event, rowNumber) {
+        const input = event.target;
+        if (!input) return;
+        
+        let value = input.value;
+        
+        // Remove invalid characters (I, O, Q, and non-alphanumeric except hyphens temporarily)
+        let cleaned = value.replace(/[^A-HJ-NPR-Z0-9]/gi, '');
+        
+        // Convert to uppercase
+        cleaned = cleaned.toUpperCase();
+        
+        // Limit to 17 characters
+        if (cleaned.length > 17) {
+            cleaned = cleaned.substring(0, 17);
+        }
+        
+        // Update input value if it was changed
+        if (value !== cleaned) {
+            input.value = cleaned;
+            console.log(`Filtered input for row ${rowNumber}: "${value}" → "${cleaned}"`);
+        }
+    }
+    
+    handleVinKeypress(event, rowNumber) {
+        const char = String.fromCharCode(event.which || event.keyCode);
+        
+        // Allow control keys (backspace, delete, etc.)
+        if (event.which < 32) return;
+        
+        // Check if character is valid for VIN
+        if (!/[A-HJ-NPR-Z0-9]/i.test(char)) {
+            event.preventDefault();
+            console.log(`Blocked invalid character "${char}" for row ${rowNumber}`);
+            
+            // Show error for invalid characters
+            if (/[IOQ]/i.test(char)) {
+                this.showVinError(rowNumber, `Character "${char.toUpperCase()}" is not allowed in VINs`);
+            }
+        }
+        
+        // Check length limit
+        const input = event.target;
+        if (input && input.value.length >= 17) {
+            event.preventDefault();
+            console.log(`Blocked character - 17 character limit reached for row ${rowNumber}`);
+        }
+    }
+
+    handleVinPaste(event, rowNumber) {
+        // Get pasted data
+        const pasteData = (event.clipboardData || window.clipboardData).getData('text');
+        
+        if (pasteData) {
+            // Clean the pasted data
+            let cleaned = pasteData.replace(/[^A-HJ-NPR-Z0-9]/gi, '');
+            cleaned = cleaned.toUpperCase();
+            cleaned = cleaned.substring(0, 17); // Limit to 17 characters
+            
+            // Prevent default paste and set cleaned value
+            event.preventDefault();
+            
+            const input = event.target;
+            if (input) {
+                input.value = cleaned;
+                console.log(`Pasted and cleaned VIN for row ${rowNumber}: "${pasteData}" → "${cleaned}"`);
+                
+                // Validate after paste
+                setTimeout(() => {
+                    this.validateVin(rowNumber);
+                }, 10);
+            }
+        }
+    }
+
+    handleVinKeydown(event, rowNumber) {
+        // Handle Enter key to create new row and jump to it
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            
+            const input = document.getElementById(`vin-input-${rowNumber}`);
+            if (!input) {
+                console.error(`Cannot find input for row ${rowNumber}`);
+                return;
+            }
+            
+            const vin = input.value.trim().toUpperCase();
+            
+            console.log(`Enter key pressed on row ${rowNumber}, VIN: "${vin}" (length: ${vin.length})`);
+            
+            // Only create new row if current VIN is valid or if user wants to skip
+            if (vin.length === 17 && this.isValidVin(vin)) {
+                console.log(`Valid VIN entered, creating new row...`);
+                // Add new row and focus on it
+                this.addVinRow();
+                const tableBody = document.getElementById('vinTableBody');
+                const newRowNumber = tableBody ? tableBody.rows.length : rowNumber + 1;
+                
+                setTimeout(() => {
+                    const newInput = document.getElementById(`vin-input-${newRowNumber}`);
+                    if (newInput) {
+                        newInput.focus();
+                        console.log(`Focused on new row ${newRowNumber}`);
+                    } else {
+                        console.error(`Could not focus on new input ${newRowNumber}`);
+                    }
+                }, 100); // Increased delay to ensure DOM is updated
+            } else if (vin.length > 0) {
+                // Show error if VIN is not valid
+                console.log(`Invalid VIN, showing error...`);
+                this.showVinError(rowNumber, 'Please enter a valid 17-character VIN before moving to next row');
+            } else {
+                // Allow moving to next row even if current is empty
+                console.log(`Empty VIN, moving to next row...`);
+                this.focusNextRow(rowNumber);
+            }
+        }
+    }
+
+    focusNextRow(currentRow) {
+        const tableBody = document.getElementById('vinTableBody');
+        if (!tableBody) {
+            console.error('Cannot find VIN table body');
+            return;
+        }
+        
+        // Check if next row exists
+        const nextRowNumber = currentRow + 1;
+        let nextInput = document.getElementById(`vin-input-${nextRowNumber}`);
+        
+        console.log(`Attempting to focus on row ${nextRowNumber}, input exists: ${!!nextInput}`);
+        
+        if (!nextInput) {
+            // Create new row if it doesn't exist
+            console.log(`Creating new row ${nextRowNumber}...`);
+            this.addVinRow();
+            setTimeout(() => {
+                nextInput = document.getElementById(`vin-input-${nextRowNumber}`);
+                if (nextInput) {
+                    nextInput.focus();
+                    console.log(`Successfully focused on new row ${nextRowNumber}`);
+                } else {
+                    console.error(`Failed to create/focus on row ${nextRowNumber}`);
+                }
+            }, 100);
+        } else {
+            nextInput.focus();
+            console.log(`Focused on existing row ${nextRowNumber}`);
+        }
+    }
+
+    getAllVinsFromTable() {
+        const tableBody = document.getElementById('vinTableBody');
+        if (!tableBody) return [];
+
+        const vins = [];
+        for (let i = 1; i <= tableBody.rows.length; i++) {
+            const input = document.getElementById(`vin-input-${i}`);
+            if (input && input.value.trim()) {
+                vins.push(input.value.trim().toUpperCase());
+            }
+        }
+
+        return vins;
+    }
+
+    updateVinCounts() {
+        const vins = this.getAllVinsFromTable();
+        const validVins = vins.filter(vin => this.isValidVin(vin));
+        const invalidVins = vins.filter(vin => vin.length > 0 && !this.isValidVin(vin));
+
+        document.getElementById('validCount').textContent = validVins.length;
+        document.getElementById('invalidCount').textContent = invalidVins.length;
+        document.getElementById('totalCount').textContent = vins.length;
+    }
+
+    clearVinTable() {
+        const tableBody = document.getElementById('vinTableBody');
+        if (!tableBody) return;
+
+        // Clear all input values
+        for (let i = 1; i <= tableBody.rows.length; i++) {
+            const input = document.getElementById(`vin-input-${i}`);
+            if (input) {
+                input.value = '';
+                this.validateVin(i);
+            }
+        }
+    }
+    
+    debugVinTable() {
+        // Debugging function to check the state of all VIN inputs
+        console.log('=== VIN TABLE DEBUG INFO ===');
+        const tableBody = document.getElementById('vinTableBody');
+        if (!tableBody) {
+            console.log('❌ Table body not found');
+            return;
+        }
+        
+        console.log(`📊 Total rows: ${tableBody.rows.length}`);
+        
+        const inputs = document.querySelectorAll('.vin-input');
+        console.log(`🔍 Total VIN inputs found: ${inputs.length}`);
+        
+        inputs.forEach((input, index) => {
+            const rowNumber = input.getAttribute('data-row-number');
+            const hasListeners = input.hasAttribute('data-listeners-attached');
+            const value = input.value;
+            const id = input.id;
+            
+            console.log(`Row ${index + 1}:`, {
+                id,
+                rowNumber,
+                hasListeners,
+                value: value || '(empty)',
+                exists: !!document.getElementById(id)
+            });
+        });
+        
+        // Test validation on all rows
+        for (let i = 1; i <= tableBody.rows.length; i++) {
+            const input = document.getElementById(`vin-input-${i}`);
+            if (input && input.value.length === 17) {
+                console.log(`🧪 Testing validation on row ${i} with VIN: ${input.value}`);
+                this.validateVin(i);
+            }
+        }
+        
+        console.log('=== END DEBUG INFO ===');
+    }
 }
 
-// Wizard initialization is handled in the HTML template to avoid conflicts
-// This ensures proper loading order and prevents duplicate declarations
+// Initialize wizard when page loads
+let wizard;
+document.addEventListener('DOMContentLoaded', () => {
+    wizard = new OrderWizard();
+    // Set global reference after initialization
+    window.wizard = wizard;
+    
+    // Add global debugging functions for troubleshooting
+    window.debugVinTable = () => {
+        if (wizard) {
+            wizard.debugVinTable();
+        } else {
+            console.log('❌ Wizard not initialized');
+        }
+    };
+    
+    window.repairVinValidation = () => {
+        if (wizard) {
+            console.log('🔧 Repairing VIN validation...');
+            wizard.attachAllEventListeners();
+            console.log('✅ VIN validation repair completed');
+        } else {
+            console.log('❌ Wizard not initialized');
+        }
+    };
+    
+    window.testVinValidation = (rowNumber) => {
+        if (wizard && rowNumber) {
+            console.log(`🧪 Testing validation on row ${rowNumber}`);
+            wizard.validateVin(rowNumber);
+        } else {
+            console.log('❌ Wizard not initialized or row number not provided');
+        }
+    };
+});
+
+// Manual Data Entry Modal Functions
+let currentEditingVehicle = null;
+let currentEditingIndex = -1;
+let reviewVehicleData = []; // Store the review data globally
+
+function openManualDataModal(rowIndex, vehicleData) {
+    currentEditingIndex = rowIndex;
+    currentEditingVehicle = { ...vehicleData }; // Clone the data
+    
+    // Populate the form with current data
+    document.getElementById('editYear').value = vehicleData.year || '';
+    document.getElementById('editMake').value = vehicleData.make || '';
+    document.getElementById('editModel').value = vehicleData.model || '';
+    document.getElementById('editTrim').value = vehicleData.trim || '';
+    document.getElementById('editStock').value = vehicleData.stock || '';
+    document.getElementById('editVin').value = vehicleData.vin || '';
+    document.getElementById('editPrice').value = vehicleData.price || '';
+    document.getElementById('editType').value = vehicleData.type || 'Pre-Owned';
+    document.getElementById('editColor').value = vehicleData.ext_color || '';
+    document.getElementById('editMileage').value = vehicleData.mileage || '';
+    document.getElementById('editFuelType').value = vehicleData.fuel_type || '';
+    document.getElementById('editTransmission').value = vehicleData.transmission || '';
+    document.getElementById('editVehicleUrl').value = vehicleData.vehicle_url || '';
+    document.getElementById('editRowIndex').value = rowIndex;
+    
+    // Show the modal
+    document.getElementById('manualDataEntryModal').style.display = 'flex';
+    
+    // Focus on the first input
+    setTimeout(() => {
+        document.getElementById('editYear').focus();
+    }, 100);
+}
+
+function closeManualDataModal() {
+    document.getElementById('manualDataEntryModal').style.display = 'none';
+    currentEditingVehicle = null;
+    currentEditingIndex = -1;
+    
+    // Clear the form
+    document.getElementById('vehicleEditForm').reset();
+}
+
+function saveVehicleEdit() {
+    const formData = new FormData(document.getElementById('vehicleEditForm'));
+    const updatedVehicle = {};
+    
+    // Extract all form data
+    for (let [key, value] of formData.entries()) {
+        if (key !== 'rowIndex') {
+            updatedVehicle[key] = value;
+        }
+    }
+    
+    // Validate required fields
+    if (!updatedVehicle.vin || updatedVehicle.vin.length !== 17) {
+        alert('VIN must be exactly 17 characters');
+        return;
+    }
+    
+    if (!updatedVehicle.year || updatedVehicle.year < 1900 || updatedVehicle.year > 2030) {
+        alert('Please enter a valid year');
+        return;
+    }
+    
+    if (!updatedVehicle.make || !updatedVehicle.model) {
+        alert('Make and Model are required');
+        return;
+    }
+    
+    // Update the vehicle data in the global array
+    if (reviewVehicleData[currentEditingIndex]) {
+        Object.assign(reviewVehicleData[currentEditingIndex], updatedVehicle);
+    }
+    
+    // Update the displayed table
+    updateReviewTableRow(currentEditingIndex, updatedVehicle);
+    
+    // Close the modal
+    closeManualDataModal();
+    
+    // Show success message
+    showNotification('Vehicle data updated successfully', 'success');
+}
+
+function updateReviewTableRow(rowIndex, vehicleData) {
+    const table = document.querySelector('#modalReviewSummary table tbody');
+    if (!table) return;
+    
+    const row = table.rows[rowIndex];
+    if (!row) return;
+    
+    // Update table cells (adjust indices based on your table structure)
+    const cells = row.cells;
+    if (cells.length >= 7) {
+        cells[1].textContent = `${vehicleData.year || ''} ${vehicleData.make || ''}`.trim();
+        cells[2].textContent = vehicleData.model || '';
+        cells[3].textContent = vehicleData.trim || '';
+        cells[4].textContent = vehicleData.stock || '';
+        cells[5].textContent = vehicleData.vin || '';
+        // QR code column stays the same (index 6)
+    }
+}
+
+function showNotification(message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.innerHTML = `
+        <div class="notification-content">
+            <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i>
+            <span>${message}</span>
+        </div>
+    `;
+    
+    // Add styles
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: var(--bg-surface);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 12px 16px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        z-index: 10000;
+        max-width: 300px;
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+    `;
+    
+    if (type === 'success') {
+        notification.style.borderColor = '#10b981';
+        notification.style.background = 'rgba(16, 185, 129, 0.1)';
+    } else if (type === 'error') {
+        notification.style.borderColor = '#ef4444';
+        notification.style.background = 'rgba(239, 68, 68, 0.1)';
+    }
+    
+    // Add to document
+    document.body.appendChild(notification);
+    
+    // Animate in
+    setTimeout(() => {
+        notification.style.transform = 'translateX(0)';
+    }, 100);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        notification.style.transform = 'translateX(100%)';
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, 3000);
+}
+
+// Close modal when clicking outside
+document.addEventListener('click', (e) => {
+    if (e.target.id === 'manualDataEntryModal') {
+        closeManualDataModal();
+    }
+});
+
+// Close modal with Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.getElementById('manualDataEntryModal').style.display === 'flex') {
+        closeManualDataModal();
+    }
+});

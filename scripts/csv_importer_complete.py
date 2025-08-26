@@ -15,6 +15,7 @@ from database_config import (
     config, CONDITION_MAPPING, CSV_COLUMNS, 
     REQUIRED_COLUMNS, NUMERIC_COLUMNS, DATE_COLUMNS
 )
+from scraper_data_normalizer import normalizer
 
 logger = logging.getLogger(__name__)
 
@@ -328,10 +329,21 @@ class CompleteCSVImporter:
                     stock = self.get_column_value(row, ['stock', 'stock_number', 'stocknumber', 'stock_no'])
                     year_str = self.get_column_value(row, ['year'])
                     
+                    # Get the SAME data that's being stored successfully
+                    condition_data = self.get_column_value(row, ['condition', 'vehicle_condition', 'status'])
+                    
+                    # Apply normalization using the actual data being stored
+                    normalized_type = normalizer.normalize_vehicle_type(condition_data or '')
+                    lot_status = normalizer.normalize_lot_status(condition_data or '')
+                    
+                    # Store normalized values for use in normalized_vehicle_data table
+                    self.current_normalized_type = normalized_type
+                    self.current_lot_status = lot_status
+                    
                     raw_tuple = (
                         vin,
                         stock,
-                        'Vehicle',  # type (generic)
+                        condition_data or 'Vehicle',  # type (use condition data that actually exists)
                         int(year_str) if year_str and year_str.isdigit() else None,
                         self.get_column_value(row, ['make']),
                         self.get_column_value(row, ['model']),
@@ -349,7 +361,9 @@ class CompleteCSVImporter:
                         '',  # region
                         '',  # country
                         dealership_name,  # location
-                        row.get('url', '')
+                        row.get('url', ''),
+                        normalized_type,  # normalized_type
+                        lot_status  # on_lot_status
                     )
                     raw_data.append(raw_tuple)
                 
@@ -359,7 +373,8 @@ class CompleteCSVImporter:
                         'vin', 'stock', 'type', 'year', 'make', 'model', 'trim',
                         'ext_color', 'status', 'price', 'body_style', 'fuel_type',
                         'msrp', 'date_in_stock', 'street_address', 'locality',
-                        'postal_code', 'region', 'country', 'location', 'vehicle_url'
+                        'postal_code', 'region', 'country', 'location', 'vehicle_url',
+                        'normalized_type', 'on_lot_status'
                     ]
                     
                     rows_inserted = self.db.execute_batch_insert(
@@ -385,23 +400,35 @@ class CompleteCSVImporter:
                     
                     # Prepare normalized data
                     for record in raw_records:
-                        condition = self.normalize_condition(record['status'])
+                        # Get the normalized values calculated during raw data processing
+                        condition_data = record.get('type', '')
+                        normalized_vehicle_type = normalizer.normalize_vehicle_type(condition_data)
+                        normalized_lot_status = normalizer.normalize_lot_status(condition_data)
+                        
+                        # Convert normalizer output to database format
+                        if normalized_lot_status in ['onlot', 'on lot']:
+                            db_lot_status = 'on lot'
+                        elif normalized_lot_status in ['offlot', 'off lot']:
+                            db_lot_status = 'off lot'
+                        else:
+                            db_lot_status = record['status']  # fallback to original
                         
                         normalized_tuple = (
                             record['id'],  # raw_data_id
                             record['vin'],
                             record['stock'],
-                            condition,
+                            normalized_vehicle_type,  # vehicle_condition (po, cpo, new)
                             record['year'],
                             record['make'],
                             record['model'],
                             record['trim'],
-                            record['status'],
+                            db_lot_status,  # status (on lot, off lot)
                             record['price'],
                             record['msrp'],
                             record['date_in_stock'],
                             record['location'],
-                            record['vehicle_url']
+                            record['vehicle_url'],
+                            db_lot_status  # on_lot_status column
                         )
                         normalized_data.append(normalized_tuple)
                         
@@ -417,7 +444,7 @@ class CompleteCSVImporter:
                         norm_columns = [
                             'raw_data_id', 'vin', 'stock', 'vehicle_condition',
                             'year', 'make', 'model', 'trim', 'status', 'price',
-                            'msrp', 'date_in_stock', 'location', 'vehicle_url'
+                            'msrp', 'date_in_stock', 'location', 'vehicle_url', 'on_lot_status'
                         ]
                         
                         self.db.upsert_data(
@@ -426,7 +453,7 @@ class CompleteCSVImporter:
                             normalized_data,
                             conflict_columns=['vin', 'location'],
                             update_columns=['stock', 'vehicle_condition', 'price', 
-                                          'status', 'last_seen_date', 'updated_at']
+                                          'status', 'on_lot_status', 'last_seen_date', 'updated_at']
                         )
                     
                     # Insert VIN history (handle duplicates gracefully)

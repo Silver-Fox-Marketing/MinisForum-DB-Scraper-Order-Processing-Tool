@@ -40,6 +40,24 @@ Updated: 2025-08-08 - DEALERSHIP-SPECIFIC VIN LOGS IMPLEMENTATION
 
 ## 🎯 Major Version Updates
 
+### **v2.5 (August 25, 2025) - Professional Dealership Settings Interface & Bulk Management**
+- 🎨 **MAJOR UI/UX OVERHAUL**: Complete professional redesign of Dealership Settings tab
+- 💾 **CRITICAL FIX**: "Save All Changes" functionality now works properly with bulk editing
+- 🏢 **Bulk Management**: Edit multiple dealerships simultaneously with inline controls
+- ✨ **Silver Fox Brand Alignment**: Professional styling with brand colors, gradients, and animations
+- 🔧 **Enhanced Form Controls**: 
+  - Vehicle type checkboxes (New/Used/Certified) for each dealership
+  - Price range inputs (Min/Max) with real-time updates
+  - Active/Inactive toggles for dealership management
+  - Proper data validation and persistence
+- 🎭 **Modern Modal Design**: Enhanced configuration modals with backdrop blur and professional styling
+- 🚀 **Technical Improvements**:
+  - Fixed duplicate function naming conflicts
+  - Proper API endpoint integration for bulk updates
+  - Enhanced error handling with detailed user feedback
+  - Real-time terminal status messages for save operations
+- 💡 **User Experience**: Smooth animations, hover effects, and visual feedback systems
+
 ### **v2.4 (August 19, 2025) - Complete Dealership Search Functionality**
 - 🔍 **FIXED: Dealership Search**: Complete resolution of search functionality issues
 - 🎯 **Search Features**: Type-to-filter dealerships in Order Processing tab works perfectly
@@ -217,6 +235,9 @@ Updated: 2025-08-08 - DEALERSHIP-SPECIFIC VIN LOGS IMPLEMENTATION
 - ✅ **Comprehensive Testing** - Stress test framework
 - ✅ **CSV Export System** - Export VIN logs and scraper data with one click
 - ✅ **VIN Log Management** - Import/export historical order data for accuracy testing
+- ✅ **Professional Dealership Settings** - Bulk editing with Silver Fox brand styling *(NEW v2.5)*
+- ✅ **Inline Editing Controls** - Modify multiple dealerships without modal switching *(NEW v2.5)*
+- ✅ **Enhanced Save Functionality** - Proper bulk save operations with error handling *(NEW v2.5)*
 
 ## 🏗️ Database Structure
 
@@ -260,6 +281,43 @@ Each dealership has configurable:
 - **Filtering Rules**: Exclude conditions, price ranges, year limits
 - **Output Rules**: Sort order, format preferences, QR inclusion
 - **QR Output Paths**: Custom directory structure
+
+## 🏢 Dealership Settings Management *(NEW v2.5)*
+
+### **Professional Bulk Editing Interface**
+The Dealership Settings tab provides a modern, professional interface for managing all 36 dealership configurations simultaneously.
+
+### **Key Features**
+- **✅ Bulk Management**: Edit multiple dealerships at once without modal switching
+- **✅ Inline Controls**: Vehicle type checkboxes, price ranges, and active toggles in each card
+- **✅ Real-time Updates**: Instant visual feedback for all changes
+- **✅ Silver Fox Branding**: Professional styling with brand colors and animations
+- **✅ Enhanced Save Functionality**: "Save All Changes" button works properly with bulk operations
+
+### **How to Use**
+1. **Access Settings**: Navigate to the "Dealership Settings" tab in the web interface
+2. **Edit Multiple Dealers**: Modify vehicle types, price ranges, and status for any number of dealerships
+3. **Save All Changes**: Click the "Save All Changes" button to update all modifications at once
+4. **Monitor Progress**: Check the System Status console for detailed save results and error handling
+
+### **Form Controls Available**
+- **Vehicle Types**: New, Used, Certified checkboxes for each dealership
+- **Price Range**: Min and Max price input fields for filtering
+- **Active Status**: Toggle to enable/disable dealership processing
+- **Advanced Configuration**: Gear icon (⚙️) opens detailed modal for complex settings
+
+### **Visual Design**
+- **Modern Cards**: Professional card-based layout with hover effects
+- **Brand Colors**: Silver Fox red, gold, and gradient styling throughout
+- **Smooth Animations**: Hover effects, scale transforms, and shimmer animations
+- **Enhanced Typography**: Brand-aligned fonts with proper hierarchy
+- **Responsive Layout**: Optimized grid system for various screen sizes
+
+### **Technical Benefits**
+- **Proper API Integration**: Fixed endpoint handling for bulk updates
+- **Error Handling**: Comprehensive error reporting with user feedback
+- **Data Validation**: Client-side and server-side validation for all inputs
+- **Performance**: Efficient batch processing of multiple dealership updates
 
 ## 📤 Export Functionality
 
@@ -424,7 +482,13 @@ The system provides intelligent VIN logging control to maintain clean historical
    - Check file encoding (should be UTF-8)
    - Ensure dealership names match config exactly
 
-3. **Performance Issues**
+3. **Dealership Settings Save Issues (FIXED in v2.5)**
+   ✅ **"Save All Changes" now works perfectly!** If you experience save issues:
+   - **Problem**: Button not responding or no changes saved
+   - **Solution**: Fixed in v2.5 - proper bulk save functionality implemented
+   - **How to test**: Make changes to vehicle types or price ranges, click "Save All Changes" - should see success messages in System Status console
+
+4. **Performance Issues**
    - Run VACUUM ANALYZE after large imports
    - Check disk space (>2GB recommended)
    - Verify indexes are created
