@@ -70,10 +70,15 @@
             </button>
             <div class="header-content">
                 <div class="logo-section">
-                    <img src="{{ url_for('static', filename='images/LS_MAIN-PRIMARY.svg') }}?v={{ range(1000, 9999) | random }}&logo-fix" alt="Silver Fox Marketing" class="header-logo">
+                    <img src="{{ url_for('static', filename='images/Asset_58.svg') }}?v={{ range(1000, 9999) | random }}&logo-fix" alt="Silver Fox Marketing" class="header-logo">
                     <div class="title-section">
-                        <h1 class="app-title">Database and Order Processing Toolkit</h1>
-                        <span class="company-name">Silver Fox Marketing</span>
+                        <div class="title-with-logo">
+                            <div class="title-text">
+                                <h1 class="app-title">Database and Order Processing Toolkit</h1>
+                                <span class="company-name">Silver Fox Marketing</span>
+                            </div>
+                            <img src="{{ url_for('static', filename='images/car_logo_orange.png') }}?v=123" alt="LotSherpa" class="car-logo">
+                        </div>
                     </div>
                 </div>
                 <div class="status-section">
@@ -84,6 +89,11 @@
                     <div class="last-scrape" id="lastScrape">
                         Last Scrape: Never
                     </div>
+                    <!-- TEST: Asset 58 Logo -->
+                    <div style="margin: 0 20px;">
+                        <img src="{{ url_for('static', filename='images/Asset_58.svg') }}?test=123" alt="Test Asset 58" style="height: 40px; width: auto;">
+                    </div>
+                    
                     <!-- Dark Mode Toggle -->
                     <div class="theme-toggle-container">
                         <label class="theme-toggle" for="darkModeToggle" title="Toggle Dark Mode">

@@ -291,52 +291,37 @@ body {
 
 /* Header */
 .app-header {
-    background: linear-gradient(135deg, var(--primary-red) 0%, var(--dark-red) 100%);
-    color: var(--white);
+    background: linear-gradient(135deg, #231f20 0%, #2a2424 50%, #231f20 100%);
+    color: #ffffff;
     padding: var(--spacing-md) var(--spacing-xl);
-    box-shadow: var(--shadow-md);
+    box-shadow: 0 4px 20px rgba(35, 31, 32, 0.5);
     z-index: 100;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border-bottom: 1px solid rgba(120, 120, 120, 0.2);
 }
 
 /* Enhanced Dark Mode Header Styling */
 [data-theme="dark"] .app-header {
-    background: linear-gradient(135deg, 
-        rgba(30, 34, 42, 0.98) 0%, 
-        rgba(25, 29, 36, 0.95) 30%, 
-        rgba(35, 39, 47, 0.98) 100%);
-    color: rgba(255, 255, 255, 0.95);
-    border-bottom: 1px solid rgba(253, 65, 13, 0.2);
+    background: linear-gradient(135deg, #231f20 0%, #1a1617 30%, #231f20 100%);
+    color: #ffffff;
+    border-bottom: 1px solid rgba(120, 120, 120, 0.3);
     box-shadow: 
-        0 4px 20px rgba(0, 0, 0, 0.25),
-        0 1px 0 rgba(255, 255, 255, 0.05) inset,
-        0 -1px 0 rgba(253, 65, 13, 0.1);
+        0 4px 20px rgba(35, 31, 32, 0.6),
+        0 1px 0 rgba(255, 255, 255, 0.1) inset;
     backdrop-filter: blur(20px);
 }
 
 /* Header Text Styling for Dark Mode */
 [data-theme="dark"] .app-header .app-title {
-    color: rgba(255, 255, 255, 0.95);
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    color: #ffffff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 [data-theme="dark"] .app-header .company-name {
-    color: rgba(253, 65, 13, 0.9);
+    color: rgba(120, 120, 120, 0.9);
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
-/* Header Logo Dark Mode Enhancement */
-[data-theme="dark"] .app-header .header-logo {
-    filter: brightness(1.2) contrast(1.1) saturate(1.1);
-    opacity: 0.98;
-    box-shadow: 0 2px 8px rgba(253, 65, 13, 0.2);
-}
-
-[data-theme="dark"] .app-header .header-logo:hover {
-    filter: brightness(1.3) contrast(1.15) saturate(1.2);
-    transform: scale(1.08);
-    box-shadow: 0 4px 12px rgba(253, 65, 13, 0.3);
-}
 
 /* Theme Toggle in Header Enhancement */
 [data-theme="dark"] .app-header .theme-toggle {
@@ -369,13 +354,29 @@ body {
 .header-logo {
     height: 45px;
     width: auto;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Enhanced Logo Styling */
-.header-logo:hover {
-    transform: scale(1.05);
-    filter: brightness(1.1);
+.title-with-logo {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.title-text {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.car-logo {
+    height: 35px;
+    width: auto;
+    opacity: 0.9;
+    transition: opacity 0.3s ease;
+}
+
+.car-logo:hover {
+    opacity: 1;
 }
 
 .title-section {

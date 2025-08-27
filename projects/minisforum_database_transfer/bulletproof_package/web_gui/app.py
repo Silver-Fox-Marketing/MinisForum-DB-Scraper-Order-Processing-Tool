@@ -73,6 +73,16 @@ except ImportError as e:
 # Flask app setup
 app = Flask(__name__)
 app.secret_key = 'silver_fox_marketing_minisforum_2025'
+# Disable template caching for development
+app.config['TEMPLATES_AUTO_RELOAD'] = True
+app.jinja_env.auto_reload = True
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+
+# Force template recompilation
+from flask import Flask
+app.jinja_env.cache = {}
+app.jinja_env.auto_reload = True
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 socketio = SocketIO(app, 
                    cors_allowed_origins="*", 
                    async_mode='threading',
@@ -393,6 +403,11 @@ queue_manager = OrderQueueManager()
 def index():
     """Main dashboard page"""
     return render_template('index.html')
+
+@app.route('/logotest')
+def logotest():
+    """Simple logo test"""
+    return '''<html><body><h1>Logo Test</h1><img src="/static/images/Asset_58.svg" height="60"><br><img src="/static/images/LS_MAIN-PRIMARY.svg" height="60"><p><a href="/">Back</a></p></body></html>'''
 
 @app.route('/websocket-test')
 def websocket_test():
