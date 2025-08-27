@@ -207,7 +207,8 @@ class MinisFornumApp {
         this.bindEventListeners();
         
         // Initialize manual VIN entry functionality
-        this.initializeManualVinEntry();
+        // Commented out - function was moved to modal-specific initialization
+        // this.initializeManualVinEntry();
         
         // Load initial data
         try {
@@ -762,18 +763,48 @@ class MinisFornumApp {
     }
     
     async saveDealershipSettings() {
-        if (!this.currentDealership) return;
+        console.log('saveDealershipSettings (first version) called');
+        console.log('currentDealership:', this.currentDealership);
+        
+        if (!this.currentDealership) {
+            console.log('No currentDealership set, returning');
+            return;
+        }
         
         try {
             // Collect form data
             const vehicleTypes = Array.from(document.querySelectorAll('input[name="vehicle_types"]:checked'))
                 .map(input => input.value);
             
-            const excludeConditions = ['new', 'po', 'cpo'].filter(type => !vehicleTypes.includes(type));
+            console.log('Vehicle types selected:', vehicleTypes);
+            
+            // Build exclude conditions based on what's NOT selected
+            const excludeConditions = [];
+            
+            // Check if NEW is excluded
+            if (!vehicleTypes.includes('new')) {
+                excludeConditions.push('new');
+            }
+            
+            // Check if USED is excluded (used encompasses po and cpo)
+            if (!vehicleTypes.includes('used')) {
+                excludeConditions.push('used');
+                excludeConditions.push('po');
+                excludeConditions.push('cpo');
+            } else {
+                // If used IS selected, we still exclude po and cpo as separate categories
+                excludeConditions.push('po');
+                excludeConditions.push('cpo');
+            }
+            
+            console.log('Exclude conditions:', excludeConditions);
             
             const filteringRules = {
-                exclude_conditions: excludeConditions,
-                require_stock: true
+                exclude_conditions: excludeConditions,  // Keep for backward compatibility
+                vehicle_types: vehicleTypes,  // Add this for backend CAO processing
+                allowed_vehicle_types: vehicleTypes,  // Also add this variant that backend checks
+                require_stock: true,
+                exclude_missing_stock: true  // Backend checks this flag
             };
             
             // Add price filters if specified
@@ -797,18 +828,26 @@ class MinisFornumApp {
             filteringRules.order_type = selectedOrderType;
             
             // Send update to server
+            const requestBody = {
+                filtering_rules: filteringRules,
+                is_active: true
+            };
+            
+            console.log('Sending update to server:', {
+                endpoint: `/api/dealerships/${this.currentDealership}`,
+                body: requestBody
+            });
+            
             const response = await fetch(`/api/dealerships/${this.currentDealership}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    filtering_rules: filteringRules,
-                    is_active: true
-                })
+                body: JSON.stringify(requestBody)
             });
             
             const result = await response.json();
+            console.log('Server response:', result);
             
             if (result.success) {
                 this.addTerminalMessage(`Updated settings for ${this.currentDealership}`, 'success');
@@ -1055,6 +1094,16 @@ class MinisFornumApp {
         }
         
         this.currentTab = tabName;
+        
+        // Show/hide floating queue actions panel based on tab
+        const floatingPanel = document.getElementById('floatingQueueActions');
+        if (floatingPanel) {
+            if (tabName === 'queue') {
+                floatingPanel.style.display = 'block';
+            } else {
+                floatingPanel.style.display = 'none';
+            }
+        }
         
         // If switching to scraper tab, ensure scraper status visibility is preserved
         if (tabName === 'scraper') {
@@ -2149,6 +2198,9 @@ class MinisFornumApp {
             refreshBtn.addEventListener('click', () => this.loadDealershipSettings());
             refreshBtn.hasEventListener = true;
         }
+        
+        // Setup search functionality for dealership settings
+        this.setupDealershipSettingsSearch(dealerships);
     }
     
     showDealershipSettingsError(message) {
@@ -2164,6 +2216,84 @@ class MinisFornumApp {
                 </button>
             </div>
         `;
+    }
+    
+    setupDealershipSettingsSearch(dealerships) {
+        const searchInput = document.getElementById('dealershipSettingsSearchInput');
+        const searchBtn = document.getElementById('dealershipSettingsSearchBtn');
+        const clearBtn = document.getElementById('clearDealershipSettingsSearchBtn');
+        const searchInfo = document.getElementById('dealershipSettingsSearchInfo');
+        
+        if (!searchInput) return;
+        
+        // Store the original dealership data
+        this.originalDealershipSettings = dealerships;
+        
+        const performSearch = () => {
+            const query = searchInput.value.toLowerCase().trim();
+            
+            if (query === '') {
+                // Show all dealerships
+                this.filterDealershipSettings('');
+                clearBtn.style.display = 'none';
+                searchInfo.style.display = 'none';
+            } else {
+                // Filter dealerships
+                this.filterDealershipSettings(query);
+                clearBtn.style.display = 'inline-block';
+                
+                // Show results count
+                const filteredCount = this.getFilteredDealershipCount(query);
+                searchInfo.style.display = 'block';
+                searchInfo.querySelector('.results-count').textContent = 
+                    `${filteredCount} dealership${filteredCount !== 1 ? 's' : ''} found`;
+            }
+        };
+        
+        // Event listeners
+        if (searchInput && !searchInput.hasDealershipSettingsListener) {
+            searchInput.addEventListener('input', performSearch);
+            searchInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    performSearch();
+                }
+            });
+            searchInput.hasDealershipSettingsListener = true;
+        }
+        
+        if (searchBtn && !searchBtn.hasDealershipSettingsListener) {
+            searchBtn.addEventListener('click', performSearch);
+            searchBtn.hasDealershipSettingsListener = true;
+        }
+        
+        if (clearBtn && !clearBtn.hasDealershipSettingsListener) {
+            clearBtn.addEventListener('click', () => {
+                searchInput.value = '';
+                performSearch();
+            });
+            clearBtn.hasDealershipSettingsListener = true;
+        }
+    }
+    
+    filterDealershipSettings(query) {
+        const cards = document.querySelectorAll('.dealership-settings-card');
+        
+        cards.forEach(card => {
+            const dealerName = card.getAttribute('data-dealer-name') || '';
+            const isVisible = query === '' || dealerName.toLowerCase().includes(query);
+            
+            card.style.display = isVisible ? 'block' : 'none';
+        });
+    }
+    
+    getFilteredDealershipCount(query) {
+        if (!this.originalDealershipSettings) return 0;
+        
+        if (query === '') return this.originalDealershipSettings.length;
+        
+        return this.originalDealershipSettings.filter(dealer => 
+            dealer.name.toLowerCase().includes(query)
+        ).length;
     }
     
     async toggleDealershipActive(dealershipName, isActive) {
@@ -2333,8 +2463,9 @@ class MinisFornumApp {
                 throw new Error(`Dealership ${dealershipName} not found`);
             }
             
-            // Store current dealership for saving later
+            // Store current dealership for saving later - set BOTH variables
             this.currentEditingDealership = dealership;
+            this.currentDealership = dealership.name;  // Set this for saveDealershipSettings function
             
             // Populate and show the modal
             this.showDealershipModal(dealership);
@@ -2354,24 +2485,69 @@ class MinisFornumApp {
         
         // Get filtering rules
         const filteringRules = dealership.filtering_rules || {};
-        const vehicleTypes = filteringRules.vehicle_types || ['new', 'used'];
+        
+        // Handle exclude_conditions (what's saved) to determine what's checked
+        let vehicleTypes;
+        if (filteringRules.exclude_conditions) {
+            // Convert exclude_conditions to vehicle_types
+            // Note: 'po' and 'cpo' are subsets of 'used', so we check for used differently
+            vehicleTypes = [];
+            
+            // If 'new' is NOT in exclude_conditions, then NEW checkbox should be checked
+            if (!filteringRules.exclude_conditions.includes('new')) {
+                vehicleTypes.push('new');
+            }
+            
+            // For used: it's checked if we're NOT excluding all used types
+            // We exclude used if 'used' is in the list OR if both 'po' and 'cpo' are excluded
+            // but there's no explicit 'used' (which shouldn't happen with current logic)
+            const excludesUsed = filteringRules.exclude_conditions.includes('used');
+            const excludesPO = filteringRules.exclude_conditions.includes('po');
+            const excludesCPO = filteringRules.exclude_conditions.includes('cpo');
+            
+            // Used checkbox is checked if we're not excluding used vehicles
+            // When only po and cpo are excluded (but not 'used'), it means we want used vehicles
+            if (!excludesUsed) {
+                vehicleTypes.push('used');
+            }
+        } else if (filteringRules.vehicle_types) {
+            // Fallback to vehicle_types if it exists
+            vehicleTypes = filteringRules.vehicle_types;
+        } else {
+            // Default to both checked
+            vehicleTypes = ['new', 'used'];
+        }
+        
+        console.log('Populating modal with vehicle types:', vehicleTypes, 'from rules:', filteringRules);
         
         // Update vehicle type checkboxes
         const newCheckbox = document.getElementById('vehicleNew');
         const usedCheckbox = document.getElementById('vehicleUsed');
         
         if (newCheckbox) newCheckbox.checked = vehicleTypes.includes('new');
-        if (usedCheckbox) usedCheckbox.checked = vehicleTypes.includes('used') || vehicleTypes.includes('certified');
+        if (usedCheckbox) usedCheckbox.checked = vehicleTypes.includes('used');
         
-        // Update price filters if they exist
+        // Update order type radio buttons
+        const orderType = filteringRules.order_type || 'cao';
+        const caoRadio = document.getElementById('orderTypeCao');
+        const listRadio = document.getElementById('orderTypeList');
+        
+        if (caoRadio) caoRadio.checked = (orderType === 'cao');
+        if (listRadio) listRadio.checked = (orderType === 'list');
+        
+        // Update price filters - clear them first, then set if exists
         const minPriceInput = document.getElementById('minPrice');
         const maxPriceInput = document.getElementById('maxPrice');
+        const minYearInput = document.getElementById('minYear');
         
-        if (minPriceInput && filteringRules.min_price) {
-            minPriceInput.value = filteringRules.min_price;
+        if (minPriceInput) {
+            minPriceInput.value = filteringRules.min_price || '';
         }
-        if (maxPriceInput && filteringRules.max_price) {
-            maxPriceInput.value = filteringRules.max_price;
+        if (maxPriceInput) {
+            maxPriceInput.value = filteringRules.max_price || '';
+        }
+        if (minYearInput) {
+            minYearInput.value = filteringRules.min_year || '';
         }
         
         // Show the modal
@@ -2384,8 +2560,8 @@ class MinisFornumApp {
         console.log('Dealership modal opened for:', dealership.name);
     }
     
-    async saveDealershipSettings() {
-        console.log('Saving dealership settings...');
+    async saveDealershipSettingsOLD_DUPLICATE() {
+        console.log('saveDealershipSettings (DUPLICATE - should not be called)');
         
         if (!this.currentEditingDealership) {
             this.addTerminalMessage('No dealership selected for editing', 'error');
@@ -5389,6 +5565,7 @@ class MinisFornumApp {
     }
     
     setupVinLogModalEvents() {
+        console.log('setupVinLogModalEvents called');
         const closeBtn = document.getElementById('closeVinLogModal');
         const closeBtn2 = document.getElementById('closeVinLogModalBtn');
         const modal = document.getElementById('vinLogModal');
@@ -5427,9 +5604,14 @@ class MinisFornumApp {
         
         // Update VIN Log button
         const updateVinLogBtn = document.getElementById('updateVinLogBtn');
+        console.log('Setup updateVinLogBtn:', !!updateVinLogBtn, 'hasListener:', updateVinLogBtn?.hasEventListener);
         if (updateVinLogBtn && !updateVinLogBtn.hasEventListener) {
-            updateVinLogBtn.addEventListener('click', () => this.openVinLogUpdateModal());
+            updateVinLogBtn.addEventListener('click', () => {
+                console.log('Update VIN Log button clicked');
+                this.openVinLogUpdateModal();
+            });
             updateVinLogBtn.hasEventListener = true;
+            console.log('Update VIN Log button event listener attached');
         }
     }
     
@@ -6037,6 +6219,25 @@ class MinisFornumApp {
         // Setup modal event listeners
         this.setupScraperDataModalEvents();
         
+        // Initialize toggle state (default to normalized/checked)
+        const toggle = document.getElementById('dataTypeToggle');
+        const labels = document.querySelectorAll('.data-type-toggle-container .toggle-label');
+        
+        if (toggle) {
+            toggle.checked = true; // Default to normalized
+        }
+        
+        // Update label states
+        labels.forEach((label, index) => {
+            if (index === 0) {
+                // Raw label
+                label.classList.remove('active');
+            } else {
+                // Normalized label
+                label.classList.add('active');
+            }
+        });
+        
         // Load vehicle data for this import
         await this.loadScraperData(importId);
     }
@@ -6077,6 +6278,13 @@ class MinisFornumApp {
             searchBtn.addEventListener('click', () => this.filterScraperData());
             searchBtn.hasEventListener = true;
         }
+        
+        // Setup data type toggle functionality
+        const dataTypeToggle = document.getElementById('dataTypeToggle');
+        if (dataTypeToggle && !dataTypeToggle.hasEventListener) {
+            dataTypeToggle.addEventListener('change', () => this.toggleDataType());
+            dataTypeToggle.hasEventListener = true;
+        }
     }
     
     closeScraperDataModal() {
@@ -6086,15 +6294,62 @@ class MinisFornumApp {
         }
     }
     
+    toggleDataType() {
+        const toggle = document.getElementById('dataTypeToggle');
+        const labels = document.querySelectorAll('.data-type-toggle-container .toggle-label');
+        
+        if (!toggle) return;
+        
+        const isNormalized = toggle.checked;
+        
+        // Update label active states
+        labels.forEach((label, index) => {
+            if (index === 0) {
+                // Raw label
+                label.classList.toggle('active', !isNormalized);
+            } else {
+                // Normalized label  
+                label.classList.toggle('active', isNormalized);
+            }
+        });
+        
+        // Re-render the modal with the selected data type
+        this.renderScraperDataModal();
+    }
+    
     async loadScraperData(importId) {
         try {
-            const response = await fetch(`/api/scraper-imports/${importId}/vehicles`);
+            // Show loading state
+            const tableContainer = document.getElementById('scraperDataTableContainer');
+            if (tableContainer) {
+                tableContainer.innerHTML = `
+                    <div class="loading-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <h3>Loading Vehicle Data...</h3>
+                        <p>Loading all vehicles from import #${importId}</p>
+                    </div>
+                `;
+            }
+            
+            // Load normalized data - request ALL vehicles (not just 50)
+            const response = await fetch(`/api/scraper-imports/${importId}/vehicles?per_page=10000`);
             const data = await response.json();
             
             if (data.success) {
-                // Store the full data for filtering
+                // Store the data
                 this.currentScraperData = data;
                 this.currentFilteredScraperData = data.vehicles || [];
+                
+                console.log(`Loaded ${data.vehicles?.length || 0} vehicles out of ${data.total || 0} total`);
+                
+                // If we didn't get all vehicles, try to get more
+                if (data.total && data.vehicles && data.vehicles.length < data.total) {
+                    console.warn(`Only loaded ${data.vehicles.length}/${data.total} vehicles. Consider increasing per_page limit.`);
+                }
+                
+                // For now, simulate raw data by using the same data with different structure
+                // In production, this would come from a separate raw data endpoint
+                this.currentScraperData.raw_vehicles = this.simulateRawData(data.vehicles || []);
                 
                 // Clear search input
                 const searchInput = document.getElementById('scraperDataSearch');
@@ -6111,9 +6366,75 @@ class MinisFornumApp {
         }
     }
     
+    // Simulate raw data for demonstration (in production this would come from actual raw data)
+    simulateRawData(normalizedVehicles) {
+        return normalizedVehicles.map(vehicle => {
+            // Create a "raw" version matching the actual raw_vehicle_data schema
+            const rawVehicle = {};
+            
+            // CRITICAL FIELDS FIRST - Stock Number and Status (matching database names)
+            if (vehicle.stock_number || vehicle.stock) rawVehicle.stock = vehicle.stock_number || vehicle.stock;
+            if (vehicle.status) rawVehicle.status = vehicle.status;
+            
+            // Core vehicle identification (matching database field names)
+            if (vehicle.vin) rawVehicle.vin = vehicle.vin;
+            if (vehicle.year) rawVehicle.year = vehicle.year;
+            if (vehicle.make) rawVehicle.make = vehicle.make;
+            if (vehicle.model) rawVehicle.model = vehicle.model;
+            if (vehicle.trim) rawVehicle.trim = vehicle.trim;
+            
+            // Vehicle details (matching database schema)
+            if (vehicle.ext_color || vehicle.color) rawVehicle.ext_color = vehicle.ext_color || vehicle.color;
+            if (vehicle.body_style) rawVehicle.body_style = vehicle.body_style;
+            if (vehicle.fuel_type) rawVehicle.fuel_type = vehicle.fuel_type;
+            
+            // Pricing information
+            if (vehicle.price) rawVehicle.price = vehicle.price;
+            if (vehicle.msrp) rawVehicle.msrp = vehicle.msrp;
+            
+            // Inventory classification
+            if (vehicle.type) rawVehicle.type = vehicle.type;
+            if (vehicle.normalized_type) rawVehicle.normalized_type = vehicle.normalized_type;
+            if (vehicle.on_lot_status) rawVehicle.on_lot_status = vehicle.on_lot_status;
+            
+            // Location information
+            if (vehicle.location) rawVehicle.location = vehicle.location;
+            if (vehicle.street_address) rawVehicle.street_address = vehicle.street_address;
+            if (vehicle.locality) rawVehicle.locality = vehicle.locality;
+            if (vehicle.region) rawVehicle.region = vehicle.region;
+            if (vehicle.postal_code) rawVehicle.postal_code = vehicle.postal_code;
+            if (vehicle.country) rawVehicle.country = vehicle.country;
+            
+            // Scraping metadata (crucial for raw view)
+            if (vehicle.vehicle_url) rawVehicle.vehicle_url = vehicle.vehicle_url;
+            if (vehicle.import_date) rawVehicle.import_date = vehicle.import_date;
+            if (vehicle.import_timestamp) rawVehicle.import_timestamp = vehicle.import_timestamp;
+            if (vehicle.time_scraped) rawVehicle.time_scraped = vehicle.time_scraped;
+            if (vehicle.date_in_stock) rawVehicle.date_in_stock = vehicle.date_in_stock;
+            if (vehicle.import_id) rawVehicle.import_id = vehicle.import_id;
+            if (vehicle.is_archived !== undefined) rawVehicle.is_archived = vehicle.is_archived;
+            
+            // Add ID field
+            if (vehicle.id) rawVehicle.id = vehicle.id;
+            
+            return rawVehicle;
+        });
+    }
+    
     renderScraperDataModal(data = null) {
         const displayData = data || this.currentScraperData;
-        const vehicleData = this.currentFilteredScraperData || displayData?.vehicles || [];
+        const toggle = document.getElementById('dataTypeToggle');
+        const isNormalized = toggle ? toggle.checked : true;
+        
+        // Choose data source based on toggle state
+        let vehicleData;
+        if (isNormalized) {
+            // Use normalized data (current filtered data)
+            vehicleData = this.currentFilteredScraperData || displayData?.vehicles || [];
+        } else {
+            // Use raw data (original scraped data without normalization)
+            vehicleData = this.currentScraperData?.raw_vehicles || this.currentFilteredScraperData || displayData?.vehicles || [];
+        }
         
         // Update import info
         const importId = document.getElementById('modalImportId');
@@ -6132,19 +6453,42 @@ class MinisFornumApp {
         if (!tableContainer) return;
         
         if (!vehicleData || vehicleData.length === 0) {
+            const dataTypeText = isNormalized ? 'normalized' : 'raw';
             tableContainer.innerHTML = `
                 <div class="empty-state">
                     <i class="fas fa-search"></i>
-                    <h3>No Vehicle Data Found</h3>
-                    <p>No vehicles found in this import.</p>
+                    <h3>No ${dataTypeText.charAt(0).toUpperCase() + dataTypeText.slice(1)} Data Found</h3>
+                    <p>No ${dataTypeText} vehicle data found in this import.</p>
                 </div>
             `;
             return;
         }
         
-        // Get column headers from first vehicle
+        // Get column headers from first vehicle and prioritize VIN first
         const firstVehicle = vehicleData[0];
-        const headers = Object.keys(firstVehicle);
+        const allHeaders = Object.keys(firstVehicle);
+        
+        // Prioritize columns: VIN first, then stock, status, then others
+        const priorityHeaders = ['vin', 'vehicle_vin', 'stock', 'stock_number', 'status', 'inventory_status'];
+        const headers = [];
+        
+        // Add priority headers first (if they exist)
+        priorityHeaders.forEach(priority => {
+            const found = allHeaders.find(header => 
+                header.toLowerCase() === priority || 
+                header.toLowerCase().includes(priority.replace('_', ''))
+            );
+            if (found && !headers.includes(found)) {
+                headers.push(found);
+            }
+        });
+        
+        // Add remaining headers
+        allHeaders.forEach(header => {
+            if (!headers.includes(header)) {
+                headers.push(header);
+            }
+        });
         
         tableContainer.innerHTML = `
             <table class="scraper-data-table">
@@ -6180,12 +6524,22 @@ class MinisFornumApp {
     }
     
     filterScraperData() {
-        if (!this.currentScraperData || !this.currentScraperData.vehicles) return;
+        if (!this.currentScraperData) return;
         
         const searchInput = document.getElementById('scraperDataSearch');
         const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+        const toggle = document.getElementById('dataTypeToggle');
+        const isNormalized = toggle ? toggle.checked : true;
         
-        let filteredData = this.currentScraperData.vehicles;
+        // Choose base dataset based on toggle state
+        let baseData;
+        if (isNormalized) {
+            baseData = this.currentScraperData.vehicles || [];
+        } else {
+            baseData = this.currentScraperData.raw_vehicles || [];
+        }
+        
+        let filteredData = baseData;
         
         // Apply search filter
         if (searchTerm) {
@@ -6218,8 +6572,16 @@ class MinisFornumApp {
             return value;
         }
         
-        if (header === 'vin' && value) {
+        if ((header === 'vin' || header === 'vehicle_vin') && value) {
             return `<span class="vin-number">${value}</span>`;
+        }
+        
+        if ((header === 'stock' || header === 'stock_number' || header === 'dealer_stock_num') && value) {
+            return `<strong>${value}</strong>`;
+        }
+        
+        if ((header === 'status' || header === 'inventory_status') && value) {
+            return `<span class="status-badge status-${value.toLowerCase().replace(' ', '-')}">${value}</span>`;
         }
         
         // Truncate long text
@@ -6349,38 +6711,125 @@ class MinisFornumApp {
     // =============================================================================
     
     openVinLogUpdateModal() {
-        if (!this.currentDealership) {
-            this.addTerminalMessage('No dealership selected for VIN log update', 'error');
+        try {
+            console.log('openVinLogUpdateModal called');
+            console.log('currentDealership:', this.currentDealership);
+            
+            if (!this.currentDealership) {
+                console.log('Error: No dealership selected');
+                this.addTerminalMessage('No dealership selected for VIN log update', 'error');
+                return;
+            }
+            
+            // Update modal title and dealership name
+            const updateTitle = document.getElementById('vinLogUpdateTitle');
+            const dealershipName = document.getElementById('updateDealershipName');
+            
+            if (updateTitle) {
+                updateTitle.textContent = `Update VIN Log - ${this.formatDealershipName(this.currentDealership)}`;
+            }
+            
+            if (dealershipName) {
+                dealershipName.textContent = this.formatDealershipName(this.currentDealership);
+            }
+            
+            // Reset modal state
+            this.resetVinLogUpdateModal();
+            
+            // Setup event listeners for this modal
+            this.setupVinLogUpdateEvents();
+            
+        } catch (error) {
+            console.error('Error in openVinLogUpdateModal:', error);
+            this.addTerminalMessage(`Error opening VIN log update modal: ${error.message}`, 'error');
             return;
         }
         
-        // Update modal title and dealership name
-        const updateTitle = document.getElementById('vinLogUpdateTitle');
-        const dealershipName = document.getElementById('updateDealershipName');
-        
-        if (updateTitle) {
-            updateTitle.textContent = `Update VIN Log - ${this.formatDealershipName(this.currentDealership)}`;
-        }
-        
-        if (dealershipName) {
-            dealershipName.textContent = this.formatDealershipName(this.currentDealership);
-        }
-        
-        // Reset modal state
-        this.resetVinLogUpdateModal();
-        
-        // Setup event listeners for this modal
-        this.setupVinLogUpdateEvents();
-        
         // Show the modal
         const modal = document.getElementById('vinLogUpdateModal');
+        console.log('vinLogUpdateModal element found:', !!modal);
+        
         if (modal) {
+            console.log('Showing VIN log update modal');
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
+            
+            // AUTO-SWITCH TO MANUAL ENTRY TAB for better UX
+            // This makes the manual VIN entry immediately visible
+            setTimeout(() => {
+                const manualEntryTab = document.getElementById('manualEntryTab');
+                if (manualEntryTab) {
+                    console.log('Auto-switching to Manual Entry tab for immediate VIN entry access');
+                    manualEntryTab.click(); // Trigger the tab switch
+                }
+            }, 100); // Small delay to ensure DOM is ready
+            
+            console.log('Modal display set to flex - Manual Entry tab will auto-activate');
+        } else {
+            console.error('vinLogUpdateModal element not found in DOM');
+            this.addTerminalMessage('VIN log update modal not found in DOM', 'error');
         }
     }
     
     setupVinLogUpdateEvents() {
+        // Initialize manual entry functionality for this modal instance - inline approach
+        console.log('Setting up VIN log update events including manual entry tabs');
+        
+        // Set up tab switching directly
+        const csvImportTab = document.getElementById('csvImportTab');
+        const manualEntryTab = document.getElementById('manualEntryTab');
+        
+        console.log('Manual entry tabs found:', {
+            csvImportTab: !!csvImportTab,
+            manualEntryTab: !!manualEntryTab
+        });
+        
+        if (csvImportTab) {
+            csvImportTab.addEventListener('click', (e) => {
+                e.preventDefault();
+                console.log('CSV Import tab clicked - switching to CSV mode');
+                
+                // Switch tabs
+                csvImportTab.classList.add('active');
+                manualEntryTab?.classList.remove('active');
+                
+                // Show/hide sections
+                const csvSection = document.getElementById('csvImportSection');
+                const manualSection = document.getElementById('manualEntrySection');
+                if (csvSection) csvSection.style.display = 'block';
+                if (manualSection) manualSection.style.display = 'none';
+                
+                console.log('Switched to CSV mode');
+            });
+        }
+        
+        if (manualEntryTab) {
+            manualEntryTab.addEventListener('click', (e) => {
+                e.preventDefault();
+                console.log('Manual Entry tab clicked - switching to manual mode');
+                
+                // Switch tabs
+                manualEntryTab.classList.add('active');
+                csvImportTab?.classList.remove('active');
+                
+                // Show/hide sections
+                const csvSection = document.getElementById('csvImportSection');
+                const manualSection = document.getElementById('manualEntrySection');
+                if (csvSection) csvSection.style.display = 'none';
+                if (manualSection) manualSection.style.display = 'block';
+                
+                console.log('Switched to Manual Entry mode - textarea should be visible now');
+            });
+        }
+        
+        // Set up manual entry functionality
+        const textarea = document.getElementById('manualOrderEntry');
+        if (textarea) {
+            textarea.addEventListener('input', () => {
+                this.updateManualEntryStats();
+            });
+        }
+        
         // File upload events
         const fileUploadArea = document.getElementById('vinLogFileUpload');
         const fileInput = document.getElementById('vinLogFileInput');
@@ -7449,7 +7898,7 @@ Example:
     
     // Manual VIN Entry Functions
     initializeManualVinEntry() {
-        // Set up tab switching
+        // Set up tab switching (this is called during app init when elements may not exist)
         const csvImportTab = document.getElementById('csvImportTab');
         const manualEntryTab = document.getElementById('manualEntryTab');
         const csvSection = document.getElementById('csvImportSection');
@@ -7463,6 +7912,28 @@ Example:
             manualEntryTab.addEventListener('click', () => {
                 this.switchImportMethod('manual');
             });
+        }
+    }
+    
+    initializeManualVinEntryForModal() {
+        // Set up tab switching for modal elements (called when modal opens)
+        const csvImportTab = document.getElementById('csvImportTab');
+        const manualEntryTab = document.getElementById('manualEntryTab');
+        
+        if (csvImportTab && !csvImportTab.hasManualEntryEvents) {
+            csvImportTab.addEventListener('click', () => {
+                console.log('CSV Import tab clicked');
+                this.switchImportMethod('csv');
+            });
+            csvImportTab.hasManualEntryEvents = true;
+        }
+        
+        if (manualEntryTab && !manualEntryTab.hasManualEntryEvents) {
+            manualEntryTab.addEventListener('click', () => {
+                console.log('Manual Entry tab clicked');
+                this.switchImportMethod('manual');
+            });
+            manualEntryTab.hasManualEntryEvents = true;
         }
         
         // Set up manual entry textarea monitoring
@@ -7491,12 +7962,20 @@ Example:
     }
     
     switchImportMethod(method) {
+        console.log('switchImportMethod called with:', method);
         const csvImportTab = document.getElementById('csvImportTab');
         const manualEntryTab = document.getElementById('manualEntryTab');
         const csvSection = document.getElementById('csvImportSection');
         const manualSection = document.getElementById('manualEntrySection');
         const importButtonText = document.getElementById('importButtonText');
         const importButtonIcon = document.getElementById('importButtonIcon');
+        
+        console.log('Elements found:', {
+            csvImportTab: !!csvImportTab,
+            manualEntryTab: !!manualEntryTab,
+            csvSection: !!csvSection,
+            manualSection: !!manualSection
+        });
         
         if (method === 'csv') {
             csvImportTab?.classList.add('active');

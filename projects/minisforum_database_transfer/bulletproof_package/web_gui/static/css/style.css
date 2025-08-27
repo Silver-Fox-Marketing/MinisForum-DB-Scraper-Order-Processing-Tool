@@ -202,6 +202,76 @@ Silver Fox Marketing Brand Colors and Typography
     transform: scale(1.05);
 }
 
+/* Data Type Toggle Switch for Scraper Data Modal */
+.data-type-toggle-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    margin-right: 20px;
+}
+
+.data-type-toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 22px;
+    cursor: pointer;
+}
+
+.data-type-toggle-switch input[type="checkbox"] {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.data-type-toggle-switch .toggle-slider {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--theme-bg-secondary);
+    border: 1.5px solid var(--theme-border);
+    border-radius: 12px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.data-type-toggle-container .data-type-toggle-switch .toggle-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    background: var(--theme-text-secondary);
+    border-radius: 50%;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.data-type-toggle-container .data-type-toggle-switch input[type="checkbox"]:checked + .toggle-slider {
+    background: var(--primary-red);
+    border-color: var(--primary-red);
+}
+
+.data-type-toggle-container .data-type-toggle-switch input[type="checkbox"]:checked + .toggle-slider .toggle-thumb {
+    transform: translateX(22px);
+    background: var(--theme-bg-primary);
+}
+
+.data-type-toggle-container .toggle-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--theme-text-secondary);
+    transition: color 0.3s ease;
+    user-select: none;
+}
+
+.data-type-toggle-container .toggle-label.active {
+    color: var(--primary-red);
+    font-weight: 600;
+}
+
 body {
     font-family: var(--font-body);
     font-size: 14px;
@@ -1846,7 +1916,7 @@ body {
 
 .toggle-switch input:checked + .toggle-slider::before {
     transform: translateX(24px);
-    background-color: var(--white);
+    background-color: var(--theme-bg-primary);
 }
 
 .toggle-switch input:checked ~ .toggle-label:last-child {
@@ -2216,7 +2286,7 @@ body {
 }
 
 .order-item.in-progress {
-    background: #fff8e1;
+    background: var(--theme-bg-secondary);
     border-color: var(--warning-orange);
 }
 
@@ -2267,8 +2337,8 @@ body {
 }
 
 .order-status.in-progress {
-    background: #fff3cd;
-    color: #856404;
+    background: var(--theme-bg-secondary);
+    color: var(--theme-text-primary);
 }
 
 .order-status.completed {
@@ -3235,10 +3305,99 @@ body {
     color: var(--primary-red);
 }
 
-/* Queue Actions */
+/* Queue Actions - Fixed/Sticky on Right Side */
 .queue-actions {
-    border-top: 1px solid #e1e5e9;
-    padding-top: var(--spacing-lg);
+    position: fixed !important;
+    right: 20px !important;
+    bottom: 20px !important;
+    z-index: 9999 !important;
+    background: var(--theme-surface);
+    padding: var(--spacing-lg);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+    border: 2px solid var(--theme-border);
+    max-width: 320px;
+    transition: all 0.3s ease;
+    /* Ensure it's above everything */
+    display: block !important;
+    /* Add visual emphasis */
+    backdrop-filter: blur(10px);
+}
+
+/* Add hover effect for better visibility */
+.queue-actions:hover {
+    box-shadow: 0 6px 30px rgba(0, 0, 0, 0.2);
+    transform: translateY(-2px);
+}
+
+/* Dark mode adjustments */
+[data-theme="dark"] .queue-actions {
+    background: var(--theme-surface-elevated);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+/* Ensure the testing mode toggle fits well */
+.queue-actions .testing-mode-toggle {
+    margin-bottom: 1rem !important;
+    padding: 0.75rem !important;
+    background: var(--theme-bg-secondary) !important;
+    border: 1px solid var(--theme-border) !important;
+    border-radius: 8px !important;
+}
+
+[data-theme="dark"] .queue-actions .testing-mode-toggle {
+    background: var(--theme-bg-tertiary) !important;
+    color: var(--theme-text-primary) !important;
+}
+
+[data-theme="dark"] .queue-actions .testing-mode-toggle span,
+[data-theme="dark"] .queue-actions .testing-mode-toggle p {
+    color: var(--theme-text-primary) !important;
+}
+
+/* Add spacing to prevent overlap with main content */
+#queue-container {
+    padding-right: 360px; /* Make room for the fixed panel */
+}
+
+/* Responsive design for smaller screens */
+@media (max-width: 1400px) {
+    .queue-actions {
+        right: 10px;
+        bottom: 10px;
+        max-width: 280px;
+    }
+    
+    #queue-container {
+        padding-right: 310px;
+    }
+}
+
+@media (max-width: 1200px) {
+    /* On smaller screens, make it a floating action button that expands */
+    .queue-actions {
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        max-width: 280px;
+    }
+    
+    #queue-container {
+        padding-right: 0; /* Remove padding on smaller screens */
+        padding-bottom: 100px; /* Add bottom padding for the floating panel */
+    }
+}
+
+/* Mobile view - make it full width at bottom */
+@media (max-width: 768px) {
+    .queue-actions {
+        position: fixed;
+        left: 10px;
+        right: 10px;
+        bottom: 10px;
+        max-width: none;
+        width: calc(100% - 20px);
+    }
 }
 
 .btn-large {
@@ -4868,10 +5027,11 @@ body {
 
 /* Sub-tab panels */
 .sub-tab-panels {
-    background: var(--background);
+    background: var(--theme-bg-primary);
     border-radius: 0 var(--border-radius) var(--border-radius) var(--border-radius);
     padding: var(--spacing-lg);
     min-height: 400px;
+    transition: background-color 0.3s ease;
 }
 
 .sub-tab-panel {
@@ -4942,10 +5102,11 @@ body {
 
 .vin-display {
     font-family: 'Courier New', monospace;
-    background: var(--background);
+    background: var(--theme-bg-secondary);
     padding: var(--spacing-xs) var(--spacing-sm);
     border-radius: var(--border-radius);
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--theme-border);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .scrape-badge {
@@ -4975,10 +5136,11 @@ body {
 }
 
 .history-timeline {
-    background: var(--background);
+    background: var(--theme-bg-primary);
     border-radius: var(--border-radius);
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--theme-border);
     max-height: 400px;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
     overflow-y: auto;
 }
 
@@ -5383,10 +5545,11 @@ body {
 /* Scraper View Interface Styles */
 .csv-import-section {
     background: var(--theme-bg-tertiary);
-    border: 1px solid #e9ecef;
+    border: 1px solid var(--theme-border);
     border-radius: 8px;
     padding: 1.5rem;
     margin-bottom: 2rem;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .import-header {
@@ -5515,6 +5678,12 @@ body {
 .import-status-badge.active {
     background: #d4edda;
     color: #155724;
+    border: 1px solid #c3e6cb;
+    box-shadow: 
+        0 0 8px rgba(40, 167, 69, 0.4),
+        0 0 16px rgba(40, 167, 69, 0.2),
+        0 2px 8px rgba(0, 0, 0, 0.1);
+    animation: activeGlow 2s ease-in-out infinite alternate;
 }
 
 .import-status-badge.archived {
@@ -5536,6 +5705,29 @@ body {
     max-width: 1200px;
     max-height: 85vh;
     overflow-y: auto;
+}
+
+/* Loading state for scraper data modal */
+.loading-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--theme-text-secondary);
+}
+
+.loading-state i {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    color: var(--primary-red);
+}
+
+.loading-state h3 {
+    margin: 0 0 0.5rem 0;
+    color: var(--theme-text-primary);
+}
+
+.loading-state p {
+    margin: 0;
+    font-size: 0.9rem;
 }
 
 .import-info {
@@ -5610,6 +5802,119 @@ body {
     background: var(--theme-bg-tertiary);
 }
 
+/* Dealership Settings Search Bar */
+.settings-search-container {
+    padding: 20px 32px;
+    background: var(--theme-surface);
+    border-bottom: 1px solid var(--theme-border);
+    margin: 0;
+}
+
+.settings-search-container .search-bar-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: 600px;
+    margin: 0 auto;
+    position: relative;
+}
+
+.settings-search-container .search-input {
+    flex: 1;
+    padding: 16px 20px 16px 48px;
+    border: 2px solid var(--theme-border);
+    background: var(--theme-bg-primary);
+    color: var(--theme-text-primary);
+    border-radius: 16px;
+    font-size: 1rem;
+    font-weight: 500;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px var(--theme-shadow);
+}
+
+.settings-search-container .search-input::placeholder {
+    color: var(--theme-text-muted);
+    font-weight: 400;
+}
+
+.settings-search-container .search-input:focus {
+    outline: none;
+    border-color: var(--primary-red);
+    background: var(--theme-surface-elevated);
+    box-shadow: 0 0 0 4px rgba(253, 65, 13, 0.1), 0 4px 16px var(--theme-shadow);
+    transform: translateY(-1px);
+}
+
+.settings-search-container .search-bar-wrapper::before {
+    content: '\f002';
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--theme-text-muted);
+    font-size: 0.9rem;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.settings-search-container .search-btn {
+    padding: 16px 20px;
+    background: linear-gradient(135deg, var(--primary-red) 0%, var(--dark-red) 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(253, 65, 13, 0.3);
+    min-width: 50px;
+}
+
+.settings-search-container .search-btn:hover {
+    background: linear-gradient(135deg, var(--dark-red) 0%, var(--primary-red) 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(253, 65, 13, 0.4);
+}
+
+.settings-search-container .clear-search-btn {
+    padding: 16px;
+    background: var(--theme-surface);
+    color: var(--theme-text-secondary);
+    border: 2px solid var(--theme-border);
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    min-width: 50px;
+    display: none;
+}
+
+.settings-search-container .clear-search-btn:hover {
+    background: var(--theme-bg-tertiary);
+    color: var(--primary-red);
+    border-color: var(--primary-red);
+    transform: translateY(-1px);
+}
+
+.search-results-info {
+    text-align: center;
+    margin-top: 12px;
+    padding: 8px 16px;
+    background: var(--theme-bg-secondary);
+    border-radius: 8px;
+    border: 1px solid var(--theme-border);
+    display: none;
+}
+
+.search-results-info .results-count {
+    color: var(--theme-text-secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
 /* Modern Dealership Settings Styles - Silver Fox Brand */
 .dealership-settings-container {
     padding: 32px;
@@ -5656,6 +5961,77 @@ body {
     overflow: hidden;
     position: relative;
     backdrop-filter: blur(20px);
+}
+
+/* Enhanced Dark Mode Contrast for Dealership Cards */
+[data-theme="dark"] .dealership-settings-card {
+    background: linear-gradient(135deg, rgba(40, 44, 52, 0.95) 0%, rgba(32, 36, 42, 0.98) 50%, rgba(44, 48, 56, 0.95) 100%);
+    border: 2px solid rgba(253, 65, 13, 0.25);
+    box-shadow: 
+        0 12px 40px rgba(253, 65, 13, 0.15), 
+        0 4px 16px rgba(0, 0, 0, 0.25),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(20px);
+}
+
+[data-theme="dark"] .dealership-settings-card:hover {
+    border: 2px solid rgba(253, 65, 13, 0.4);
+    box-shadow: 
+        0 20px 60px rgba(253, 65, 13, 0.25), 
+        0 8px 24px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    transform: translateY(-6px) scale(1.02);
+}
+
+/* Enhanced Dark Mode Styles for Card Content */
+[data-theme="dark"] .settings-card-header {
+    background: linear-gradient(135deg, rgba(48, 52, 60, 0.98) 0%, rgba(40, 44, 52, 0.95) 50%, rgba(52, 56, 64, 0.98) 100%);
+    border-bottom: 2px solid rgba(253, 65, 13, 0.2);
+}
+
+[data-theme="dark"] .settings-card-body {
+    background: linear-gradient(135deg, rgba(32, 36, 42, 0.95) 0%, rgba(28, 32, 38, 0.98) 100%);
+}
+
+[data-theme="dark"] .settings-card-header h3 {
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .dealer-icon {
+    background: linear-gradient(135deg, var(--primary-red) 0%, var(--dark-red) 100%) !important;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 2px 8px rgba(253, 65, 13, 0.3);
+}
+
+[data-theme="dark"] .metrics-section .metric-number {
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .metrics-section .metric-date {
+    color: rgba(255, 255, 255, 0.75);
+}
+
+[data-theme="dark"] .card-actions {
+    background: rgba(28, 32, 38, 0.9);
+    border-top: 1px solid rgba(253, 65, 13, 0.15);
+}
+
+/* Enhanced Dark Mode Disabled Card Styles */
+[data-theme="dark"] .dealership-settings-card.disabled {
+    background: linear-gradient(135deg, rgba(35, 39, 47, 0.6) 0%, rgba(30, 34, 40, 0.7) 50%, rgba(38, 42, 50, 0.6) 100%);
+    border: 2px solid rgba(107, 114, 128, 0.3);
+    opacity: 0.6;
+}
+
+[data-theme="dark"] .dealership-settings-card.disabled .settings-card-header {
+    background: linear-gradient(135deg, rgba(45, 49, 57, 0.6) 0%, rgba(40, 44, 52, 0.5) 50%, rgba(48, 52, 60, 0.6) 100%);
+    border-bottom: 2px solid rgba(107, 114, 128, 0.2);
+}
+
+[data-theme="dark"] .dealership-settings-card.disabled .settings-card-header h3 {
+    color: rgba(156, 163, 175, 0.8);
 }
 
 .dealership-settings-card::before {
@@ -5799,6 +6175,21 @@ body {
     100% { transform: scale(1.4); opacity: 0; }
 }
 
+@keyframes activeGlow {
+    0% {
+        box-shadow: 
+            0 0 8px rgba(40, 167, 69, 0.4),
+            0 0 16px rgba(40, 167, 69, 0.2),
+            0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    100% {
+        box-shadow: 
+            0 0 12px rgba(40, 167, 69, 0.6),
+            0 0 24px rgba(40, 167, 69, 0.3),
+            0 2px 12px rgba(0, 0, 0, 0.15);
+    }
+}
+
 .vehicle-count-badge {
     background: linear-gradient(135deg, var(--gold) 0%, #e6ac00 100%);
     color: var(--black);
@@ -5879,7 +6270,7 @@ body {
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    background: white;
+    background: var(--theme-bg-primary);
     top: 2px;
     left: 2px;
     transition: all 0.3s ease;
@@ -6133,13 +6524,13 @@ body {
     border: 2px solid var(--theme-border);
     border-radius: 50%;
     position: relative;
-    background: white;
+    background: var(--theme-bg-primary);
     transition: all 0.3s ease;
 }
 
 .toggle-option input[type="radio"]:checked + .modern-radio-label .radio-indicator {
-    border-color: white;
-    background: white;
+    border-color: var(--theme-bg-primary);
+    background: var(--theme-bg-primary);
 }
 
 .toggle-option input[type="radio"]:checked + .modern-radio-label .radio-indicator::after {
@@ -6228,13 +6619,13 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: white;
+    background: var(--theme-bg-primary);
     transition: all 0.3s ease;
 }
 
 .modern-checkbox-item input[type="checkbox"]:checked + .modern-checkbox-label .checkbox-indicator {
-    background: white;
-    border-color: white;
+    background: var(--theme-bg-primary);
+    border-color: var(--theme-bg-primary);
 }
 
 .checkbox-indicator i {
@@ -6364,7 +6755,7 @@ body {
 .setting-input:focus {
     outline: none;
     border-color: var(--primary-red);
-    background: linear-gradient(135deg, var(--theme-surface) 0%, var(--white) 100%);
+    background: linear-gradient(135deg, var(--theme-surface) 0%, var(--theme-bg-primary) 100%);
     box-shadow: 0 0 0 4px rgba(253, 65, 13, 0.12), 0 4px 16px rgba(253, 65, 13, 0.08);
     transform: translateY(-1px);
 }
@@ -6385,7 +6776,7 @@ body {
 .setting-select:focus {
     outline: none;
     border-color: var(--primary-red);
-    background: linear-gradient(135deg, var(--theme-surface) 0%, var(--white) 100%);
+    background: linear-gradient(135deg, var(--theme-surface) 0%, var(--theme-bg-primary) 100%);
     box-shadow: 0 0 0 4px rgba(253, 65, 13, 0.12), 0 4px 16px rgba(253, 65, 13, 0.08);
     transform: translateY(-1px);
 }
@@ -6628,6 +7019,11 @@ body {
     background: #d4edda;
     color: #155724;
     border: 1px solid #c3e6cb;
+    box-shadow: 
+        0 0 8px rgba(40, 167, 69, 0.4),
+        0 0 16px rgba(40, 167, 69, 0.2),
+        0 2px 8px rgba(0, 0, 0, 0.1);
+    animation: activeGlow 2s ease-in-out infinite alternate;
 }
 
 .import-status-badge.archived {
@@ -6930,9 +7326,9 @@ body {
 }
 
 .filter-tag.status-filter {
-    background: #fff3e0;
-    color: #f57c00;
-    border-color: #ffb74d;
+    background: var(--theme-bg-secondary);
+    color: var(--theme-text-primary);
+    border-color: var(--theme-border);
 }
 
 .no-filters {
@@ -7524,7 +7920,7 @@ body {
 
 .detail-card.primary {
     border-color: var(--primary-red);
-    background: linear-gradient(135deg, #fff 0%, #fef8f8 100%);
+    background: linear-gradient(135deg, var(--theme-bg-primary) 0%, var(--theme-bg-secondary) 100%);
 }
 
 .detail-icon {
@@ -7692,8 +8088,8 @@ body {
 }
 
 .summary-card {
-    background: linear-gradient(135deg, var(--white) 0%, #f8fafc 100%);
-    border: 2px solid var(--border-color);
+    background: linear-gradient(135deg, var(--theme-bg-primary) 0%, var(--theme-bg-secondary) 100%);
+    border: 2px solid var(--theme-border);
     border-radius: var(--radius-lg);
     padding: var(--spacing-lg);
     display: flex;
@@ -8006,7 +8402,7 @@ body {
     width: 18px;
     left: 3px;
     bottom: 3px;
-    background-color: white;
+    background-color: var(--theme-bg-primary);
     transition: 0.3s;
     border-radius: 50%;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);

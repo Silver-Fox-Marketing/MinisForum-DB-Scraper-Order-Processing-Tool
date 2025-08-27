@@ -428,6 +428,25 @@
                             </div>
                         </div>
                         
+                        <!-- Search Bar for Dealership Settings -->
+                        <div class="settings-search-container">
+                            <div class="search-bar-wrapper">
+                                <input type="text" 
+                                       class="search-input" 
+                                       id="dealershipSettingsSearchInput" 
+                                       placeholder="Search dealerships by name...">
+                                <button class="search-btn" id="dealershipSettingsSearchBtn">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                                <button class="clear-search-btn" id="clearDealershipSettingsSearchBtn" style="display: none;">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="search-results-info" id="dealershipSettingsSearchInfo" style="display: none;">
+                                <span class="results-count">0 dealerships found</span>
+                            </div>
+                        </div>
+                        
                         <div class="dealership-settings-container">
                             <div class="settings-grid" id="dealershipSettingsGrid">
                                 <div class="loading">
@@ -547,26 +566,7 @@
                                     </div>
                                 </div>
                                 
-                                <div class="queue-actions">
-                                    <!-- Testing Mode Toggle -->
-                                    <div class="testing-mode-toggle" style="margin-bottom: 1rem; padding: 0.75rem; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px;">
-                                        <label style="display: flex; align-items: center; cursor: pointer; margin: 0;">
-                                            <input type="checkbox" id="queueTestingMode" style="margin-right: 10px; width: 18px; height: 18px; cursor: pointer;">
-                                            <span style="font-weight: 500; color: #856404;">
-                                                <i class="fas fa-flask" style="margin-right: 5px;"></i>
-                                                Testing Mode - Skip VIN History Logging
-                                            </span>
-                                        </label>
-                                        <p style="margin: 8px 0 0 28px; color: #856404; font-size: 12px; line-height: 1.3;">
-                                            When enabled, processed VINs will NOT be added to dealership VIN histories. Use for testing to avoid affecting future CAO comparisons.
-                                        </p>
-                                    </div>
-                                    
-                                    <button class="btn btn-primary btn-large" id="processQueueBtn" disabled>
-                                        <i class="fas fa-play"></i>
-                                        Process Queue
-                                    </button>
-                                </div>
+                                <!-- Queue actions moved outside to enable fixed positioning -->
                             </div>
                         </div>
                     </div>
@@ -1006,7 +1006,7 @@
                 </button>
                 <button class="modern-modal-btn update-btn" id="updateVinLogBtn">
                     <i class="fas fa-upload"></i>
-                    Update Log
+                    Update VIN Log
                 </button>
                 <button class="modern-modal-btn close-btn" id="closeVinLogModalBtn">
                     <i class="fas fa-times-circle"></i>
@@ -1247,6 +1247,19 @@ SF24002
         <div class="modal-content scraper-data-modal">
             <div class="modal-header">
                 <h3 id="scraperDataModalTitle">Scraper Data</h3>
+                
+                <!-- Data Type Toggle Switch -->
+                <div class="data-type-toggle-container">
+                    <span class="toggle-label">Raw</span>
+                    <label class="data-type-toggle-switch">
+                        <input type="checkbox" id="dataTypeToggle" checked>
+                        <span class="toggle-slider">
+                            <span class="toggle-thumb"></span>
+                        </span>
+                    </label>
+                    <span class="toggle-label active">Normalized</span>
+                </div>
+                
                 <button class="modal-close" id="closeScraperDataModal">
                     <i class="fas fa-times"></i>
                 </button>
@@ -1632,6 +1645,28 @@ SF24002
                 <button class="btn btn-primary" onclick="saveVehicleEdit()">Save Changes</button>
             </div>
         </div>
+    </div>
+
+    <!-- Floating Queue Actions Panel - Moved outside main container for fixed positioning -->
+    <div class="queue-actions" id="floatingQueueActions" style="display: none;">
+        <!-- Testing Mode Toggle -->
+        <div class="testing-mode-toggle">
+            <label style="display: flex; align-items: center; cursor: pointer; margin: 0;">
+                <input type="checkbox" id="queueTestingMode" style="margin-right: 10px; width: 18px; height: 18px; cursor: pointer;">
+                <span style="font-weight: 500;">
+                    <i class="fas fa-flask" style="margin-right: 5px;"></i>
+                    Testing Mode
+                </span>
+            </label>
+            <p style="margin: 8px 0 0 28px; font-size: 12px; line-height: 1.3;">
+                Skip VIN history logging for testing
+            </p>
+        </div>
+        
+        <button class="btn btn-primary btn-large" id="processQueueBtn" disabled>
+            <i class="fas fa-play"></i>
+            Process Queue
+        </button>
     </div>
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
