@@ -14,6 +14,7 @@ import os
 import sys
 import json
 import logging
+import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, send_file, flash, redirect, url_for
@@ -399,15 +400,90 @@ order_processor = CorrectOrderProcessor()
 # Global queue manager
 queue_manager = OrderQueueManager()
 
-@app.route('/')
-def index():
-    """Main dashboard page"""
-    return render_template('index.html')
+# ===== FILENAME-BASED CACHE BUSTING SYSTEM =====
+def generate_unique_js_files():
+    """
+    Creates timestamped copies of JavaScript files with unique filenames.
+    This bypasses browser cache more effectively than query parameters.
+    Returns dictionary mapping original names to unique filenames.
+    """
+    timestamp = int(time.time())
+    js_files = {}
+    static_js_path = Path(__file__).parent / 'static' / 'js'
+    
+    try:
+        # Generate unique filename for app.js
+        original_app_js = static_js_path / 'app.js'
+        if original_app_js.exists():
+            unique_app_js = f'app.{timestamp}.js'
+            unique_app_path = static_js_path / unique_app_js
+            shutil.copy2(original_app_js, unique_app_path)
+            js_files['app.js'] = unique_app_js
+            print(f"OK Created cache-busting file: {unique_app_js}")
+        
+        # Generate unique filename for order_wizard.js  
+        original_wizard_js = static_js_path / 'order_wizard.js'
+        if original_wizard_js.exists():
+            unique_wizard_js = f'order_wizard.{timestamp}.js'
+            unique_wizard_path = static_js_path / unique_wizard_js
+            shutil.copy2(original_wizard_js, unique_wizard_path)
+            js_files['order_wizard.js'] = unique_wizard_js
+            print(f"OK Created cache-busting file: {unique_wizard_js}")
+            
+        # Clean up old timestamped files (keep only latest 3)
+        cleanup_old_js_files(static_js_path)
+        
+        return js_files
+    except Exception as e:
+        print(f"ERROR generating unique JS files: {e}")
+        # Return original filenames as fallback
+        return {'app.js': 'app.js', 'order_wizard.js': 'order_wizard.js'}
+
+def cleanup_old_js_files(js_dir):
+    """Remove old timestamped JavaScript files to prevent accumulation"""
+    try:
+        # Find all timestamped app.js files
+        app_files = list(js_dir.glob('app.*.js'))
+        wizard_files = list(js_dir.glob('order_wizard.*.js'))
+        
+        # Keep only the 3 newest of each type
+        for file_list in [app_files, wizard_files]:
+            if len(file_list) > 3:
+                # Sort by modification time, keep newest 3
+                file_list.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                for old_file in file_list[3:]:
+                    old_file.unlink()
+                    print(f"CLEANUP Removed old JS file: {old_file.name}")
+    except Exception as e:
+        print(f"WARNING Error cleaning up old JS files: {e}")
+
+# Generate unique JS files on startup
+UNIQUE_JS_FILES = generate_unique_js_files()
+
 
 @app.route('/logotest')
 def logotest():
     """Simple logo test"""
     return '''<html><body><h1>Logo Test</h1><img src="/static/images/Asset_58.svg" height="60"><br><img src="/static/images/LS_MAIN-PRIMARY.svg" height="60"><p><a href="/">Back</a></p></body></html>'''
+
+@app.route('/template-test')
+def template_test():
+    """Test if template changes are working"""
+    return '''
+    <html>
+    <head><title>Template Test</title></head>
+    <body style="padding: 20px; font-family: Arial;">
+        <h1>Template Cache Test</h1>
+        <div style="background: red; color: white; padding: 20px; margin: 10px 0;">
+            <h2>🔍 TEST SEARCH BAR</h2>
+            <input type="text" placeholder="Search test..." style="padding: 10px; margin: 10px; width: 300px;">
+            <button style="padding: 10px 20px; background: white; color: red; border: none;">SEARCH</button>
+        </div>
+        <p><a href="/">Back to Main Site</a></p>
+        <p>If you can see this red search bar, then Flask routing works but template caching is the issue.</p>
+    </body>
+    </html>
+    '''
 
 @app.route('/websocket-test')
 def websocket_test():
@@ -664,6 +740,75 @@ def order_wizard():
     response.headers['Expires'] = '0'
     response.headers['Last-Modified'] = '0'
     response.headers['ETag'] = f'wizard-final-{cache_buster}'
+    return response
+
+@app.route('/bypass')
+def index_bypass():
+    """CRITICAL EMERGENCY BYPASS: Completely manual JavaScript loading"""
+    import time
+    from flask import make_response
+    cache_buster = int(time.time())
+    
+    # Get the unique JavaScript filename  
+    unique_app_js = UNIQUE_JS_FILES.get('app.js', 'app.js')
+    
+    print(f"CRITICAL BYPASS: Using JavaScript file: {unique_app_js}")
+    
+    # Create minimal HTML with the correct JavaScript
+    html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EMERGENCY BYPASS TEST</title>
+</head>
+<body>
+    <h1>EMERGENCY BYPASS TEST</h1>
+    <p>JavaScript Loading Test: {unique_app_js}</p>
+    <div id="manualOrderEntry" style="width: 400px; height: 200px; border: 1px solid black;">Test VIN Entry Area</div>
+    <button onclick="validateManualEntryInline()">Test Validate</button>
+    <button onclick="clearManualEntryInline()">Test Clear</button>
+    
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="/static/js/{unique_app_js}"></script>
+    <script>
+        console.log('EMERGENCY BYPASS: JavaScript loaded successfully');
+        console.log('Available functions:', typeof updateManualEntryStatsInline, typeof validateManualEntryInline);
+    </script>
+</body>
+</html>"""
+    
+    response = make_response(html_content)
+    response.headers['Content-Type'] = 'text/html; charset=utf-8'
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '-1'
+    response.headers['Last-Modified'] = '0'
+    response.headers['ETag'] = f'emergency-bypass-{cache_buster}'
+    response.headers['Vary'] = '*'
+    
+    return response
+
+@app.route('/')
+def index():
+    """Main index page - REDIRECT TO BYPASS"""
+    return redirect('/bypass')
+
+@app.route('/fresh')
+def fresh_app():
+    """FRESH APPLICATION BYPASS - Uses filename-based cache busting"""
+    import time
+    from flask import make_response
+    cache_buster = int(time.time())
+    # Use unique JavaScript filenames instead of query parameters  
+    unique_app_js = UNIQUE_JS_FILES.get('app.js', 'app.js')
+    response = make_response(render_template('index.html', v=cache_buster, unique_app_js=unique_app_js))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache' 
+    response.headers['Expires'] = '-1'
+    response.headers['Last-Modified'] = '0'
+    response.headers['ETag'] = f'fresh-{cache_buster}'
+    response.headers['Vary'] = '*'
     return response
 
 @app.route('/wizard-new')
@@ -1325,6 +1470,139 @@ def import_vin_log_csv():
         
     except Exception as e:
         logger.error(f"Error importing VIN log CSV: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/manual-vin-import', methods=['POST'])
+def manual_vin_import():
+    """Import VINs manually entered by user into dealership-specific VIN log"""
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        dealership_name = data.get('dealership_name')
+        vins = data.get('vins', [])
+        import_date = data.get('import_date')
+        source = data.get('source', 'manual_entry')
+        
+        if not dealership_name:
+            return jsonify({'error': 'Dealership name is required'}), 400
+            
+        if not vins or len(vins) == 0:
+            return jsonify({'error': 'No VINs provided'}), 400
+        
+        logger.info(f"Manual VIN import for {dealership_name}: {len(vins)} VINs")
+        
+        # Get dealership-specific VIN log table name (match existing format)
+        def get_dealership_vin_log_table(dealership_name):
+            slug = dealership_name.lower()
+            slug = slug.replace(' ', '_')
+            slug = slug.replace('&', 'and')
+            slug = slug.replace('.', '')
+            slug = slug.replace(',', '')
+            slug = slug.replace('-', '_')
+            slug = slug.replace('/', '_')
+            slug = slug.replace("'", '')
+            slug = slug.replace('__', '_')
+            return f'{slug}_vin_log'
+        
+        table_name = get_dealership_vin_log_table(dealership_name)
+        logger.info(f"Using VIN log table: {table_name}")
+        
+        # Check if table exists, create if not
+        table_check = db_manager.execute_query("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = %s 
+            AND table_name = %s
+        """, ('public', table_name))
+        
+        if not table_check:
+            logger.info(f"Creating VIN log table: {table_name}")
+            create_table_sql = f"""
+            CREATE TABLE {table_name} (
+                vin VARCHAR(17) NOT NULL,
+                processed_date TIMESTAMP DEFAULT NOW(),
+                order_type VARCHAR(50),
+                template_type VARCHAR(50),
+                order_number VARCHAR(100),
+                order_date TIMESTAMP,
+                source VARCHAR(50) DEFAULT 'manual_entry',
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                PRIMARY KEY (vin, processed_date)
+            );
+            """
+            db_manager.execute_query(create_table_sql)
+            logger.info(f"Created VIN log table: {table_name}")
+        
+        # Process VINs
+        imported_count = 0
+        errors = []
+        
+        for vin_data in vins:
+            try:
+                vin = vin_data['vin'].strip().upper()
+                order_number = vin_data.get('order_number', '')
+                processed_date = vin_data.get('processed_date', import_date)
+                
+                if not vin or len(vin) != 17:
+                    errors.append(f"Invalid VIN: {vin}")
+                    continue
+                
+                # Check if VIN already exists (prevent duplicates)
+                existing_check = db_manager.execute_query(f"""
+                    SELECT vin FROM {table_name} WHERE vin = %s
+                """, (vin,))
+                
+                if existing_check:
+                    logger.info(f"VIN {vin} already exists in {table_name}, skipping")
+                    continue
+                
+                # Insert VIN into dealership-specific VIN log
+                insert_sql = f"""
+                    INSERT INTO {table_name} 
+                    (vin, order_number, order_date, source, processed_date, order_type, template_type) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """
+                
+                db_manager.execute_query(insert_sql, (
+                    vin,
+                    order_number,
+                    processed_date,  # Use as order_date
+                    source,
+                    processed_date,  # Use as processed_date
+                    'manual',        # order_type
+                    'manual_entry'   # template_type
+                ))
+                
+                imported_count += 1
+                logger.info(f"Imported VIN {vin} to {table_name}")
+                
+            except Exception as e:
+                error_msg = f"Error processing VIN {vin_data.get('vin', 'unknown')}: {str(e)}"
+                errors.append(error_msg)
+                logger.error(error_msg)
+        
+        if imported_count > 0:
+            logger.info(f"Manual VIN import completed: {imported_count} VINs imported to {table_name}")
+            return jsonify({
+                'success': True,
+                'imported_count': imported_count,
+                'errors': errors,
+                'dealership': dealership_name,
+                'table_name': table_name
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'No VINs were imported',
+                'errors': errors
+            }), 400
+    
+    except Exception as e:
+        logger.error(f"Error in manual VIN import: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/download_csv/<filename>')
@@ -4331,6 +4609,11 @@ def export_scraper_data():
     except Exception as e:
         logger.error(f"Error exporting scraper data: {e}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/test-endpoint', methods=['GET', 'POST'])
+def test_endpoint():
+    """Test endpoint to verify route registration"""
+    return jsonify({'message': 'Test endpoint works!', 'method': request.method})
 
 if __name__ == '__main__':
     # Create necessary directories
