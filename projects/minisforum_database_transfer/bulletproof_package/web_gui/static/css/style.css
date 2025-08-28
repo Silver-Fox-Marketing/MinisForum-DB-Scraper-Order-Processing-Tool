@@ -574,6 +574,55 @@ body {
     font-weight: 500;
 }
 
+/* Sidebar Status Section - Centered above Order Processing */
+.sidebar-status-section {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    padding: 8px 20px;
+    margin-bottom: 4px;
+    background: transparent;
+    border-radius: 0;
+    border: none;
+}
+
+.sidebar-status-section .status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--theme-text-primary, #ffffff);
+    white-space: nowrap;
+}
+
+.sidebar-status-section .status-icon {
+    font-size: 10px;
+    color: var(--success-green, #10b981);
+    animation: pulse 2s infinite;
+}
+
+[data-theme="dark"] .sidebar-status-section {
+    background: rgba(0, 0, 0, 0.2);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Collapsed sidebar - show only status icon */
+.sidebar.collapsed .sidebar-status-section {
+    padding: 12px;
+    margin-bottom: 8px;
+    justify-content: center;
+}
+
+.sidebar.collapsed .sidebar-status-section .status-text {
+    display: none;
+}
+
+.sidebar.collapsed .sidebar-status-section .status-icon {
+    font-size: 14px;
+    margin: 0;
+}
+
 .status-icon {
     color: var(--success-green);
     font-size: 0.8rem;

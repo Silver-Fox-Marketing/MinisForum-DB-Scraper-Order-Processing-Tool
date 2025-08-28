@@ -82,16 +82,8 @@
                     </div>
                 </div>
                 <div class="status-section">
-                    <div class="status-indicator" id="systemStatus">
-                        <i class="fas fa-circle status-icon"></i>
-                        <span class="status-text">System Ready</span>
-                    </div>
                     <div class="last-scrape" id="lastScrape">
                         Last Scrape: Never
-                    </div>
-                    <!-- TEST: Asset 58 Logo -->
-                    <div style="margin: 0 20px;">
-                        <img src="{{ url_for('static', filename='images/Asset_58.svg') }}?test=123" alt="Test Asset 58" style="height: 40px; width: auto;">
                     </div>
                     
                     <!-- Dark Mode Toggle -->
@@ -126,6 +118,14 @@
                     <button class="sidebar-toggle" id="sidebarToggle" title="Toggle Sidebar">
                         <i class="fas fa-chevron-left"></i>
                     </button>
+                </div>
+                
+                <!-- System Status Indicator -->
+                <div class="sidebar-status-section">
+                    <div class="status-indicator" id="systemStatus">
+                        <i class="fas fa-circle status-icon"></i>
+                        <span class="status-text">System Ready</span>
+                    </div>
                 </div>
                 
                 <nav class="sidebar-nav">
@@ -438,27 +438,6 @@
                             </div>
                         </div>
                         
-                        <!-- SEARCH BAR - FORCED VISIBILITY -->
-                        <div style="background: #ff0000; padding: 20px; margin: 10px 0; border-radius: 8px;">
-                            <h3 style="color: white; margin: 0 0 10px 0;">🔍 DEALERSHIP SEARCH</h3>
-                            <div style="display: flex; gap: 10px; align-items: center;">
-                                <input type="text" 
-                                       style="flex: 1; padding: 12px; border: none; border-radius: 4px; font-size: 16px;"
-                                       id="dealershipSettingsSearchInput" 
-                                       placeholder="Type to search dealerships...">
-                                <button style="padding: 12px 20px; background: white; color: #ff0000; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;" 
-                                        id="dealershipSettingsSearchBtn">
-                                    SEARCH
-                                </button>
-                                <button style="padding: 12px; background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 4px; cursor: pointer; display: none;" 
-                                        id="clearDealershipSettingsSearchBtn">
-                                    ✕
-                                </button>
-                            </div>
-                            <div id="dealershipSettingsSearchInfo" style="margin-top: 10px; color: white; font-weight: bold; display: none;">
-                                <span class="results-count">0 dealerships found</span>
-                            </div>
-                        </div>
                         
                         <div class="dealership-settings-container">
                             <div class="settings-grid" id="dealershipSettingsGrid">
