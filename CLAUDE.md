@@ -240,6 +240,71 @@ npm test
 
 ---
 
+## 🚨 CRITICAL CODING RULES - WINDOWS COMPATIBILITY
+
+### **🎯 SCRAPER DATA SELECTION - ACTIVE vs ARCHIVED RULE**
+**CRITICAL: CAO Order Processing ONLY uses scraper datasets marked "active"**
+
+**NEVER use import dates, timestamps, or recency to determine which scraper data to use!**
+
+**The ONLY factor that determines which scraper dataset is used for CAO processing:**
+- **Status = "active"**: Use this dataset for CAO processing
+- **Status = "archived"**: NEVER use for CAO processing
+
+**Database Query Pattern:**
+```sql
+-- CORRECT: Filter by active status only
+SELECT * FROM raw_vehicle_data 
+WHERE location = 'Dealership Name'
+AND status = 'active'  -- or whatever the active indicator column is
+AND type = 'Used'
+
+-- WRONG: Using dates/timestamps  
+SELECT * FROM raw_vehicle_data 
+WHERE location = 'Dealership Name'
+AND import_date = (SELECT MAX(import_date) FROM...)  -- NEVER DO THIS
+```
+
+**Key Points:**
+- Multiple scraper runs may exist for the same dealership
+- Only the dataset marked "active" should be processed
+- Archived datasets are kept for historical reference only
+- This prevents processing duplicate/outdated inventory data
+
+### **VEHICLE TYPE CLASSIFICATION SYSTEM**
+**IMPORTANT: Standard vehicle type categories for dealership filtering:**
+- **NEW**: New vehicles only
+- **USED**: Umbrella term that includes ALL pre-owned vehicles:
+  - **PO (Pre-Owned)**: Regular used vehicles
+  - **CPO (Certified Pre-Owned)**: Manufacturer certified used vehicles  
+  - **CERTIFIED**: Alternative term for certified pre-owned
+
+**Implementation Rules:**
+- When dealership config specifies `vehicle_types: ['used']`, the filtering logic must include `['po', 'cpo', 'certified', 'pre-owned']`
+- When dealership config specifies `vehicle_types: ['new']`, only include `['new']`
+- Never create complex type arrays - use simple "new" or "used" categories
+- The normalization process converts raw vehicle types to standardized values
+
+**Database Schema:**
+- `raw_vehicle_data.type`: Contains original scraper values ("Used", "New", "Certified Pre-Owned", etc.)
+- `normalized_vehicle_data.vehicle_condition`: Contains standardized values ("new", "po", "cpo")
+- CAO processing queries `normalized_vehicle_data` using the standardized values
+
+### **NEVER USE UNICODE CHARACTERS IN PYTHON SCRIPTS**
+**Windows Terminal Encoding Issues:**
+- **NEVER use emojis or unicode symbols** (❌ ✅ 📊 🎯 etc.) in Python print statements
+- Windows CP1252 encoding will throw `UnicodeEncodeError` every time
+- Always use ASCII alternatives:
+  - Instead of ✅ use `[OK]`, `SUCCESS:`, or `FOUND:`
+  - Instead of ❌ use `[X]`, `ERROR:`, or `NOT FOUND:`
+  - Instead of 📊 use `===`, `---`, or `***`
+  - Instead of 🎯 use `>>>`, `TARGET:`, or `==>`
+
+**This applies to:**
+- All Python scripts run via command line
+- Debug scripts and test files
+- Any console output from Python
+
 ## 🛠 Available Tools & Libraries
 
 ### **Pre-installed in Environment:**

@@ -791,8 +791,8 @@ def index_bypass():
 
 @app.route('/')
 def index():
-    """Main index page - REDIRECT TO BYPASS"""
-    return redirect('/bypass')
+    """Main index page"""
+    return render_template('index.html', js_files=UNIQUE_JS_FILES)
 
 @app.route('/fresh')
 def fresh_app():
@@ -954,6 +954,9 @@ def process_cao_orders():
             # CorrectOrderProcessor uses template_type and skip_vin_logging parameters
             # The filtering is handled automatically using dealership configs in the database
             result = order_processor.process_cao_order(dealership, template_type="shortcut_pack", skip_vin_logging=skip_vin_logging)
+            
+            # DEBUG: Log the actual result being returned
+            logger.info(f"CAO result for {dealership}: success={result.get('success')}, vehicle_count={result.get('vehicle_count')}, new_vehicles={result.get('new_vehicles')}")
             
             # Transform result for web interface compatibility
             if result.get('success') and result.get('csv_file'):

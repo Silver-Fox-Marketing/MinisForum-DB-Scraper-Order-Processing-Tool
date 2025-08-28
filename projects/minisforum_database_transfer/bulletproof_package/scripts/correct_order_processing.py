@@ -135,9 +135,11 @@ class CorrectOrderProcessor:
                 'template_type': template_type,
                 'total_vehicles': len(current_vehicles),
                 'new_vehicles': len(new_vehicles),
+                'vehicle_count': len(new_vehicles),
                 'qr_codes_generated': len(qr_paths),
                 'qr_folder': str(qr_folder),
                 'csv_file': str(csv_path),
+                'export_file': str(csv_path),
                 'download_csv': f"/download_csv/{csv_path.name}",
                 'billing_csv_file': str(billing_csv_path),
                 'download_billing_csv': f"/download_csv/{billing_csv_path.name}",
@@ -214,10 +216,12 @@ class CorrectOrderProcessor:
                 'template_type': template_type,
                 'vehicles_requested': len(vehicles),
                 'vehicles_processed': len(filtered_vehicles),
+                'vehicle_count': len(filtered_vehicles),
                 'vehicles_filtered_out': len(vehicles) - len(filtered_vehicles),
                 'qr_codes_generated': len(qr_paths),
                 'qr_folder': str(qr_folder),
                 'csv_file': str(csv_path),
+                'export_file': str(csv_path),
                 'download_csv': f"/download_csv/{csv_path.name}",
                 'billing_csv_file': str(billing_csv_path),
                 'download_billing_csv': f"/download_csv/{billing_csv_path.name}",
@@ -335,43 +339,42 @@ class CorrectOrderProcessor:
             if isinstance(filtering_rules, str):
                 filtering_rules = json.loads(filtering_rules)
         
+        # Log the filtering rules being applied
+        logger.info(f"Applying filtering rules for {dealership_name}: {filtering_rules}")
+        
         # Build query with filters - use actual location name for data lookup
         # CRITICAL: Only process vehicles from the ACTIVE scraper import that are physically on the lot
+        # Use normalized_vehicle_data for proper vehicle type filtering (po, cpo, new instead of raw values)
         query = """
-            SELECT rvd.* FROM raw_vehicle_data rvd
-            JOIN scraper_imports si ON rvd.import_id = si.import_id
-            WHERE rvd.location = %s 
-            AND rvd.on_lot_status = 'on lot'
-            AND si.status = 'active'
+            SELECT nvd.* FROM normalized_vehicle_data nvd
+            WHERE nvd.location = %s 
+            AND nvd.on_lot_status = 'onlot'
         """
         params = [actual_location_name]
         
-        # Apply vehicle type filter - FIXED SIMPLE APPROACH
+        # Apply vehicle type filter - NORMALIZED DATA APPROACH
         vehicle_types = filtering_rules.get('allowed_vehicle_types', filtering_rules.get('vehicle_types', ['new', 'used']))
         if vehicle_types and 'all' not in vehicle_types:
-            # Build individual ILIKE conditions for each allowed type
-            all_type_patterns = []
+            # Build conditions for normalized vehicle_condition values
+            allowed_conditions = []
             for vtype in vehicle_types:
                 if vtype == 'new':
-                    all_type_patterns.append('%new%')
+                    allowed_conditions.append('new')
                 elif vtype == 'used':
-                    # CRITICAL: "used" includes Pre-Owned AND Certified Pre-Owned
-                    all_type_patterns.extend(['%pre-owned%', '%pre owned%', '%certified%', '%used%', '%cpo%'])
+                    # UMBRELLA TERM: "used" includes both po (Pre-Owned) AND cpo (Certified Pre-Owned)
+                    allowed_conditions.extend(['po', 'cpo'])
                 elif vtype in ['certified', 'cpo']:
-                    all_type_patterns.extend(['%certified%', '%cpo%'])
+                    allowed_conditions.append('cpo')
                 elif vtype in ['po', 'pre-owned']:
-                    all_type_patterns.extend(['%pre-owned%', '%pre owned%'])
+                    allowed_conditions.append('po')
             
-            if all_type_patterns:
+            if allowed_conditions:
                 # Remove duplicates
-                all_type_patterns = list(set(all_type_patterns))
-                # Create simple OR conditions
-                type_conditions = []
-                for pattern in all_type_patterns:
-                    type_conditions.append("type ILIKE %s")
-                    params.append(pattern)
-                
-                query += f" AND ({' OR '.join(type_conditions)})"
+                allowed_conditions = list(set(allowed_conditions))
+                # Create IN clause for exact matches on normalized values
+                placeholders = ', '.join(['%s'] * len(allowed_conditions))
+                query += f" AND nvd.vehicle_condition IN ({placeholders})"
+                params.extend(allowed_conditions)
         
         # Apply year filter
         min_year = filtering_rules.get('min_year')
@@ -379,29 +382,29 @@ class CorrectOrderProcessor:
             query += " AND year >= %s"
             params.append(min_year)
         
-        # Apply require_status filter (highest priority - checks the 'type' column)
+        # Apply require_status filter (highest priority - checks the 'status' column)
         require_statuses = filtering_rules.get('require_status')
         if require_statuses:
             if isinstance(require_statuses, list):
                 status_conditions = []
                 for status in require_statuses:
-                    status_conditions.append("rvd.type ILIKE %s")
+                    status_conditions.append("nvd.status ILIKE %s")
                     params.append(f"%{status}%")
                 query += f" AND ({' OR '.join(status_conditions)})"
             else:
-                query += " AND rvd.type ILIKE %s"
+                query += " AND nvd.status ILIKE %s"
                 params.append(f"%{require_statuses}%")
         
-        # Apply exclude_status filter (checks the 'type' column for raw status values)
+        # Apply exclude_status filter (checks the 'status' column for raw status values)
         exclude_statuses = filtering_rules.get('exclude_status')
         if exclude_statuses:
             if isinstance(exclude_statuses, list):
                 for status in exclude_statuses:
-                    # Use ILIKE for case-insensitive matching against the 'type' column
-                    query += " AND rvd.type NOT ILIKE %s"
+                    # Use ILIKE for case-insensitive matching against the 'status' column
+                    query += " AND nvd.status NOT ILIKE %s"
                     params.append(f"%{status}%")
             else:
-                query += " AND rvd.type NOT ILIKE %s"
+                query += " AND nvd.status NOT ILIKE %s"
                 params.append(f"%{exclude_statuses}%")
         
         # Apply stock number filter (exclude missing and asterisk placeholders)
@@ -413,7 +416,7 @@ class CorrectOrderProcessor:
         if filtering_rules.get('exclude_missing_price', False):
             query += " AND price IS NOT NULL AND price > 0"
         
-        query += " ORDER BY import_timestamp DESC"
+        query += " ORDER BY created_at DESC"
         
         logger.info(f"Query: {query}")
         logger.info(f"Params: {params}")
@@ -430,13 +433,12 @@ class CorrectOrderProcessor:
             logger.error("Attempting simplified query without problematic constraints...")
             # Try a simplified query without filtering if the main query fails
             # CRITICAL: Still only process vehicles from ACTIVE import that are on the lot
+            # Use normalized_vehicle_data for consistent data structure
             simplified_query = """
-                SELECT rvd.* FROM raw_vehicle_data rvd
-                JOIN scraper_imports si ON rvd.import_id = si.import_id
-                WHERE rvd.location = %s 
-                AND rvd.on_lot_status = 'on lot'
-                AND si.status = 'active'
-                ORDER BY rvd.import_timestamp DESC
+                SELECT nvd.* FROM normalized_vehicle_data nvd
+                WHERE nvd.location = %s 
+                AND nvd.on_lot_status = 'on lot'
+                ORDER BY nvd.updated_at DESC
             """
             try:
                 result = db_manager.execute_query(simplified_query, (actual_location_name,))
@@ -463,6 +465,9 @@ class CorrectOrderProcessor:
             filtering_rules = config[0]['filtering_rules']
             if isinstance(filtering_rules, str):
                 filtering_rules = json.loads(filtering_rules)
+        
+        # Log the filtering rules being applied
+        logger.info(f"Applying filtering rules for {dealership_name}: {filtering_rules}")
         
         # Get allowed vehicle types using the new 'allowed_vehicle_types' field
         vehicle_types = filtering_rules.get('allowed_vehicle_types', filtering_rules.get('vehicle_types', ['new', 'used']))

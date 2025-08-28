@@ -7975,9 +7975,16 @@ class ModalOrderWizard {
         const result = results[0] || results; // Handle both array and single object responses
         console.log('Processed result:', result);
         
+        // DEBUG: Check all possible vehicle count fields
+        console.log('DEBUG vehicle counts:', {
+            new_vehicles: result.new_vehicles,
+            vehicle_count: result.vehicle_count,
+            vehicles_processed: result.vehicles_processed
+        });
+        
         // Map backend fields to frontend expected fields
         const mappedResult = {
-            vehicles_processed: result.new_vehicles || 0,
+            vehicles_processed: result.new_vehicles || result.vehicle_count || 0,
             files_generated: result.qr_codes_generated || 0,
             success: result.success,
             dealership: result.dealership,

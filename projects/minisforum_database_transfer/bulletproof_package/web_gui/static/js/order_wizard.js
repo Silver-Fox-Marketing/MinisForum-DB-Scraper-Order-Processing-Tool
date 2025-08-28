@@ -69,6 +69,41 @@ class OrderWizard {
         }
     }
     
+    clearAllCachedData() {
+        console.log('CLEARING ALL CACHED DATA - FRESH START');
+        
+        // Clear JavaScript data structures
+        this.processedOrders = [];
+        this.currentOrderResult = null;
+        this.currentOrderVins = [];
+        this.currentOrderDealership = null;
+        
+        // Reset processing results
+        this.processingResults = {
+            totalDealerships: 0,
+            caoProcessed: 0,
+            listProcessed: 0,
+            totalVehicles: 0,
+            filesGenerated: 0,
+            errors: []
+        };
+        
+        // Clear any CSV data display
+        const spreadsheetContainer = document.getElementById('csvTable');
+        const placeholder = document.getElementById('csvPlaceholder');
+        const vehicleCount = document.getElementById('vehicleCount');
+        
+        if (spreadsheetContainer) spreadsheetContainer.style.display = 'none';
+        if (placeholder) placeholder.style.display = 'block';
+        if (vehicleCount) vehicleCount.textContent = '0';
+        
+        // Clear QR code displays
+        const qrContainer = document.getElementById('qrGrid');
+        if (qrContainer) qrContainer.innerHTML = '<p>No QR codes generated yet.</p>';
+        
+        console.log('Cache cleared - ready for fresh processing');
+    }
+    
     initializeStep() {
         // Update total dealerships display
         const totalElement = document.getElementById('totalDealerships');
@@ -119,6 +154,9 @@ class OrderWizard {
     }
     
     startProcessing() {
+        // CRITICAL: Clear all cached data before starting fresh processing
+        this.clearAllCachedData();
+        
         this.updateProgress('cao');
         this.showStep('caoStep');
         
@@ -252,7 +290,7 @@ class OrderWizard {
         
         // Map backend fields to frontend expected fields
         const mappedResult = {
-            vehicles_processed: result.new_vehicles || 0,
+            vehicles_processed: result.new_vehicles || result.vehicle_count || 0,
             files_generated: result.qr_codes_generated || 0,
             success: result.success,
             dealership: result.dealership,
@@ -266,6 +304,8 @@ class OrderWizard {
     }
     
     skipCAO() {
+        // CRITICAL: Clear cached data when skipping to fresh list processing
+        this.clearAllCachedData();
         this.proceedToListProcessing();
     }
     
@@ -1256,6 +1296,38 @@ class OrderWizard {
         if (targetStep) {
             targetStep.classList.add('active');
         }
+        
+        // Initialize VIN table when showing list step
+        if (stepId === 'listStep') {
+            console.log('List step is active, initializing VIN table...');
+            // Small delay to ensure DOM is ready
+            setTimeout(() => {
+                this.initializeVinTable();
+            }, 100);
+        }
+        
+        // Always ensure VIN table is properly initialized for list step
+        if (stepId === 'listStep') {
+            setTimeout(() => {
+                const vinTableBody = document.getElementById('vinTableBody');
+                console.log('Checking VIN table status...');
+                console.log('VIN table body element:', vinTableBody);
+                console.log('VIN table body children count:', vinTableBody ? vinTableBody.children.length : 'N/A');
+                
+                if (!vinTableBody) {
+                    console.error('VIN table body not found - DOM issue!');
+                } else if (vinTableBody.children.length === 0) {
+                    console.log('VIN table is empty, forcing initialization...');
+                    this.initializeVinTable();
+                } else {
+                    console.log('VIN table already has content, ensuring focus...');
+                    const firstInput = document.getElementById('vin-input-1');
+                    if (firstInput) {
+                        firstInput.focus();
+                    }
+                }
+            }, 250);
+        }
     }
     
     // ========== ORDER NUMBER STEP METHODS ==========
@@ -1624,7 +1696,7 @@ class OrderWizard {
                 <tr data-row-index="${rowIndex}">
                     <td>
                         <div class="row-actions">
-                            <button class="row-edit-btn" onclick="wizard.editRow(${rowIndex})">
+                            <button class="row-edit-btn" onclick="wizard.editRowWithModal(${rowIndex})">
                                 <i class="fas fa-edit"></i> Edit
                             </button>
                         </div>
@@ -1636,6 +1708,68 @@ class OrderWizard {
             `;
         }).join('');
         table.appendChild(tbody);
+    }
+    
+    editRowWithModal(rowIndex) {
+        if (!this.currentCSVData || !this.currentCSVData.rows[rowIndex]) {
+            console.error('No CSV data available for editing');
+            return;
+        }
+        
+        const row = this.currentCSVData.rows[rowIndex];
+        const headers = this.currentCSVData.headers;
+        
+        // Convert CSV row data to vehicle object format
+        const vehicleData = this.csvRowToVehicleObject(row, headers);
+        
+        // Store the review data globally for the modal functions
+        if (!reviewVehicleData[rowIndex]) {
+            reviewVehicleData[rowIndex] = vehicleData;
+        }
+        
+        // Open the modal
+        openManualDataModal(rowIndex, vehicleData);
+    }
+    
+    csvRowToVehicleObject(row, headers) {
+        const vehicle = {};
+        
+        // Map CSV columns to vehicle properties
+        headers.forEach((header, index) => {
+            const value = row[index] || '';
+            const headerLower = header.toLowerCase();
+            
+            // Map headers to standard vehicle properties
+            if (headerLower.includes('year')) {
+                vehicle.year = value;
+            } else if (headerLower.includes('make')) {
+                vehicle.make = value;
+            } else if (headerLower.includes('model')) {
+                vehicle.model = value;
+            } else if (headerLower.includes('trim')) {
+                vehicle.trim = value;
+            } else if (headerLower.includes('stock')) {
+                vehicle.stock = value;
+            } else if (headerLower.includes('vin')) {
+                vehicle.vin = value;
+            } else if (headerLower.includes('price')) {
+                vehicle.price = value;
+            } else if (headerLower.includes('type')) {
+                vehicle.type = value;
+            } else if (headerLower.includes('color')) {
+                vehicle.ext_color = value;
+            } else if (headerLower.includes('mileage') || headerLower.includes('miles')) {
+                vehicle.mileage = value;
+            } else if (headerLower.includes('fuel')) {
+                vehicle.fuel_type = value;
+            } else if (headerLower.includes('transmission')) {
+                vehicle.transmission = value;
+            } else if (headerLower.includes('url')) {
+                vehicle.vehicle_url = value;
+            }
+        });
+        
+        return vehicle;
     }
     
     editRow(rowIndex) {
@@ -1813,19 +1947,18 @@ class OrderWizard {
     }
 
     processListVins() {
-        const vinTextarea = document.getElementById('vinTextarea');
-        if (!vinTextarea || !vinTextarea.value.trim()) {
-            this.showError('Please enter VINs for processing');
+        // Get VINs from the table instead of textarea
+        const vins = this.getAllVinsFromTable();
+        
+        if (vins.length === 0) {
+            this.showError('Please enter at least one VIN for processing');
             return;
         }
 
-        // Parse VINs from textarea
-        const vins = vinTextarea.value.trim().split('\n')
-            .map(vin => vin.trim())
-            .filter(vin => vin.length > 0);
-
-        if (vins.length === 0) {
-            this.showError('Please enter valid VINs');
+        // Validate all VINs before processing
+        const invalidVins = vins.filter(vin => !this.isValidVin(vin));
+        if (invalidVins.length > 0) {
+            this.showError(`Please correct the following invalid VINs: ${invalidVins.join(', ')}`);
             return;
         }
 
@@ -1890,6 +2023,544 @@ class OrderWizard {
         div.textContent = text;
         return div.innerHTML;
     }
+
+    // =============================================================================
+    // VIN TABLE MANAGEMENT FUNCTIONS
+    // =============================================================================
+
+    initializeVinTable() {
+        const tableBody = document.getElementById('vinTableBody');
+        
+        if (!tableBody) {
+            console.error('VIN table body not found! Retrying...');
+            
+            // Retry after a delay if table body not found
+            setTimeout(() => {
+                this.initializeVinTable();
+            }, 300);
+            return;
+        }
+
+        // Clear existing rows and add initial 5 rows
+        tableBody.innerHTML = '';
+        
+        // Create all rows synchronously first, then attach event listeners
+        const rowsToCreate = 5;
+        
+        for (let i = 0; i < rowsToCreate; i++) {
+            const rowNumber = i + 1;
+            this.createVinRowElement(rowNumber);
+        }
+        
+        // After all rows are created, attach event listeners with a delay
+        setTimeout(() => {
+            this.attachAllEventListeners();
+            this.updateVinCounts();
+            
+            // Focus on first input
+            const firstInput = document.getElementById('vin-input-1');
+            if (firstInput) {
+                firstInput.focus();
+            }
+        }, 100);
+    }
+    
+    createVinRowElement(rowNumber) {
+        const tableBody = document.getElementById('vinTableBody');
+        if (!tableBody) return;
+
+        const row = document.createElement('tr');
+        row.className = 'vin-row';
+        row.id = `vin-row-${rowNumber}`;
+
+        row.innerHTML = `
+            <td class="row-number">${rowNumber}</td>
+            <td>
+                <input type="text" 
+                       class="vin-input" 
+                       id="vin-input-${rowNumber}"
+                       placeholder="Enter 17-character VIN"
+                       maxlength="17"
+                       data-row-number="${rowNumber}"
+                       autocomplete="off"
+                       spellcheck="false">
+            </td>
+            <td class="vin-status" id="vin-status-${rowNumber}">
+                <i class="fas fa-minus-circle" style="color: #9ca3af;"></i>
+            </td>
+        `;
+
+        tableBody.appendChild(row);
+        console.log(`Created VIN row element ${rowNumber}`);
+    }
+    
+    attachAllEventListeners() {
+        console.log('Attaching event listeners to all VIN inputs...');
+        const inputs = document.querySelectorAll('.vin-input');
+        
+        inputs.forEach(input => {
+            const rowNumber = parseInt(input.getAttribute('data-row-number'));
+            if (rowNumber && !input.hasAttribute('data-listeners-attached')) {
+                // Use arrow functions to maintain 'this' context
+                input.addEventListener('input', (event) => {
+                    this.filterVinInput(event, rowNumber);
+                    this.validateVin(rowNumber);
+                });
+                
+                input.addEventListener('paste', (event) => {
+                    this.handleVinPaste(event, rowNumber);
+                });
+                
+                input.addEventListener('keydown', (event) => {
+                    this.handleVinKeydown(event, rowNumber);
+                });
+                
+                input.addEventListener('keypress', (event) => {
+                    this.handleVinKeypress(event, rowNumber);
+                });
+                
+                // Mark as having listeners attached to prevent double-binding
+                input.setAttribute('data-listeners-attached', 'true');
+                console.log(`Event listeners attached for VIN input row ${rowNumber}`);
+            }
+        });
+    }
+
+    addVinRow() {
+        const tableBody = document.getElementById('vinTableBody');
+        if (!tableBody) return;
+
+        const rowNumber = tableBody.rows.length + 1;
+        
+        // Create the row element
+        this.createVinRowElement(rowNumber);
+        
+        // Attach event listeners for the new row with a small delay
+        setTimeout(() => {
+            const input = document.getElementById(`vin-input-${rowNumber}`);
+            if (input && !input.hasAttribute('data-listeners-attached')) {
+                // Use arrow functions to maintain 'this' context
+                input.addEventListener('input', (event) => {
+                    this.filterVinInput(event, rowNumber);
+                    this.validateVin(rowNumber);
+                });
+                
+                input.addEventListener('paste', (event) => {
+                    this.handleVinPaste(event, rowNumber);
+                });
+                
+                input.addEventListener('keydown', (event) => {
+                    this.handleVinKeydown(event, rowNumber);
+                });
+                
+                input.addEventListener('keypress', (event) => {
+                    this.handleVinKeypress(event, rowNumber);
+                });
+                
+                // Mark as having listeners attached
+                input.setAttribute('data-listeners-attached', 'true');
+                console.log(`Event listeners added for new VIN input row ${rowNumber}`);
+            } else if (input) {
+                console.log(`Row ${rowNumber} already has event listeners attached`);
+            } else {
+                console.error(`Failed to find input element for new row ${rowNumber}`);
+            }
+            
+            this.updateVinCounts();
+        }, 50);
+    }
+
+    removeLastRow() {
+        const tableBody = document.getElementById('vinTableBody');
+        if (!tableBody || tableBody.rows.length <= 1) return;
+
+        tableBody.removeChild(tableBody.lastElementChild);
+        this.updateVinCounts();
+    }
+
+    validateVin(rowNumber) {
+        console.log(`Validating VIN for row ${rowNumber}`);
+        
+        // Wait a moment for DOM to be ready if called immediately after element creation
+        if (!document.getElementById(`vin-input-${rowNumber}`)) {
+            console.log(`Element not ready for row ${rowNumber}, scheduling retry...`);
+            setTimeout(() => {
+                this.validateVin(rowNumber);
+            }, 50);
+            return;
+        }
+        
+        // Use more robust element selection with multiple fallback strategies
+        let input = document.getElementById(`vin-input-${rowNumber}`);
+        let status = document.getElementById(`vin-status-${rowNumber}`);
+        let row = document.getElementById(`vin-row-${rowNumber}`);
+        
+        // Additional fallback strategies
+        if (!input) {
+            input = document.querySelector(`input[data-row-number="${rowNumber}"]`);
+            console.log(`Fallback querySelector found input for row ${rowNumber}: ${!!input}`);
+        }
+        if (!status) {
+            status = document.querySelector(`#vin-status-${rowNumber}, .vin-status:nth-child(${rowNumber})`);
+        }
+        if (!row) {
+            row = document.querySelector(`#vin-row-${rowNumber}`);
+        }
+        
+        if (!input || !status || !row) {
+            console.error(`Missing elements for row ${rowNumber}:`, {
+                input: !!input,
+                status: !!status, 
+                row: !!row,
+                availableInputs: document.querySelectorAll('.vin-input').length,
+                targetId: `vin-input-${rowNumber}`
+            });
+            
+            // Final retry attempt
+            setTimeout(() => {
+                console.log('Final retry attempt for validation...');
+                this.validateVinRetry(rowNumber);
+            }, 150);
+            return;
+        }
+
+        const vin = input.value.trim().toUpperCase();
+        input.value = vin; // Convert to uppercase
+        
+        console.log(`Row ${rowNumber} VIN: "${vin}" (length: ${vin.length})`);
+
+        // Remove previous validation classes
+        input.classList.remove('valid', 'invalid');
+        status.classList.remove('valid', 'invalid');
+        row.classList.remove('valid', 'invalid');
+
+        if (vin.length === 0) {
+            // Empty VIN
+            status.innerHTML = '<i class="fas fa-minus-circle" style="color: #9ca3af;"></i>';
+            console.log(`Row ${rowNumber}: Empty VIN`);
+        } else {
+            const isValid = this.isValidVin(vin);
+            console.log(`Row ${rowNumber}: VIN validation result:`, isValid);
+            
+            if (isValid) {
+                // Valid VIN
+                input.classList.add('valid');
+                status.classList.add('valid');
+                row.classList.add('valid');
+                status.innerHTML = '<i class="fas fa-check-circle"></i>';
+                console.log(`Row ${rowNumber}: VIN marked as VALID`);
+            } else {
+                // Invalid VIN
+                input.classList.add('invalid');
+                status.classList.add('invalid');
+                row.classList.add('invalid');
+                status.innerHTML = '<i class="fas fa-times-circle"></i>';
+                console.log(`Row ${rowNumber}: VIN marked as INVALID`);
+                
+                // Show notification for invalid length
+                if (vin.length !== 17) {
+                    this.showVinError(rowNumber, `VIN must be exactly 17 characters (currently ${vin.length})`);
+                }
+            }
+        }
+
+        this.updateVinCounts();
+    }
+    
+    validateVinRetry(rowNumber) {
+        // Retry validation with fresh element lookup
+        const input = document.getElementById(`vin-input-${rowNumber}`);
+        if (input) {
+            console.log(`Retry validation successful for row ${rowNumber}`);
+            this.validateVin(rowNumber);
+        } else {
+            console.error(`Retry validation failed - still cannot find input for row ${rowNumber}`);
+        }
+    }
+
+    isValidVin(vin) {
+        if (!vin || typeof vin !== 'string') return false;
+        
+        // Check length
+        if (vin.length !== 17) return false;
+        
+        // Check for invalid characters (VINs don't contain I, O, Q)
+        if (/[IOQ]/.test(vin)) return false;
+        
+        // Check for valid alphanumeric characters only
+        if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)) return false;
+        
+        return true;
+    }
+
+    showVinError(rowNumber, message) {
+        // Create temporary notification
+        const notification = document.createElement('div');
+        notification.className = 'vin-error-notification';
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #fef2f2;
+            border: 2px solid #dc2626;
+            color: #dc2626;
+            padding: 12px 16px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10000;
+            max-width: 300px;
+            font-weight: 500;
+        `;
+        notification.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <i class="fas fa-exclamation-triangle"></i>
+                <div>
+                    <strong>Row ${rowNumber}:</strong><br>
+                    ${message}
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(notification);
+
+        // Remove notification after 3 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 3000);
+    }
+
+    filterVinInput(event, rowNumber) {
+        const input = event.target;
+        if (!input) return;
+        
+        let value = input.value;
+        
+        // Remove invalid characters (I, O, Q, and non-alphanumeric except hyphens temporarily)
+        let cleaned = value.replace(/[^A-HJ-NPR-Z0-9]/gi, '');
+        
+        // Convert to uppercase
+        cleaned = cleaned.toUpperCase();
+        
+        // Limit to 17 characters
+        if (cleaned.length > 17) {
+            cleaned = cleaned.substring(0, 17);
+        }
+        
+        // Update input value if it was changed
+        if (value !== cleaned) {
+            input.value = cleaned;
+            console.log(`Filtered input for row ${rowNumber}: "${value}" → "${cleaned}"`);
+        }
+    }
+    
+    handleVinKeypress(event, rowNumber) {
+        const char = String.fromCharCode(event.which || event.keyCode);
+        
+        // Allow control keys (backspace, delete, etc.)
+        if (event.which < 32) return;
+        
+        // Check if character is valid for VIN
+        if (!/[A-HJ-NPR-Z0-9]/i.test(char)) {
+            event.preventDefault();
+            console.log(`Blocked invalid character "${char}" for row ${rowNumber}`);
+            
+            // Show error for invalid characters
+            if (/[IOQ]/i.test(char)) {
+                this.showVinError(rowNumber, `Character "${char.toUpperCase()}" is not allowed in VINs`);
+            }
+        }
+        
+        // Check length limit
+        const input = event.target;
+        if (input && input.value.length >= 17) {
+            event.preventDefault();
+            console.log(`Blocked character - 17 character limit reached for row ${rowNumber}`);
+        }
+    }
+
+    handleVinPaste(event, rowNumber) {
+        // Get pasted data
+        const pasteData = (event.clipboardData || window.clipboardData).getData('text');
+        
+        if (pasteData) {
+            // Clean the pasted data
+            let cleaned = pasteData.replace(/[^A-HJ-NPR-Z0-9]/gi, '');
+            cleaned = cleaned.toUpperCase();
+            cleaned = cleaned.substring(0, 17); // Limit to 17 characters
+            
+            // Prevent default paste and set cleaned value
+            event.preventDefault();
+            
+            const input = event.target;
+            if (input) {
+                input.value = cleaned;
+                console.log(`Pasted and cleaned VIN for row ${rowNumber}: "${pasteData}" → "${cleaned}"`);
+                
+                // Validate after paste
+                setTimeout(() => {
+                    this.validateVin(rowNumber);
+                }, 10);
+            }
+        }
+    }
+
+    handleVinKeydown(event, rowNumber) {
+        // Handle Enter key to create new row and jump to it
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            
+            const input = document.getElementById(`vin-input-${rowNumber}`);
+            if (!input) {
+                console.error(`Cannot find input for row ${rowNumber}`);
+                return;
+            }
+            
+            const vin = input.value.trim().toUpperCase();
+            
+            console.log(`Enter key pressed on row ${rowNumber}, VIN: "${vin}" (length: ${vin.length})`);
+            
+            // Only create new row if current VIN is valid or if user wants to skip
+            if (vin.length === 17 && this.isValidVin(vin)) {
+                console.log(`Valid VIN entered, creating new row...`);
+                // Add new row and focus on it
+                this.addVinRow();
+                const tableBody = document.getElementById('vinTableBody');
+                const newRowNumber = tableBody ? tableBody.rows.length : rowNumber + 1;
+                
+                setTimeout(() => {
+                    const newInput = document.getElementById(`vin-input-${newRowNumber}`);
+                    if (newInput) {
+                        newInput.focus();
+                        console.log(`Focused on new row ${newRowNumber}`);
+                    } else {
+                        console.error(`Could not focus on new input ${newRowNumber}`);
+                    }
+                }, 100); // Increased delay to ensure DOM is updated
+            } else if (vin.length > 0) {
+                // Show error if VIN is not valid
+                console.log(`Invalid VIN, showing error...`);
+                this.showVinError(rowNumber, 'Please enter a valid 17-character VIN before moving to next row');
+            } else {
+                // Allow moving to next row even if current is empty
+                console.log(`Empty VIN, moving to next row...`);
+                this.focusNextRow(rowNumber);
+            }
+        }
+    }
+
+    focusNextRow(currentRow) {
+        const tableBody = document.getElementById('vinTableBody');
+        if (!tableBody) {
+            console.error('Cannot find VIN table body');
+            return;
+        }
+        
+        // Check if next row exists
+        const nextRowNumber = currentRow + 1;
+        let nextInput = document.getElementById(`vin-input-${nextRowNumber}`);
+        
+        console.log(`Attempting to focus on row ${nextRowNumber}, input exists: ${!!nextInput}`);
+        
+        if (!nextInput) {
+            // Create new row if it doesn't exist
+            console.log(`Creating new row ${nextRowNumber}...`);
+            this.addVinRow();
+            setTimeout(() => {
+                nextInput = document.getElementById(`vin-input-${nextRowNumber}`);
+                if (nextInput) {
+                    nextInput.focus();
+                    console.log(`Successfully focused on new row ${nextRowNumber}`);
+                } else {
+                    console.error(`Failed to create/focus on row ${nextRowNumber}`);
+                }
+            }, 100);
+        } else {
+            nextInput.focus();
+            console.log(`Focused on existing row ${nextRowNumber}`);
+        }
+    }
+
+    getAllVinsFromTable() {
+        const tableBody = document.getElementById('vinTableBody');
+        if (!tableBody) return [];
+
+        const vins = [];
+        for (let i = 1; i <= tableBody.rows.length; i++) {
+            const input = document.getElementById(`vin-input-${i}`);
+            if (input && input.value.trim()) {
+                vins.push(input.value.trim().toUpperCase());
+            }
+        }
+
+        return vins;
+    }
+
+    updateVinCounts() {
+        const vins = this.getAllVinsFromTable();
+        const validVins = vins.filter(vin => this.isValidVin(vin));
+        const invalidVins = vins.filter(vin => vin.length > 0 && !this.isValidVin(vin));
+
+        document.getElementById('validCount').textContent = validVins.length;
+        document.getElementById('invalidCount').textContent = invalidVins.length;
+        document.getElementById('totalCount').textContent = vins.length;
+    }
+
+    clearVinTable() {
+        const tableBody = document.getElementById('vinTableBody');
+        if (!tableBody) return;
+
+        // Clear all input values
+        for (let i = 1; i <= tableBody.rows.length; i++) {
+            const input = document.getElementById(`vin-input-${i}`);
+            if (input) {
+                input.value = '';
+                this.validateVin(i);
+            }
+        }
+    }
+    
+    debugVinTable() {
+        // Debugging function to check the state of all VIN inputs
+        console.log('=== VIN TABLE DEBUG INFO ===');
+        const tableBody = document.getElementById('vinTableBody');
+        if (!tableBody) {
+            console.log('❌ Table body not found');
+            return;
+        }
+        
+        console.log(`📊 Total rows: ${tableBody.rows.length}`);
+        
+        const inputs = document.querySelectorAll('.vin-input');
+        console.log(`🔍 Total VIN inputs found: ${inputs.length}`);
+        
+        inputs.forEach((input, index) => {
+            const rowNumber = input.getAttribute('data-row-number');
+            const hasListeners = input.hasAttribute('data-listeners-attached');
+            const value = input.value;
+            const id = input.id;
+            
+            console.log(`Row ${index + 1}:`, {
+                id,
+                rowNumber,
+                hasListeners,
+                value: value || '(empty)',
+                exists: !!document.getElementById(id)
+            });
+        });
+        
+        // Test validation on all rows
+        for (let i = 1; i <= tableBody.rows.length; i++) {
+            const input = document.getElementById(`vin-input-${i}`);
+            if (input && input.value.length === 17) {
+                console.log(`🧪 Testing validation on row ${i} with VIN: ${input.value}`);
+                this.validateVin(i);
+            }
+        }
+        
+        console.log('=== END DEBUG INFO ===');
+    }
 }
 
 // Initialize wizard when page loads
@@ -1898,4 +2569,204 @@ document.addEventListener('DOMContentLoaded', () => {
     wizard = new OrderWizard();
     // Set global reference after initialization
     window.wizard = wizard;
+    
+    // Add global debugging functions for troubleshooting
+    window.debugVinTable = () => {
+        if (wizard) {
+            wizard.debugVinTable();
+        } else {
+            console.log('❌ Wizard not initialized');
+        }
+    };
+    
+    window.repairVinValidation = () => {
+        if (wizard) {
+            console.log('🔧 Repairing VIN validation...');
+            wizard.attachAllEventListeners();
+            console.log('✅ VIN validation repair completed');
+        } else {
+            console.log('❌ Wizard not initialized');
+        }
+    };
+    
+    window.testVinValidation = (rowNumber) => {
+        if (wizard && rowNumber) {
+            console.log(`🧪 Testing validation on row ${rowNumber}`);
+            wizard.validateVin(rowNumber);
+        } else {
+            console.log('❌ Wizard not initialized or row number not provided');
+        }
+    };
+});
+
+// Manual Data Entry Modal Functions
+let currentEditingVehicle = null;
+let currentEditingIndex = -1;
+let reviewVehicleData = []; // Store the review data globally
+
+function openManualDataModal(rowIndex, vehicleData) {
+    currentEditingIndex = rowIndex;
+    currentEditingVehicle = { ...vehicleData }; // Clone the data
+    
+    // Populate the form with current data
+    document.getElementById('editYear').value = vehicleData.year || '';
+    document.getElementById('editMake').value = vehicleData.make || '';
+    document.getElementById('editModel').value = vehicleData.model || '';
+    document.getElementById('editTrim').value = vehicleData.trim || '';
+    document.getElementById('editStock').value = vehicleData.stock || '';
+    document.getElementById('editVin').value = vehicleData.vin || '';
+    document.getElementById('editPrice').value = vehicleData.price || '';
+    document.getElementById('editType').value = vehicleData.type || 'Pre-Owned';
+    document.getElementById('editColor').value = vehicleData.ext_color || '';
+    document.getElementById('editMileage').value = vehicleData.mileage || '';
+    document.getElementById('editFuelType').value = vehicleData.fuel_type || '';
+    document.getElementById('editTransmission').value = vehicleData.transmission || '';
+    document.getElementById('editVehicleUrl').value = vehicleData.vehicle_url || '';
+    document.getElementById('editRowIndex').value = rowIndex;
+    
+    // Show the modal
+    document.getElementById('manualDataEntryModal').style.display = 'flex';
+    
+    // Focus on the first input
+    setTimeout(() => {
+        document.getElementById('editYear').focus();
+    }, 100);
+}
+
+function closeManualDataModal() {
+    document.getElementById('manualDataEntryModal').style.display = 'none';
+    currentEditingVehicle = null;
+    currentEditingIndex = -1;
+    
+    // Clear the form
+    document.getElementById('vehicleEditForm').reset();
+}
+
+function saveVehicleEdit() {
+    const formData = new FormData(document.getElementById('vehicleEditForm'));
+    const updatedVehicle = {};
+    
+    // Extract all form data
+    for (let [key, value] of formData.entries()) {
+        if (key !== 'rowIndex') {
+            updatedVehicle[key] = value;
+        }
+    }
+    
+    // Validate required fields
+    if (!updatedVehicle.vin || updatedVehicle.vin.length !== 17) {
+        alert('VIN must be exactly 17 characters');
+        return;
+    }
+    
+    if (!updatedVehicle.year || updatedVehicle.year < 1900 || updatedVehicle.year > 2030) {
+        alert('Please enter a valid year');
+        return;
+    }
+    
+    if (!updatedVehicle.make || !updatedVehicle.model) {
+        alert('Make and Model are required');
+        return;
+    }
+    
+    // Update the vehicle data in the global array
+    if (reviewVehicleData[currentEditingIndex]) {
+        Object.assign(reviewVehicleData[currentEditingIndex], updatedVehicle);
+    }
+    
+    // Update the displayed table
+    updateReviewTableRow(currentEditingIndex, updatedVehicle);
+    
+    // Close the modal
+    closeManualDataModal();
+    
+    // Show success message
+    showNotification('Vehicle data updated successfully', 'success');
+}
+
+function updateReviewTableRow(rowIndex, vehicleData) {
+    const table = document.querySelector('#modalReviewSummary table tbody');
+    if (!table) return;
+    
+    const row = table.rows[rowIndex];
+    if (!row) return;
+    
+    // Update table cells (adjust indices based on your table structure)
+    const cells = row.cells;
+    if (cells.length >= 7) {
+        cells[1].textContent = `${vehicleData.year || ''} ${vehicleData.make || ''}`.trim();
+        cells[2].textContent = vehicleData.model || '';
+        cells[3].textContent = vehicleData.trim || '';
+        cells[4].textContent = vehicleData.stock || '';
+        cells[5].textContent = vehicleData.vin || '';
+        // QR code column stays the same (index 6)
+    }
+}
+
+function showNotification(message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.innerHTML = `
+        <div class="notification-content">
+            <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i>
+            <span>${message}</span>
+        </div>
+    `;
+    
+    // Add styles
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: var(--bg-surface);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 12px 16px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        z-index: 10000;
+        max-width: 300px;
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+    `;
+    
+    if (type === 'success') {
+        notification.style.borderColor = '#10b981';
+        notification.style.background = 'rgba(16, 185, 129, 0.1)';
+    } else if (type === 'error') {
+        notification.style.borderColor = '#ef4444';
+        notification.style.background = 'rgba(239, 68, 68, 0.1)';
+    }
+    
+    // Add to document
+    document.body.appendChild(notification);
+    
+    // Animate in
+    setTimeout(() => {
+        notification.style.transform = 'translateX(0)';
+    }, 100);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        notification.style.transform = 'translateX(100%)';
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, 3000);
+}
+
+// Close modal when clicking outside
+document.addEventListener('click', (e) => {
+    if (e.target.id === 'manualDataEntryModal') {
+        closeManualDataModal();
+    }
+});
+
+// Close modal with Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.getElementById('manualDataEntryModal').style.display === 'flex') {
+        closeManualDataModal();
+    }
 });
