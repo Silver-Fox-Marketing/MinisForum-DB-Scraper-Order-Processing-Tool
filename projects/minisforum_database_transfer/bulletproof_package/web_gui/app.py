@@ -37,10 +37,6 @@ try:
     from order_queue_manager import OrderQueueManager
     print("OK Basic modules imported successfully")
     
-    print("Attempting to import OrderProcessingWorkflow...")
-    from order_processing_workflow import OrderProcessingWorkflow
-    print("OK OrderProcessingWorkflow imported successfully")
-    
     print("Attempting to import CorrectOrderProcessor...")
     from correct_order_processing import CorrectOrderProcessor
     print("OK CorrectOrderProcessor imported successfully")

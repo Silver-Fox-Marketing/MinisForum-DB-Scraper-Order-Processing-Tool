@@ -69,18 +69,18 @@ class ScraperDataNormalizer:
             'new': 'new'
         }
         
-        # Lot status mappings
+        # Lot status mappings - CRITICAL: Use 'on lot' format for database compatibility
         self.lot_status_mapping = {
-            'instock': 'onlot',
-            'in stock': 'onlot',
-            'available': 'onlot',
-            'on lot': 'onlot',
-            'on-lot': 'onlot',
-            'in-transit': 'offlot',
-            'in transit': 'offlot',
-            'allocated': 'offlot',
-            'courtesy vehicle': 'offlot',
-            'in-service': 'offlot'
+            'instock': 'on lot',
+            'in stock': 'on lot',
+            'available': 'on lot',
+            'on lot': 'on lot',
+            'on-lot': 'on lot',
+            'in-transit': 'off lot',
+            'in transit': 'off lot',
+            'allocated': 'off lot',
+            'courtesy vehicle': 'off lot',
+            'in-service': 'off lot'
         }
     
     def normalize_vehicle_type(self, raw_type: str) -> str:
@@ -125,14 +125,14 @@ class ScraperDataNormalizer:
             if key in raw_status_lower or raw_status_lower in key:
                 return value
         
-        # Default fallback patterns
+        # Default fallback patterns - CRITICAL: Use 'on lot' format for database compatibility
         if any(word in raw_status_lower for word in ['stock', 'available', 'lot']):
-            return 'onlot'
+            return 'on lot'
         elif any(word in raw_status_lower for word in ['transit', 'allocated', 'courtesy', 'service', 'build', 'production']):
-            return 'offlot'
+            return 'off lot'
         
-        # Conservative default - assume onlot if unsure
-        return 'onlot'
+        # Conservative default - assume on lot if unsure
+        return 'on lot'
     
     def normalize_vehicle_data(self, vehicle_data: Dict) -> Tuple[str, str]:
         """

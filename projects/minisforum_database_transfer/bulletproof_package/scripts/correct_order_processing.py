@@ -347,8 +347,11 @@ class CorrectOrderProcessor:
         # Use normalized_vehicle_data for proper vehicle type filtering (po, cpo, new instead of raw values)
         query = """
             SELECT nvd.* FROM normalized_vehicle_data nvd
+            JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
+            JOIN scraper_imports si ON rvd.import_id = si.import_id
             WHERE nvd.location = %s 
-            AND nvd.on_lot_status = 'onlot'
+            AND nvd.on_lot_status IN ('onlot', 'on lot')
+            AND si.status = 'active'
         """
         params = [actual_location_name]
         
@@ -409,7 +412,7 @@ class CorrectOrderProcessor:
         
         # Apply stock number filter (exclude missing and asterisk placeholders)
         if filtering_rules.get('exclude_missing_stock', True):
-            query += " AND stock IS NOT NULL AND stock != %s AND stock != %s"
+            query += " AND nvd.stock IS NOT NULL AND nvd.stock != %s AND nvd.stock != %s"
             params.extend(['', '*'])
             
         # Apply price filter - ONLY for Glendale by default
@@ -436,8 +439,11 @@ class CorrectOrderProcessor:
             # Use normalized_vehicle_data for consistent data structure
             simplified_query = """
                 SELECT nvd.* FROM normalized_vehicle_data nvd
+                JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
+                JOIN scraper_imports si ON rvd.import_id = si.import_id
                 WHERE nvd.location = %s 
-                AND nvd.on_lot_status = 'on lot'
+                AND nvd.on_lot_status IN ('onlot', 'on lot')
+                AND si.status = 'active'
                 ORDER BY nvd.updated_at DESC
             """
             try:

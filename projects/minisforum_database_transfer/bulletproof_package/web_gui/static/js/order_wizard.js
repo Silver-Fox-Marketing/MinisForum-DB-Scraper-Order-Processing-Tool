@@ -73,10 +73,13 @@ class OrderWizard {
         console.log('CLEARING ALL CACHED DATA - FRESH START');
         
         // Clear JavaScript data structures
+        console.log('DEBUG: Clearing processedOrders - before:', this.processedOrders.length);
         this.processedOrders = [];
         this.currentOrderResult = null;
         this.currentOrderVins = [];
         this.currentOrderDealership = null;
+        this.currentCSVData = null; // CRITICAL: Clear cached CSV table data
+        console.log('DEBUG: Cleared processedOrders - after:', this.processedOrders.length);
         
         // Reset processing results
         this.processingResults = {
@@ -88,18 +91,26 @@ class OrderWizard {
             errors: []
         };
         
-        // Clear any CSV data display
+        // Clear any CSV data display and table contents
         const spreadsheetContainer = document.getElementById('csvTable');
         const placeholder = document.getElementById('csvPlaceholder');
         const vehicleCount = document.getElementById('vehicleCount');
         
-        if (spreadsheetContainer) spreadsheetContainer.style.display = 'none';
+        if (spreadsheetContainer) {
+            spreadsheetContainer.style.display = 'none';
+            spreadsheetContainer.innerHTML = ''; // CRITICAL: Clear stale table HTML
+        }
         if (placeholder) placeholder.style.display = 'block';
         if (vehicleCount) vehicleCount.textContent = '0';
         
         // Clear QR code displays
         const qrContainer = document.getElementById('qrGrid');
         if (qrContainer) qrContainer.innerHTML = '<p>No QR codes generated yet.</p>';
+        
+        // CRITICAL: Clear localStorage cache that causes Review stage to show stale data
+        console.log('CLEARING localStorage cache for fresh Review data');
+        localStorage.removeItem('orderWizardQueue');
+        localStorage.removeItem('orderWizardTestingMode');
         
         console.log('Cache cleared - ready for fresh processing');
     }
@@ -253,11 +264,16 @@ class OrderWizard {
         
         // Check if we have processed orders that need review
         if (this.processedOrders.length > 0) {
+            // CRITICAL FIX: Only show cached results if they're from current session
+            console.log('DEBUG: Found processedOrders for review:', this.processedOrders.length);
+            console.log('DEBUG: Last processed order dealership:', this.processedOrders[this.processedOrders.length - 1].dealership);
+            
             // Show review step for processed CAO orders
             const lastProcessedOrder = this.processedOrders[this.processedOrders.length - 1];
             this.showReviewStep(lastProcessedOrder.dealership, lastProcessedOrder.result);
         } else {
             // Show continue button if no orders were processed
+            console.log('DEBUG: No processedOrders found - showing continue button');
             const nextBtn = document.getElementById('caoNextBtn');
             if (nextBtn) {
                 nextBtn.style.display = 'inline-flex';
@@ -1603,9 +1619,18 @@ class OrderWizard {
         }
         
         try {
+            // DEBUG: Log what CSV file we're fetching
+            console.log('DEBUG: Loading CSV from URL:', result.download_csv);
+            
+            // Force cache-busted request to ensure fresh CSV data
+            const cacheBusterUrl = result.download_csv + (result.download_csv.includes('?') ? '&' : '?') + 't=' + Date.now();
+            console.log('DEBUG: Cache-busted CSV URL:', cacheBusterUrl);
+            
             // Fetch CSV content
-            const response = await fetch(result.download_csv);
+            const response = await fetch(cacheBusterUrl, { cache: 'no-cache' });
             const csvText = await response.text();
+            
+            console.log('DEBUG: CSV content length:', csvText.length, 'characters');
             
             // Parse CSV
             const lines = csvText.split('\n').filter(line => line.trim());

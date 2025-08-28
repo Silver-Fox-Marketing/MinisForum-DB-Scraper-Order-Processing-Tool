@@ -3,6 +3,150 @@ MinisForum Database Control - Brand Identity CSS
 Silver Fox Marketing Brand Colors and Typography
 */
 
+/* DEALERSHIP SETTINGS SEARCH BAR - MODERN PROFESSIONAL STYLING */
+.dealership-settings-search-container {
+    background: var(--theme-surface, #ffffff) !important;
+    border: 1px solid var(--theme-border-light, #e2e8f0) !important;
+    border-radius: 16px !important;
+    padding: 0 !important;
+    margin: 20px 0 !important;
+    box-shadow: 
+        0 1px 3px rgba(0,0,0,0.1),
+        0 1px 2px rgba(0,0,0,0.06),
+        inset 0 0 0 1px rgba(255,255,255,0.05) !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0 !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    backdrop-filter: blur(8px) !important;
+    position: relative !important;
+    overflow: hidden !important;
+    min-height: 56px !important;
+}
+
+.dealership-settings-search-container:hover {
+    border-color: var(--sf-red-light, #fca5a5) !important;
+    box-shadow: 
+        0 4px 12px rgba(220, 38, 38, 0.1),
+        0 2px 4px rgba(0,0,0,0.06),
+        inset 0 0 0 1px rgba(220, 38, 38, 0.1) !important;
+    transform: translateY(-1px) !important;
+}
+
+.dealership-settings-search-container:focus-within {
+    border-color: var(--sf-red, #dc2626) !important;
+    box-shadow: 
+        0 0 0 3px rgba(220, 38, 38, 0.1),
+        0 4px 12px rgba(220, 38, 38, 0.15),
+        0 2px 4px rgba(0,0,0,0.06) !important;
+    transform: translateY(-2px) !important;
+}
+
+.dealership-settings-search-container .search-icon {
+    color: var(--theme-text-secondary, #64748b) !important;
+    font-size: 20px !important;
+    padding: 0 20px 0 24px !important;
+    transition: all 0.2s ease !important;
+    z-index: 2 !important;
+}
+
+.dealership-settings-search-container:focus-within .search-icon {
+    color: var(--sf-red, #dc2626) !important;
+    transform: scale(1.1) !important;
+}
+
+.dealership-settings-search-container .search-input {
+    flex: 1 !important;
+    border: none !important;
+    background: transparent !important;
+    font-size: 16px !important;
+    font-weight: 500 !important;
+    color: var(--theme-text-primary, #1e293b) !important;
+    outline: none !important;
+    padding: 16px 0 !important;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    letter-spacing: 0.01em !important;
+    z-index: 2 !important;
+}
+
+.dealership-settings-search-container .search-input::placeholder {
+    color: var(--theme-text-secondary, #64748b) !important;
+    font-weight: 400 !important;
+    font-style: normal !important;
+    opacity: 0.8 !important;
+    transition: opacity 0.2s ease !important;
+}
+
+.dealership-settings-search-container .search-input:focus::placeholder {
+    opacity: 0.5 !important;
+}
+
+.dealership-settings-search-container #clearDealershipSearch {
+    background: rgba(220, 38, 38, 0.1) !important;
+    border: none !important;
+    border-radius: 12px !important;
+    color: var(--sf-red, #dc2626) !important;
+    padding: 8px 12px !important;
+    margin: 0 16px 0 0 !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    backdrop-filter: blur(4px) !important;
+    z-index: 2 !important;
+}
+
+.dealership-settings-search-container #clearDealershipSearch:hover {
+    background: var(--sf-red, #dc2626) !important;
+    color: white !important;
+    transform: scale(1.05) !important;
+}
+
+.dealership-settings-search-container #clearDealershipSearch:active {
+    transform: scale(0.98) !important;
+}
+
+/* Modern glass morphism effect overlay */
+.dealership-settings-search-container::before {
+    content: '' !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    background: linear-gradient(135deg, 
+        rgba(255,255,255,0.1) 0%, 
+        rgba(255,255,255,0.05) 50%, 
+        rgba(255,255,255,0.1) 100%) !important;
+    pointer-events: none !important;
+    z-index: 1 !important;
+}
+
+/* Dark mode optimizations */
+[data-theme="dark"] .dealership-settings-search-container {
+    background: var(--theme-surface, #1e293b) !important;
+    border-color: var(--theme-border, #334155) !important;
+    box-shadow: 
+        0 1px 3px rgba(0,0,0,0.3),
+        0 1px 2px rgba(0,0,0,0.2),
+        inset 0 0 0 1px rgba(255,255,255,0.08) !important;
+}
+
+[data-theme="dark"] .dealership-settings-search-container:hover {
+    border-color: var(--sf-red-light, #ef4444) !important;
+    box-shadow: 
+        0 4px 12px rgba(239, 68, 68, 0.2),
+        0 2px 4px rgba(0,0,0,0.3),
+        inset 0 0 0 1px rgba(239, 68, 68, 0.15) !important;
+}
+
+[data-theme="dark"] .dealership-settings-search-container::before {
+    background: linear-gradient(135deg, 
+        rgba(255,255,255,0.05) 0%, 
+        rgba(255,255,255,0.02) 50%, 
+        rgba(255,255,255,0.05) 100%) !important;
+}
+
 /* Import Google Fonts - Montserrat for body text */
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&display=swap');
 
@@ -5602,6 +5746,179 @@ body {
     padding: 1.5rem;
     margin-bottom: 2rem;
     transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* VIN Log Update Modal Dark Mode Fixes */
+.vin-update-modal .modal-body,
+.vin-log-update-modal .modal-body,
+#vinUpdateModal .modal-body {
+    background: var(--theme-bg-primary) !important;
+    color: var(--theme-text-primary) !important;
+}
+
+/* Fix white backgrounds in VIN update modal content areas */
+.vin-update-modal .tab-content,
+.vin-log-update-modal .tab-content,
+#vinUpdateModal .tab-content,
+.csv-import-content,
+.manual-entry-content,
+.manual-order-entry-container,
+.csv-format-display {
+    background: var(--theme-surface) !important;
+    color: var(--theme-text-primary) !important;
+}
+
+/* Fix the CSV format display area (green text on dark background) */
+.csv-format-display pre,
+.csv-import-content pre,
+.manual-entry-content pre,
+pre.format-example,
+.format-example,
+.csv-example,
+.order-format-example {
+    background: var(--theme-bg-tertiary) !important;
+    color: var(--success-green) !important;
+    border: 1px solid var(--theme-border) !important;
+    padding: 1rem !important;
+    border-radius: 8px !important;
+}
+
+/* Fix checkbox areas in VIN update modal */
+.vin-update-modal .checkbox-group,
+.vin-log-update-modal .checkbox-group,
+#vinUpdateModal .checkbox-group,
+.import-options,
+.modal-checkbox-area,
+.checkbox-container {
+    background: var(--theme-surface) !important;
+    color: var(--theme-text-primary) !important;
+    border: 1px solid var(--theme-border) !important;
+    padding: 1rem !important;
+    border-radius: 8px !important;
+}
+
+/* Fix any remaining white text areas */
+.vin-update-modal textarea,
+.vin-log-update-modal textarea,
+#vinUpdateModal textarea,
+.manual-entry-textarea,
+#manualOrderEntry {
+    background: var(--theme-bg-tertiary) !important;
+    color: var(--theme-text-primary) !important;
+    border: 1px solid var(--theme-border) !important;
+}
+
+/* Dark mode specific overrides for VIN update modal */
+[data-theme="dark"] .vin-update-modal,
+[data-theme="dark"] .vin-log-update-modal,
+[data-theme="dark"] #vinUpdateModal {
+    background: var(--theme-bg-primary) !important;
+}
+
+[data-theme="dark"] .vin-update-modal .modal-content,
+[data-theme="dark"] .vin-log-update-modal .modal-content,
+[data-theme="dark"] #vinUpdateModal .modal-content {
+    background: linear-gradient(135deg, 
+        var(--theme-surface) 0%, 
+        var(--theme-bg-primary) 50%, 
+        var(--theme-surface-elevated) 100%) !important;
+}
+
+/* Override any inline styles with higher specificity */
+[data-theme="dark"] div[style*="background: white"],
+[data-theme="dark"] div[style*="background:white"],
+[data-theme="dark"] div[style*="background-color: white"],
+[data-theme="dark"] div[style*="background-color:white"],
+[data-theme="dark"] div[style*="background: #fff"],
+[data-theme="dark"] div[style*="background:#fff"],
+[data-theme="dark"] div[style*="background: #ffffff"],
+[data-theme="dark"] div[style*="background:#ffffff"] {
+    background: var(--theme-surface) !important;
+}
+
+/* Fix any pre or code blocks with white backgrounds */
+[data-theme="dark"] pre[style*="background"],
+[data-theme="dark"] code[style*="background"] {
+    background: var(--theme-bg-tertiary) !important;
+    color: var(--success-green) !important;
+}
+
+/* Ensure proper text visibility in VIN update modal */
+[data-theme="dark"] .vin-update-modal label,
+[data-theme="dark"] .vin-log-update-modal label,
+[data-theme="dark"] #vinUpdateModal label,
+[data-theme="dark"] .vin-update-modal .form-label,
+[data-theme="dark"] .vin-log-update-modal .form-label,
+[data-theme="dark"] #vinUpdateModal .form-label {
+    color: var(--theme-text-secondary) !important;
+}
+
+/* Style for the Import Manual VINs button */
+#importManualVins {
+    background: linear-gradient(135deg, #10b981, #059669);
+    border: none;
+    color: white;
+    transition: all 0.3s ease;
+}
+
+#importManualVins:hover:not(:disabled) {
+    background: linear-gradient(135deg, #059669, #047857);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
+}
+
+#importManualVins:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Dark mode adjustments for the manual import button */
+[data-theme="dark"] #importManualVins {
+    background: linear-gradient(135deg, #059669, #047857);
+}
+
+[data-theme="dark"] #importManualVins:hover:not(:disabled) {
+    background: linear-gradient(135deg, #10b981, #059669);
+}
+
+/* TEMPLATE CACHE BYPASS - Force create Import Manual VINs button via CSS */
+#vinLogUpdateModal .modal-footer::before {
+    content: "Import Manual VINs" !important;
+    display: none !important;
+    position: relative !important;
+    background: linear-gradient(135deg, #10b981, #059669) !important;
+    color: white !important;
+    border: none !important;
+    padding: 10px 20px !important;
+    border-radius: 6px !important;
+    margin-right: 10px !important;
+    cursor: pointer !important;
+    font-family: inherit !important;
+    font-size: 14px !important;
+    transition: all 0.3s ease !important;
+}
+
+/* Show the pseudo-button when manual entry tab is active */
+body[data-manual-mode="true"] #vinLogUpdateModal .modal-footer::before {
+    display: inline-block !important;
+}
+
+/* Hide CSV import button when in manual mode */
+body[data-manual-mode="true"] #startVinLogImport {
+    display: none !important;
+}
+
+/* Fix info text and descriptions */
+[data-theme="dark"] .vin-update-modal .info-text,
+[data-theme="dark"] .vin-log-update-modal .info-text,
+[data-theme="dark"] #vinUpdateModal .info-text,
+[data-theme="dark"] .vin-update-modal .help-text,
+[data-theme="dark"] .vin-log-update-modal .help-text,
+[data-theme="dark"] #vinUpdateModal .help-text,
+[data-theme="dark"] .vin-update-modal small,
+[data-theme="dark"] .vin-log-update-modal small,
+[data-theme="dark"] #vinUpdateModal small {
+    color: var(--theme-text-secondary) !important;
 }
 
 .import-header {

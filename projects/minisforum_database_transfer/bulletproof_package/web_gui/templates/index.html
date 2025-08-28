@@ -438,21 +438,24 @@
                             </div>
                         </div>
                         
-                        <!-- Search Bar for Dealership Settings -->
-                        <div class="settings-search-container">
-                            <div class="search-bar-wrapper">
+                        <!-- SEARCH BAR - FORCED VISIBILITY -->
+                        <div style="background: #ff0000; padding: 20px; margin: 10px 0; border-radius: 8px;">
+                            <h3 style="color: white; margin: 0 0 10px 0;">🔍 DEALERSHIP SEARCH</h3>
+                            <div style="display: flex; gap: 10px; align-items: center;">
                                 <input type="text" 
-                                       class="search-input" 
+                                       style="flex: 1; padding: 12px; border: none; border-radius: 4px; font-size: 16px;"
                                        id="dealershipSettingsSearchInput" 
-                                       placeholder="Search dealerships by name...">
-                                <button class="search-btn" id="dealershipSettingsSearchBtn">
-                                    <i class="fas fa-search"></i>
+                                       placeholder="Type to search dealerships...">
+                                <button style="padding: 12px 20px; background: white; color: #ff0000; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;" 
+                                        id="dealershipSettingsSearchBtn">
+                                    SEARCH
                                 </button>
-                                <button class="clear-search-btn" id="clearDealershipSettingsSearchBtn" style="display: none;">
-                                    <i class="fas fa-times"></i>
+                                <button style="padding: 12px; background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 4px; cursor: pointer; display: none;" 
+                                        id="clearDealershipSettingsSearchBtn">
+                                    ✕
                                 </button>
                             </div>
-                            <div class="search-results-info" id="dealershipSettingsSearchInfo" style="display: none;">
+                            <div id="dealershipSettingsSearchInfo" style="margin-top: 10px; color: white; font-weight: bold; display: none;">
                                 <span class="results-count">0 dealerships found</span>
                             </div>
                         </div>
@@ -1067,11 +1070,11 @@
                 <!-- Import Method Selection -->
                 <div class="import-method-selection">
                     <div class="method-tabs">
-                        <button class="method-tab active" id="csvImportTab" data-method="csv">
+                        <button class="method-tab active" id="csvImportTab" data-method="csv" onclick="switchToCSVModeInline()">
                             <i class="fas fa-file-csv"></i>
                             CSV Import
                         </button>
-                        <button class="method-tab" id="manualEntryTab" data-method="manual">
+                        <button class="method-tab" id="manualEntryTab" data-method="manual" onclick="switchToManualModeInline()">
                             <i class="fas fa-keyboard"></i>
                             Manual Entry
                         </button>
@@ -1128,7 +1131,7 @@
 
 SF24002
 3FAHP0JA4CR123456
-5NPEB4AC7BH987654" rows="12"></textarea>
+5NPEB4AC7BH987654" rows="12" oninput="updateManualEntryStatsInline()"></textarea>
                                 
                                 <div class="entry-stats" id="manualEntryStats">
                                     <div class="stat-item">
@@ -1143,11 +1146,11 @@ SF24002
                             </div>
                             
                             <div class="manual-entry-actions">
-                                <button class="manual-action-btn validate-btn" id="validateManualEntry">
+                                <button class="manual-action-btn validate-btn" id="validateManualEntry" onclick="emergencyValidate()">
                                     <i class="fas fa-check-circle"></i>
                                     Validate Format
                                 </button>
-                                <button class="manual-action-btn clear-btn" id="clearManualEntry">
+                                <button class="manual-action-btn clear-btn" id="clearManualEntry" onclick="emergencyClear()">
                                     <i class="fas fa-eraser"></i>
                                     Clear All
                                 </button>
@@ -1224,7 +1227,11 @@ SF24002
                 <button class="btn btn-secondary" id="cancelVinLogUpdate">
                     Cancel
                 </button>
-                <button class="btn btn-primary" id="startVinLogImport" disabled>
+                <button class="btn btn-success" id="importManualVins" onclick="handleManualVinImport()">
+                    <i class="fas fa-keyboard"></i>
+                    Import Manual VINs
+                </button>
+                <button class="btn btn-primary" id="startVinLogImport" disabled onclick="window.app.handleImportButtonClick()">
                     <i class="fas fa-upload" id="importButtonIcon"></i>
                     <span id="importButtonText">Import CSV</span>
                 </button>
@@ -1531,11 +1538,34 @@ SF24002
 
                         <div class="order-number-input">
                             <div class="form-group">
-                                <label for="modalOrderNumber">Order Number:</label>
-                                <input type="text" id="modalOrderNumber" class="form-control" 
+                                <label for="orderNumberInput">Order Number:</label>
+                                <input type="text" id="orderNumberInput" class="form-control" 
                                        placeholder="e.g., SF24001, Order123, etc." 
                                        maxlength="20" required>
                             </div>
+                        </div>
+
+                        <!-- Order Number Apply Button -->
+                        <div class="form-group">
+                            <button type="button" id="applyOrderNumberBtn" class="btn btn-primary" 
+                                    onclick="wizard.applyOrderNumber()">
+                                Apply Order Number
+                            </button>
+                        </div>
+
+                        <!-- VIN Preview Section -->
+                        <div id="orderNumberPreview" class="order-preview" style="display: none;">
+                            <h4>Order Preview</h4>
+                            <div class="preview-content">
+                                <div id="vinPreviewList"></div>
+                            </div>
+                        </div>
+
+                        <!-- Other required elements -->
+                        <div style="display: none;">
+                            <div id="orderNumberDealershipDisplay"></div>
+                            <div id="orderDealershipName"></div>
+                            <div id="orderVinCount"></div>
                         </div>
                         
                         <div class="wizard-actions">
@@ -1680,7 +1710,144 @@ SF24002
     </div>
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=2025082502"></script>
+    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}"></script>
+    
+    <!-- INLINE MANUAL VIN ENTRY FUNCTIONS - CACHE BYPASS -->
+    <script>
+    function updateManualEntryStatsInline() {
+        console.log('=== INLINE UPDATE MANUAL ENTRY STATS CALLED ===');
+        const textarea = document.getElementById('manualOrderEntry');
+        const orderCountEl = document.getElementById('manualOrderCount');
+        const vinCountEl = document.getElementById('manualVinCount');
+        
+        if (!textarea || !orderCountEl || !vinCountEl) {
+            console.error('Missing required elements for stats update');
+            return;
+        }
+        
+        const text = textarea.value.trim();
+        console.log('Textarea value:', text);
+        
+        if (!text) {
+            orderCountEl.textContent = '0';
+            vinCountEl.textContent = '0';
+            console.log('No text found, setting counts to 0');
+            return;
+        }
+        
+        // Count orders and VINs
+        const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+        let orders = 0;
+        let vins = 0;
+        
+        for (let line of lines) {
+            if (line.length === 17 && /^[A-HJ-NPR-Z0-9]+$/i.test(line)) {
+                vins++;
+                console.log('Found VIN:', line);
+            } else if (line.length > 0 && line.length < 17) {
+                orders++;
+                console.log('Found Order:', line);
+            }
+        }
+        
+        // UPDATE THE DISPLAY
+        orderCountEl.textContent = orders.toString();
+        vinCountEl.textContent = vins.toString();
+        
+        console.log('Updated stats:', { orders, vins });
+    }
+    
+    function validateManualEntryInline() {
+        console.log('=== INLINE VALIDATE BUTTON CLICKED ===');
+        const textarea = document.getElementById('manualOrderEntry');
+        if (!textarea) {
+            alert('Error: Cannot find textarea element');
+            return;
+        }
+        
+        const text = textarea.value.trim();
+        console.log('Textarea content:', text);
+        
+        if (!text) {
+            alert('Please enter some VIN data to validate');
+            return;
+        }
+        
+        // Count orders and VINs
+        const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+        let orders = 0;
+        let vins = 0;
+        let errors = [];
+        
+        console.log('Processing lines:', lines);
+        
+        for (let line of lines) {
+            if (line.length === 17 && /^[A-HJ-NPR-Z0-9]+$/i.test(line)) {
+                vins++;
+                console.log('Found VIN:', line);
+            } else if (line.length > 0 && line.length < 17) {
+                orders++;
+                console.log('Found Order:', line);
+            } else if (line.length > 17) {
+                errors.push(`Line too long: ${line.substring(0, 20)}...`);
+            }
+        }
+        
+        const message = `Validation Results:\n• Orders: ${orders}\n• VINs: ${vins}\n• Errors: ${errors.length}`;
+        console.log('Validation results:', { orders, vins, errors: errors.length });
+        
+        if (errors.length > 0) {
+            alert(message + '\n\nErrors:\n' + errors.slice(0, 5).join('\n'));
+        } else {
+            alert(message + '\n\n✅ Format looks good!');
+        }
+    }
+    
+    function clearManualEntryInline() {
+        console.log('=== INLINE CLEAR BUTTON CLICKED ===');
+        const textarea = document.getElementById('manualOrderEntry');
+        if (textarea) {
+            textarea.value = '';
+            console.log('Textarea cleared');
+            updateManualEntryStatsInline();
+        } else {
+            console.error('Cannot find textarea to clear');
+        }
+    }
+    
+    function switchToCSVModeInline() {
+        console.log('=== INLINE SWITCHING TO CSV MODE ===');
+        const csvTab = document.getElementById('csvImportTab');
+        const manualTab = document.getElementById('manualEntryTab');
+        const csvSection = document.getElementById('csvImportSection');
+        const manualSection = document.getElementById('manualEntrySection');
+        
+        if (csvTab) csvTab.classList.add('active');
+        if (manualTab) manualTab.classList.remove('active');
+        if (csvSection) csvSection.style.display = 'block';
+        if (manualSection) manualSection.style.display = 'none';
+        
+        console.log('Switched to CSV mode');
+    }
+    
+    function switchToManualModeInline() {
+        console.log('=== INLINE SWITCHING TO MANUAL MODE ===');
+        const csvTab = document.getElementById('csvImportTab');
+        const manualTab = document.getElementById('manualEntryTab');
+        const csvSection = document.getElementById('csvImportSection');
+        const manualSection = document.getElementById('manualEntrySection');
+        
+        if (csvTab) csvTab.classList.remove('active');
+        if (manualTab) manualTab.classList.add('active');
+        if (csvSection) csvSection.style.display = 'none';
+        if (manualSection) manualSection.style.display = 'block';
+        
+        console.log('Switched to Manual Entry mode');
+        
+        // Update stats after switching
+        updateManualEntryStatsInline();
+    }
+    </script>
     
 </body>
 </html>

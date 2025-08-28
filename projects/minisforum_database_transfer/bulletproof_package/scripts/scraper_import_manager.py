@@ -31,6 +31,26 @@ class ScraperImportManager:
     def archive_previous_imports(self):
         """Archive all previous active imports before creating new one"""
         try:
+            # CRITICAL: Clean up normalized data from active imports to prevent data contamination
+            # This ensures CAO processes only see data from the new active import
+            logger.info("Cleaning up normalized data from active imports to prevent contamination...")
+            
+            # Remove normalized records linked to imports that are about to be archived
+            cleanup_result = db_manager.execute_query("""
+                DELETE FROM normalized_vehicle_data 
+                WHERE id IN (
+                    SELECT nvd.id 
+                    FROM normalized_vehicle_data nvd
+                    JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
+                    JOIN scraper_imports si ON rvd.import_id = si.import_id
+                    WHERE si.status = 'active'
+                )
+                RETURNING id
+            """)
+            
+            cleaned_count = len(cleanup_result) if cleanup_result else 0
+            logger.info(f"Cleaned up {cleaned_count} normalized records from active imports before archiving")
+            
             # Archive previous active imports
             db_manager.execute_query("""
                 UPDATE scraper_imports 
@@ -46,10 +66,97 @@ class ScraperImportManager:
                 WHERE is_archived = FALSE OR is_archived IS NULL
             """)
             
-            logger.info("Archived all previous imports")
+            logger.info("Archived all previous imports and prevented normalized data contamination")
             
         except Exception as e:
             logger.error(f"Error archiving previous imports: {e}")
+            raise
+
+    def ensure_active_normalization(self, import_id: int):
+        """Ensure all vehicles from the active import have normalized records"""
+        try:
+            from scraper_data_normalizer import ScraperDataNormalizer
+            
+            logger.info(f"Ensuring normalization for active import {import_id}...")
+            
+            # Get raw vehicles from active import missing normalized records
+            missing_vehicles_query = """
+                SELECT rvd.*
+                FROM raw_vehicle_data rvd
+                JOIN scraper_imports si ON rvd.import_id = si.import_id
+                LEFT JOIN normalized_vehicle_data nvd ON rvd.id = nvd.raw_data_id
+                WHERE si.import_id = %s
+                AND si.status = 'active'
+                AND nvd.raw_data_id IS NULL
+                ORDER BY rvd.location, rvd.stock
+            """
+            
+            missing_vehicles = db_manager.execute_query(missing_vehicles_query, (import_id,))
+            
+            if not missing_vehicles:
+                logger.info("All vehicles from active import already have normalized records")
+                return
+            
+            logger.info(f"Creating normalized records for {len(missing_vehicles)} missing vehicles...")
+            
+            normalizer = ScraperDataNormalizer()
+            normalized_data = []
+            
+            for vehicle in missing_vehicles:
+                try:
+                    # Normalize vehicle data
+                    condition_data = vehicle.get('type', '')
+                    normalized_type = normalizer.normalize_vehicle_type(condition_data)
+                    lot_status = normalizer.normalize_lot_status(vehicle.get('status', ''))
+                    
+                    # Convert to database format
+                    db_lot_status = 'on lot' if lot_status in ['onlot', 'on lot'] else 'off lot'
+                    
+                    normalized_tuple = (
+                        vehicle['id'],  # raw_data_id
+                        vehicle['vin'],
+                        vehicle['stock'],
+                        normalized_type,  # vehicle_condition
+                        vehicle['year'],
+                        vehicle['make'],
+                        vehicle['model'],
+                        vehicle['trim'],
+                        db_lot_status,  # status
+                        vehicle['price'],
+                        vehicle['msrp'],
+                        vehicle['date_in_stock'],
+                        vehicle['location'],
+                        vehicle['vehicle_url'],
+                        db_lot_status  # on_lot_status
+                    )
+                    
+                    normalized_data.append(normalized_tuple)
+                    
+                except Exception as e:
+                    logger.error(f"Error normalizing VIN {vehicle.get('vin', 'unknown')}: {e}")
+            
+            # Insert normalized records
+            if normalized_data:
+                insert_query = """
+                    INSERT INTO normalized_vehicle_data 
+                    (raw_data_id, vin, stock, vehicle_condition, year, make, model, trim, 
+                     status, price, msrp, date_in_stock, location, vehicle_url, on_lot_status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (vin, location) DO UPDATE SET
+                    raw_data_id = EXCLUDED.raw_data_id,
+                    vehicle_condition = EXCLUDED.vehicle_condition,
+                    status = EXCLUDED.status,
+                    on_lot_status = EXCLUDED.on_lot_status,
+                    updated_at = CURRENT_TIMESTAMP
+                """
+                
+                for record in normalized_data:
+                    db_manager.execute_query(insert_query, record)
+                
+                logger.info(f"Successfully created {len(normalized_data)} normalized records for active import")
+            
+        except Exception as e:
+            logger.error(f"Error ensuring active normalization: {e}")
             raise
     
     def create_new_import(self, source: str = 'automated_scrape', file_name: str = None) -> int:
@@ -73,6 +180,22 @@ class ScraperImportManager:
             
         except Exception as e:
             logger.error(f"Error creating new import: {e}")
+            raise
+
+    def finalize_import(self, import_id: int):
+        """Finalize an import by updating stats and ensuring normalization"""
+        try:
+            # Update import statistics
+            self.update_import_stats(import_id)
+            
+            # CRITICAL: Ensure all vehicles from active import have normalized records
+            # This prevents data contamination issues in CAO processing
+            self.ensure_active_normalization(import_id)
+            
+            logger.info(f"Import {import_id} finalized with stats updated and normalization complete")
+            
+        except Exception as e:
+            logger.error(f"Error finalizing import {import_id}: {e}")
             raise
     
     def update_import_stats(self, import_id: int):
