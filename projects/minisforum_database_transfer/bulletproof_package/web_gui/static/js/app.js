@@ -8114,9 +8114,54 @@ Example:
         // Generate sample vehicle data for all processed orders
         this.processedOrders.forEach(order => {
             if (order.result) {
-                const sampleVehicles = this.generateSampleVehicleData(order);
-                allVehicles.push(...sampleVehicles);
-                console.log(`Added ${sampleVehicles.length} vehicles for ${order.dealership}`);
+                // CRITICAL FIX: Use REAL vehicle data from API instead of sample data
+                console.log('DEBUG: Full order result structure for', order.dealership, ':', order.result);
+                console.log('DEBUG: Available keys in result:', Object.keys(order.result));
+                
+                // CRITICAL FIX: Vehicle data is in CSV file, not API response
+                if (order.result.download_csv) {
+                    console.log(`Fetching vehicle data from CSV: ${order.result.download_csv}`);
+                    // We'll fetch CSV data asynchronously - for now show loading message
+                    this.fetchVehicleDataFromCSV(order.result.download_csv, order.dealership).then(vehicles => {
+                        if (vehicles && vehicles.length > 0) {
+                            // DEBUG: Find actual table element IDs
+                            console.log('DEBUG: Looking for modal table elements...');
+                            console.log('modalVehicleTableBody:', document.getElementById('modalVehicleTableBody'));
+                            console.log('modalNoDataPlaceholder:', document.getElementById('modalNoDataPlaceholder'));  
+                            console.log('modalVehicleCount:', document.getElementById('modalVehicleCount'));
+                            
+                            // Try multiple possible element IDs
+                            let tableBody = document.getElementById('modalVehicleTableBody') || 
+                                          document.getElementById('vehicleTableBody') ||
+                                          document.querySelector('.modal tbody') ||
+                                          document.querySelector('#modalVehicleTable tbody');
+                            
+                            let noDataPlaceholder = document.getElementById('modalNoDataPlaceholder') ||
+                                                   document.getElementById('noDataPlaceholder') ||
+                                                   document.querySelector('.no-data-placeholder');
+                                                   
+                            let vehicleCountEl = document.getElementById('modalVehicleCount') ||
+                                               document.getElementById('vehicleCount') ||
+                                               document.querySelector('.vehicle-count');
+                            
+                            console.log('DEBUG: Found elements:', {tableBody, noDataPlaceholder, vehicleCountEl});
+                            
+                            if (tableBody) {
+                                this.renderVehicleTable(vehicles, tableBody);
+                                console.log(`Populated table with ${vehicles.length} REAL vehicles for ${order.dealership}`);
+                            } else {
+                                console.error('Could not find modal table body element');
+                            }
+                            
+                            if (noDataPlaceholder) noDataPlaceholder.style.display = 'none';
+                            if (vehicleCountEl) vehicleCountEl.textContent = vehicles.length.toString();
+                        }
+                    }).catch(error => {
+                        console.error(`Failed to fetch CSV data for ${order.dealership}:`, error);
+                    });
+                } else {
+                    console.error(`No CSV file available for ${order.dealership}`);
+                }
             }
         });
         
@@ -8223,6 +8268,108 @@ Example:
     truncateVin(vin) {
         if (!vin || vin.length <= 10) return vin;
         return vin.substring(0, 8) + '...';
+    }
+    
+    async fetchVehicleDataFromCSV(csvUrl, dealership) {
+        try {
+            console.log(`Fetching CSV data for ${dealership} from ${csvUrl}`);
+            
+            // Add cache-busting to ensure fresh data
+            const cacheBusterUrl = csvUrl + (csvUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
+            const response = await fetch(cacheBusterUrl, { cache: 'no-cache' });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const csvText = await response.text();
+            console.log(`CSV content length: ${csvText.length} characters`);
+            
+            // Parse CSV into vehicle objects
+            const lines = csvText.split('\n').filter(line => line.trim());
+            if (lines.length < 2) {
+                throw new Error('CSV file appears to be empty or invalid');
+            }
+            
+            // Parse header row
+            const headers = this.parseCSVLine(lines[0]);
+            console.log('CSV headers:', headers);
+            
+            // Parse data rows into vehicle objects
+            const vehicles = [];
+            for (let i = 1; i < lines.length; i++) {
+                const values = this.parseCSVLine(lines[i]);
+                if (values.length > 0) {
+                    const vehicle = {};
+                    headers.forEach((header, index) => {
+                        vehicle[header] = values[index] || '';
+                    });
+                    vehicles.push(vehicle);
+                }
+            }
+            
+            console.log(`Parsed ${vehicles.length} vehicles from CSV`);
+            return vehicles;
+            
+        } catch (error) {
+            console.error(`Error fetching CSV data for ${dealership}:`, error);
+            throw error;
+        }
+    }
+    
+    parseCSVLine(line) {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            
+            if (char === '"') {
+                inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+                result.push(current);
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        result.push(current);
+        
+        return result.map(field => field.trim());
+    }
+    
+    renderVehicleTable(vehicles, tableBody) {
+        if (!vehicles || vehicles.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="7">No vehicles to display</td></tr>';
+            return;
+        }
+        
+        // Generate table rows with actual vehicle data - map CSV columns to display format
+        const rows = vehicles.map((vehicle, index) => {
+            return `
+                <tr>
+                    <td>
+                        <button class="btn-sm btn-secondary" onclick="app.editVehicle(${index})">
+                            Edit
+                        </button>
+                    </td>
+                    <td>${vehicle.YEARMAKE || vehicle.year || ''}</td>
+                    <td>${vehicle.MODEL || vehicle.model || ''}</td>
+                    <td>${vehicle.TRIM || vehicle.trim || ''}</td>
+                    <td>${vehicle.STOCK || vehicle.stock || vehicle.stock_number || ''}</td>
+                    <td>${this.truncateVin(vehicle.VIN || vehicle.vin || '')}</td>
+                    <td>
+                        <button class="btn-sm btn-primary qr-btn" onclick="app.showQRCode('${vehicle.VIN || vehicle.vin || ''}')">
+                            QR
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        
+        tableBody.innerHTML = rows;
+        console.log(`Rendered ${vehicles.length} vehicle rows in table`);
     }
     
     updateModalDownloadButton() {
@@ -9509,3 +9656,109 @@ window.forceManualButtonVisible = function() {
 };
 
 console.log('✅ FINAL FIXES LOADED - All functions should work now!');
+
+// ============================================================================
+// EMERGENCY TEMPLATE CACHE BYPASS (August 28, 2025) 
+// ============================================================================
+
+console.log('🚨 LOADING EMERGENCY TEMPLATE CACHE BYPASS SOLUTIONS...');
+
+// CRITICAL: Force Order Number Input Box to appear via DOM injection
+function forceOrderNumberInput() {
+    console.log('🔧 Checking for missing order number input...');
+    
+    // Look for the order number step
+    const orderStep = document.querySelector('[data-step="order-number"]');
+    if (orderStep) {
+        console.log('📍 Found order number step, checking for input...');
+        
+        // Check if input already exists
+        const existingInput = document.getElementById('orderNumberInput');
+        if (!existingInput) {
+            console.log('🚨 MISSING ORDER INPUT - INJECTING VIA DOM...');
+            
+            // Find the step description area  
+            const stepDescription = orderStep.querySelector('.step-description');
+            if (stepDescription) {
+                // Create the missing form elements
+                const inputHTML = `
+                    <div class="order-number-input" style="margin: 20px 0;">
+                        <div class="form-group">
+                            <label for="orderNumberInput">Order Number:</label>
+                            <input type="text" id="orderNumberInput" class="form-control" 
+                                   placeholder="e.g., SF24001, Order123, etc." 
+                                   maxlength="20" required>
+                        </div>
+                        <div class="form-group">
+                            <button type="button" id="applyOrderNumberBtn" class="btn btn-primary" 
+                                    onclick="wizard.applyOrderNumber()">
+                                Apply Order Number
+                            </button>
+                        </div>
+                        <div id="orderNumberPreview" class="order-preview" style="display: none;">
+                            <h4>Order Preview</h4>
+                            <div class="preview-content">
+                                <div id="vinPreviewList"></div>
+                            </div>
+                        </div>
+                        <div style="display: none;">
+                            <div id="orderNumberDealershipDisplay"></div>
+                            <div id="orderDealershipName"></div>
+                            <div id="orderVinCount"></div>
+                        </div>
+                    </div>
+                `;
+                
+                // Inject the HTML
+                stepDescription.insertAdjacentHTML('afterend', inputHTML);
+                console.log('✅ ORDER INPUT INJECTED SUCCESSFULLY via DOM!');
+            }
+        } else {
+            console.log('✅ Order input already exists - no injection needed');
+        }
+    }
+}
+
+// CRITICAL: Force fresh CSV data in review stage
+function forceFreshReviewData() {
+    console.log('🔧 Checking for stale review data...');
+    
+    // Find vehicle count element
+    const vehicleCount = document.getElementById('vehicleCount');
+    if (vehicleCount && vehicleCount.textContent === '27') {
+        console.log('🚨 DETECTED STALE 27 VIN COUNT - FORCING REFRESH...');
+        
+        // Force the wizard to reload CSV with cache busting
+        if (typeof wizard !== 'undefined' && wizard.currentOrderResult) {
+            console.log('🔄 Forcing fresh CSV reload...');
+            wizard.loadCSVIntoSpreadsheet(wizard.currentOrderResult);
+        }
+    }
+}
+
+// Monitor for wizard step changes and apply fixes
+let lastStepCheck = '';
+function monitorWizardSteps() {
+    const currentStep = document.querySelector('.wizard-step.active')?.getAttribute('data-step') || '';
+    
+    if (currentStep !== lastStepCheck) {
+        lastStepCheck = currentStep;
+        console.log(`🎯 Wizard step changed to: ${currentStep}`);
+        
+        // Apply fixes based on current step
+        if (currentStep === 'order-number') {
+            setTimeout(forceOrderNumberInput, 500);
+        } else if (currentStep === 'review') {
+            setTimeout(forceFreshReviewData, 500);
+        }
+    }
+}
+
+// Start monitoring immediately and set interval
+setTimeout(() => {
+    console.log('🎯 Starting wizard step monitoring...');
+    monitorWizardSteps();
+    setInterval(monitorWizardSteps, 1000);
+}, 2000);
+
+console.log('✅ EMERGENCY TEMPLATE CACHE BYPASS LOADED - DOM injection ready!');
