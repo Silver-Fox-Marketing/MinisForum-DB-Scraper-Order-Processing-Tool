@@ -16,6 +16,7 @@ from database_config import (
     REQUIRED_COLUMNS, NUMERIC_COLUMNS, DATE_COLUMNS
 )
 from scraper_data_normalizer import normalizer
+from scraper_import_manager import ScraperImportManager
 
 logger = logging.getLogger(__name__)
 
@@ -267,10 +268,26 @@ class CompleteCSVImporter:
         return None
     
     def import_complete_csv(self, file_path: str) -> Dict:
-        """Import the complete_data.csv file"""
+        """Import the complete_data.csv file using proper ScraperImportManager"""
         logger.info(f"Importing complete CSV file: {file_path}")
         
         try:
+            # Initialize ScraperImportManager first to get active import ID
+            import_manager = ScraperImportManager()
+            
+            # Get or create active import
+            active_import = self.db.execute_query(
+                "SELECT import_id FROM scraper_imports WHERE status = 'active' LIMIT 1"
+            )
+            
+            if not active_import:
+                # Create new import
+                import_id = import_manager.create_new_import()
+            else:
+                import_id = active_import[0]['import_id']
+            
+            logger.info(f"Using import ID: {import_id}")
+            
             # Read CSV with pandas
             df = pd.read_csv(file_path, dtype=str, keep_default_na=False)
             
@@ -362,8 +379,9 @@ class CompleteCSVImporter:
                         '',  # country
                         dealership_name,  # location
                         row.get('url', ''),
-                        normalized_type,  # normalized_type
-                        lot_status  # on_lot_status
+                        import_id,  # import_id - CRITICAL for active dataset filtering
+                        datetime.now(),  # import_timestamp
+                        date.today()  # import_date
                     )
                     raw_data.append(raw_tuple)
                 
@@ -374,7 +392,7 @@ class CompleteCSVImporter:
                         'ext_color', 'status', 'price', 'body_style', 'fuel_type',
                         'msrp', 'date_in_stock', 'street_address', 'locality',
                         'postal_code', 'region', 'country', 'location', 'vehicle_url',
-                        'normalized_type', 'on_lot_status'
+                        'import_id', 'import_timestamp', 'import_date'
                     ]
                     
                     rows_inserted = self.db.execute_batch_insert(
@@ -386,16 +404,15 @@ class CompleteCSVImporter:
                     self.import_stats['imported_rows'] += rows_inserted
                     self.import_stats['dealerships'][dealership_name]['imported'] = rows_inserted
                     
-                    # Get inserted records for normalization
-                    today = date.today()
+                    # Get inserted records for normalization using import_id
                     raw_records = self.db.execute_query(
                         """
                         SELECT id, vin, stock, type, year, make, model, trim, 
                                status, price, msrp, date_in_stock, location, vehicle_url
                         FROM raw_vehicle_data
-                        WHERE location = %s AND import_date = %s
+                        WHERE location = %s AND import_id = %s
                         """,
-                        (dealership_name, today)
+                        (dealership_name, import_id)
                     )
                     
                     # Prepare normalized data
@@ -405,13 +422,9 @@ class CompleteCSVImporter:
                         normalized_vehicle_type = normalizer.normalize_vehicle_type(condition_data)
                         normalized_lot_status = normalizer.normalize_lot_status(condition_data)
                         
-                        # Convert normalizer output to database format
-                        if normalized_lot_status in ['onlot', 'on lot']:
-                            db_lot_status = 'on lot'
-                        elif normalized_lot_status in ['offlot', 'off lot']:
-                            db_lot_status = 'off lot'
-                        else:
-                            db_lot_status = record['status']  # fallback to original
+                        # Use normalizer output directly - DON'T convert back to 'on lot'/'off lot' format
+                        # The CAO system expects 'onlot'/'offlot' format from normalizer
+                        db_lot_status = normalized_lot_status
                         
                         normalized_tuple = (
                             record['id'],  # raw_data_id
@@ -428,7 +441,10 @@ class CompleteCSVImporter:
                             record['date_in_stock'],
                             record['location'],
                             record['vehicle_url'],
-                            db_lot_status  # on_lot_status column
+                            db_lot_status,  # on_lot_status column
+                            datetime.now(),  # created_at
+                            datetime.now(),  # updated_at
+                            date.today()  # last_seen_date
                         )
                         normalized_data.append(normalized_tuple)
                         
@@ -444,7 +460,8 @@ class CompleteCSVImporter:
                         norm_columns = [
                             'raw_data_id', 'vin', 'stock', 'vehicle_condition',
                             'year', 'make', 'model', 'trim', 'status', 'price',
-                            'msrp', 'date_in_stock', 'location', 'vehicle_url', 'on_lot_status'
+                            'msrp', 'date_in_stock', 'location', 'vehicle_url', 'on_lot_status',
+                            'created_at', 'updated_at', 'last_seen_date'
                         ]
                         
                         self.db.upsert_data(

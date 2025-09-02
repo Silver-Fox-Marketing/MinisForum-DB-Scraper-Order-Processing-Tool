@@ -35,8 +35,8 @@ class CorrectOrderProcessor:
             'Dave Sinclair Lincoln South': 'Dave Sinclair Lincoln',
             'BMW of West St. Louis': 'BMW of West St. Louis', 
             'Columbia Honda': 'Columbia Honda',
-            'South County Dodge Chrysler Jeep RAM': 'South County Dodge Chrysler Jeep RAM',
-            'South County DCJR': 'South County Dodge Chrysler Jeep RAM'
+            'South County Dodge Chrysler Jeep RAM': 'South County DCJR',
+            'South County DCJR': 'South County DCJR'
         }
         
         # Reverse mapping for VIN history lookups
@@ -92,18 +92,33 @@ class CorrectOrderProcessor:
             if not current_vehicles:
                 return {'success': False, 'error': 'No vehicles found'}
             
-            logger.info(f"Found {len(current_vehicles)} total vehicles")
+            logger.info(f"[CAO DEBUG] Found {len(current_vehicles)} total vehicles for {dealership_name}")
             
             # Step 2: Compare VIN lists to find NEW vehicles (Enhanced Logic)
             current_vins = [v['vin'] for v in current_vehicles]
+            logger.info(f"[CAO DEBUG] Current VINs: {current_vins[:5]}..." if len(current_vins) > 5 else f"[CAO DEBUG] Current VINs: {current_vins}")
+            
             new_vins = self._find_new_vehicles_enhanced(dealership_name, current_vins, current_vehicles)
+            logger.info(f"[CAO DEBUG] NEW VINs after comparison: {new_vins[:5]}..." if len(new_vins) > 5 else f"[CAO DEBUG] NEW VINs after comparison: {new_vins}")
             
             # Filter to only NEW vehicles
             new_vehicles = [v for v in current_vehicles if v['vin'] in new_vins]
-            logger.info(f"Found {len(new_vehicles)} NEW vehicles needing graphics")
+            logger.info(f"[CAO DEBUG] Found {len(new_vehicles)} NEW vehicles needing graphics for {dealership_name}")
             
-            if not new_vehicles:
-                return {'success': True, 'new_vehicles': 0, 'message': 'No new vehicles to process'}
+            # CRITICAL FIX: Apply dealership filtering to CAO orders (same as LIST orders)
+            filtered_vehicles = self._apply_dealership_filters(new_vehicles, dealership_name)
+            logger.info(f"[CAO DEBUG] After dealership filtering: {len(filtered_vehicles)} vehicles match dealership criteria")
+            
+            if not filtered_vehicles:
+                return {
+                    'success': False, 
+                    'error': f'No vehicles match dealership filtering criteria. Found {len(new_vehicles)} new vehicles but none match the configured filters (new/used/certified).',
+                    'new_vehicles': 0,
+                    'vehicles_filtered_out': len(new_vehicles)
+                }
+                
+            # Use filtered vehicles for the rest of the process
+            new_vehicles = filtered_vehicles
             
             # Step 3: Create output folders
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -135,9 +150,11 @@ class CorrectOrderProcessor:
                 'template_type': template_type,
                 'total_vehicles': len(current_vehicles),
                 'new_vehicles': len(new_vehicles),
+                'vehicle_count': len(new_vehicles),
                 'qr_codes_generated': len(qr_paths),
                 'qr_folder': str(qr_folder),
                 'csv_file': str(csv_path),
+                'export_file': str(csv_path),
                 'download_csv': f"/download_csv/{csv_path.name}",
                 'billing_csv_file': str(billing_csv_path),
                 'download_billing_csv': f"/download_csv/{billing_csv_path.name}",
@@ -214,10 +231,12 @@ class CorrectOrderProcessor:
                 'template_type': template_type,
                 'vehicles_requested': len(vehicles),
                 'vehicles_processed': len(filtered_vehicles),
+                'vehicle_count': len(filtered_vehicles),
                 'vehicles_filtered_out': len(vehicles) - len(filtered_vehicles),
                 'qr_codes_generated': len(qr_paths),
                 'qr_folder': str(qr_folder),
                 'csv_file': str(csv_path),
+                'export_file': str(csv_path),
                 'download_csv': f"/download_csv/{csv_path.name}",
                 'billing_csv_file': str(billing_csv_path),
                 'download_billing_csv': f"/download_csv/{billing_csv_path.name}",
@@ -322,7 +341,7 @@ class CorrectOrderProcessor:
         
         # Map dealership config name to actual data location name
         actual_location_name = self.dealership_name_mapping.get(dealership_name, dealership_name)
-        logger.info(f"Mapping {dealership_name} -> {actual_location_name}")
+        logger.info(f"[CAO DEBUG] Mapping {dealership_name} -> {actual_location_name}")
         
         # Get dealership config
         config = db_manager.execute_query("""
@@ -335,13 +354,19 @@ class CorrectOrderProcessor:
             if isinstance(filtering_rules, str):
                 filtering_rules = json.loads(filtering_rules)
         
+        # Log the filtering rules being applied
+        logger.info(f"[CAO DEBUG] Applying filtering rules for {dealership_name}: {filtering_rules}")
+        
         # Build query with filters - use actual location name for data lookup
         # CRITICAL: Only process vehicles from the ACTIVE scraper import that are physically on the lot
         # Use normalized_vehicle_data for proper vehicle type filtering (po, cpo, new instead of raw values)
         query = """
             SELECT nvd.* FROM normalized_vehicle_data nvd
+            JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
+            JOIN scraper_imports si ON rvd.import_id = si.import_id
             WHERE nvd.location = %s 
-            AND nvd.on_lot_status = 'on lot'
+            AND nvd.on_lot_status IN ('onlot', 'on lot')
+            AND si.status = 'active'
         """
         params = [actual_location_name]
         
@@ -375,51 +400,55 @@ class CorrectOrderProcessor:
             query += " AND year >= %s"
             params.append(min_year)
         
-        # Apply require_status filter (highest priority - checks the 'type' column)
+        # Apply require_status filter (highest priority - checks the 'status' column)
         require_statuses = filtering_rules.get('require_status')
         if require_statuses:
             if isinstance(require_statuses, list):
                 status_conditions = []
                 for status in require_statuses:
-                    status_conditions.append("rvd.type ILIKE %s")
+                    status_conditions.append("nvd.status ILIKE %s")
                     params.append(f"%{status}%")
                 query += f" AND ({' OR '.join(status_conditions)})"
             else:
-                query += " AND rvd.type ILIKE %s"
+                query += " AND nvd.status ILIKE %s"
                 params.append(f"%{require_statuses}%")
         
-        # Apply exclude_status filter (checks the 'type' column for raw status values)
+        # Apply exclude_status filter (checks the 'status' column for raw status values)
         exclude_statuses = filtering_rules.get('exclude_status')
         if exclude_statuses:
             if isinstance(exclude_statuses, list):
                 for status in exclude_statuses:
-                    # Use ILIKE for case-insensitive matching against the 'type' column
-                    query += " AND rvd.type NOT ILIKE %s"
+                    # Use ILIKE for case-insensitive matching against the 'status' column
+                    query += " AND nvd.status NOT ILIKE %s"
                     params.append(f"%{status}%")
             else:
-                query += " AND rvd.type NOT ILIKE %s"
+                query += " AND nvd.status NOT ILIKE %s"
                 params.append(f"%{exclude_statuses}%")
         
         # Apply stock number filter (exclude missing and asterisk placeholders)
         if filtering_rules.get('exclude_missing_stock', True):
-            query += " AND stock IS NOT NULL AND stock != %s AND stock != %s"
+            query += " AND nvd.stock IS NOT NULL AND nvd.stock != %s AND nvd.stock != %s"
             params.extend(['', '*'])
             
         # Apply price filter - ONLY for Glendale by default
         if filtering_rules.get('exclude_missing_price', False):
             query += " AND price IS NOT NULL AND price > 0"
         
-        query += " ORDER BY import_timestamp DESC"
+        query += " ORDER BY created_at DESC"
         
-        logger.info(f"Query: {query}")
-        logger.info(f"Params: {params}")
+        logger.info(f"[CAO DEBUG] Final Query: {query}")
+        logger.info(f"[CAO DEBUG] Query Params: {params}")
         
         try:
             # Ensure params is properly formatted as tuple for database query
             query_params = tuple(params) if params else None
-            logger.info(f"Final query params as tuple: {query_params}")
+            logger.info(f"[CAO DEBUG] Final query params as tuple: {query_params}")
             result = db_manager.execute_query(query, query_params)
-            logger.info(f"Query returned {len(result)} vehicles")
+            logger.info(f"[CAO DEBUG] Query returned {len(result)} vehicles for {dealership_name}")
+            
+            if result:
+                logger.info(f"[CAO DEBUG] Sample VINs from query: {[v['vin'] for v in result[:5]]}")
+            
             return result
         except Exception as e:
             logger.error(f"Database query failed: {e}")
@@ -429,8 +458,11 @@ class CorrectOrderProcessor:
             # Use normalized_vehicle_data for consistent data structure
             simplified_query = """
                 SELECT nvd.* FROM normalized_vehicle_data nvd
+                JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
+                JOIN scraper_imports si ON rvd.import_id = si.import_id
                 WHERE nvd.location = %s 
-                AND nvd.on_lot_status = 'on lot'
+                AND nvd.on_lot_status IN ('onlot', 'on lot')
+                AND si.status = 'active'
                 ORDER BY nvd.updated_at DESC
             """
             try:
@@ -459,13 +491,17 @@ class CorrectOrderProcessor:
             if isinstance(filtering_rules, str):
                 filtering_rules = json.loads(filtering_rules)
         
+        # Log the filtering rules being applied
+        logger.info(f"Applying filtering rules for {dealership_name}: {filtering_rules}")
+        
         # Get allowed vehicle types using the new 'allowed_vehicle_types' field
         vehicle_types = filtering_rules.get('allowed_vehicle_types', filtering_rules.get('vehicle_types', ['new', 'used']))
         
         # Filter vehicles based on type
         filtered_vehicles = []
         for vehicle in vehicles:
-            vehicle_type = vehicle.get('type', '').lower()
+            # CRITICAL FIX: Use 'vehicle_condition' field from normalized data, not 'type'
+            vehicle_type = vehicle.get('vehicle_condition', '').lower()
             
             # Check if vehicle type matches allowed types
             type_matches = False
@@ -475,17 +511,25 @@ class CorrectOrderProcessor:
                 for allowed_type in vehicle_types:
                     if allowed_type == 'used':
                         # CRITICAL: "used" is UMBRELLA term for Pre-Owned AND Certified Pre-Owned
-                        if any(keyword in vehicle_type for keyword in ['used', 'pre-owned', 'pre owned', 'certified', 'cpo']):
+                        # Match normalized database values: "po" and "cpo"
+                        if vehicle_type in ['po', 'cpo'] or any(keyword in vehicle_type for keyword in ['used', 'pre-owned', 'pre owned', 'certified', 'cpo']):
                             type_matches = True
                             break
                     elif allowed_type in ['certified', 'cpo']:
                         # Handle both 'certified' and 'cpo' config values  
-                        if any(keyword in vehicle_type for keyword in ['certified', 'cpo']):
+                        # Match normalized database value: "cpo"
+                        if vehicle_type == 'cpo' or any(keyword in vehicle_type for keyword in ['certified', 'cpo']):
                             type_matches = True
                             break
                     elif allowed_type in ['po', 'pre-owned']:
                         # Handle pre-owned variants
-                        if any(keyword in vehicle_type for keyword in ['pre-owned', 'pre owned']):
+                        # Match normalized database value: "po"
+                        if vehicle_type == 'po' or any(keyword in vehicle_type for keyword in ['pre-owned', 'pre owned']):
+                            type_matches = True
+                            break
+                    elif allowed_type == 'new':
+                        # Match normalized database value: "new"
+                        if vehicle_type == 'new':
                             type_matches = True
                             break
                     elif allowed_type in vehicle_type:
@@ -742,7 +786,7 @@ class CorrectOrderProcessor:
                     make = vehicle.get('make', '')
                     model = vehicle.get('model', '')
                     stock = vehicle.get('stock', '')
-                    type_prefix = self._get_type_prefix(vehicle.get('type', ''))
+                    type_prefix = self._get_type_prefix(vehicle.get('vehicle_condition', ''))
                     vin = vehicle.get('vin', '')
                     
                     qr_path = qr_paths[idx] if idx < len(qr_paths) else ''
@@ -764,7 +808,7 @@ class CorrectOrderProcessor:
                     trim = vehicle.get('trim', '')
                     stock = vehicle.get('stock', '')
                     vin = vehicle.get('vin', '')
-                    type_prefix = self._get_type_prefix(vehicle.get('type', ''))
+                    type_prefix = self._get_type_prefix(vehicle.get('vehicle_condition', ''))
                     
                     qr_path = qr_paths[idx] if idx < len(qr_paths) else ''
                     
@@ -827,7 +871,7 @@ class CorrectOrderProcessor:
             model = vehicle.get('model', '')
             stock = vehicle.get('stock', '')
             vin = vehicle.get('vin', '')
-            vtype = vehicle.get('type', '').lower()
+            vtype = vehicle.get('vehicle_condition', '').lower()
             
             # Determine vehicle type for billing
             if 'new' in vtype:
@@ -915,9 +959,11 @@ class CorrectOrderProcessor:
         
         # Get the dealership-specific VIN log table
         vin_log_table = self._get_dealership_vin_log_table(dealership_name)
-        logger.info(f"Using dealership-specific VIN log table: {vin_log_table}")
+        logger.info(f"[CAO DEBUG] Using dealership-specific VIN log table: {vin_log_table}")
         
         new_vins = []
+        
+        logger.info(f"[CAO DEBUG] Checking {len(current_vehicles)} vehicles against VIN log for {dealership_name}")
         
         for vehicle in current_vehicles:
             vin = vehicle.get('vin')
@@ -946,17 +992,19 @@ class CorrectOrderProcessor:
                 processed_date = most_recent['processed_date']
                 
                 # If VIN is in the log, it's been processed before - skip it
-                logger.info(f"Skipping {vin}: Previously processed as {prev_order_type} on {processed_date}")
+                logger.info(f"[CAO DEBUG] Skipping {vin}: Previously processed as {prev_order_type} on {processed_date}")
                 should_process = False
             else:
                 # No history in this dealership's log = definitely new
-                logger.info(f"Processing {vin}: No previous history in {dealership_name}")
+                logger.info(f"[CAO DEBUG] Processing {vin}: No previous history in {dealership_name}")
                 should_process = True
             
             if should_process:
                 new_vins.append(vin)
         
-        logger.info(f"Simplified v2.1 logic: {len(current_vins)} current, {len(new_vins)} need processing")
+        logger.info(f"[CAO DEBUG] VIN Comparison Summary for {dealership_name}: {len(current_vins)} current vehicles, {len(new_vins)} need processing")
+        if new_vins:
+            logger.info(f"[CAO DEBUG] VINs that need processing: {new_vins}")
         return new_vins
     
     def _normalize_vehicle_type(self, vehicle_type: str) -> str:
