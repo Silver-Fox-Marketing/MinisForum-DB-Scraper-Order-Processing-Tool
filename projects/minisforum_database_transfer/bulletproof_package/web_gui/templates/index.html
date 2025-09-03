@@ -74,17 +74,13 @@
                     <div class="title-section">
                         <div class="title-with-logo">
                             <div class="title-text">
-                                <h1 class="app-title">Database and Order Processing Toolkit</h1>
-                                <span class="company-name">Silver Fox Marketing</span>
+                                <span class="company-name">Database & Order Processor</span>
                             </div>
                             <img src="{{ url_for('static', filename='images/car_logo_orange.png') }}?v=123" alt="LotSherpa" class="car-logo">
                         </div>
                     </div>
                 </div>
                 <div class="status-section">
-                    <div class="last-scrape" id="lastScrape">
-                        Last Scrape: Never
-                    </div>
                     
                     <!-- Dark Mode Toggle -->
                     <div class="theme-toggle-container">
@@ -125,6 +121,13 @@
                     <div class="status-indicator" id="systemStatus">
                         <i class="fas fa-circle status-icon"></i>
                         <span class="status-text">System Ready</span>
+                    </div>
+                </div>
+                
+                <!-- Last Scrape Indicator -->
+                <div class="sidebar-scrape-section">
+                    <div class="last-scrape" id="lastScrape">
+                        Last Scrape: Never
                     </div>
                 </div>
                 
@@ -709,6 +712,17 @@
                                         <i class="fas fa-list"></i>
                                         <span class="radio-title">LIST</span>
                                         <span class="radio-desc">Manual VIN entry</span>
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="toggle-option" data-value="maintenance">
+                                <input type="radio" id="orderTypeMaintenance" name="order_type" value="maintenance">
+                                <label for="orderTypeMaintenance" class="modern-radio-label">
+                                    <div class="radio-indicator"></div>
+                                    <div class="radio-content">
+                                        <img src="/static/images/maintenance_icon.svg" alt="Maintenance" style="width: 16px; height: 16px; color: currentColor;">
+                                        <span class="radio-title">MAINTENANCE</span>
+                                        <span class="radio-desc">CAO + Manual VINs</span>
                                     </div>
                                 </label>
                             </div>
@@ -1517,20 +1531,13 @@ SF24002
 
                         <div class="order-number-input">
                             <div class="form-group">
-                                <label for="orderNumberInput">Order Number:</label>
-                                <input type="text" id="orderNumberInput" class="form-control" 
+                                <label for="modalOrderNumber">Order Number:</label>
+                                <input type="text" id="modalOrderNumber" class="form-control" 
                                        placeholder="e.g., SF24001, Order123, etc." 
                                        maxlength="20" required>
                             </div>
                         </div>
 
-                        <!-- Order Number Apply Button -->
-                        <div class="form-group">
-                            <button type="button" id="applyOrderNumberBtn" class="btn btn-primary" 
-                                    onclick="wizard.applyOrderNumber()">
-                                Apply Order Number
-                            </button>
-                        </div>
 
                         <!-- VIN Preview Section -->
                         <div id="orderNumberPreview" class="order-preview" style="display: none;">
@@ -1689,7 +1696,7 @@ SF24002
     </div>
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}"></script>
+    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?cache-bust=order-fix-{{ range(10000, 99999) | random }}"></script>
     
     <!-- INLINE MANUAL VIN ENTRY FUNCTIONS - CACHE BYPASS -->
     <script>

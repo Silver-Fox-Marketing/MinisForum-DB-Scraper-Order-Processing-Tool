@@ -3349,6 +3349,12 @@ class MinisFornumApp {
                                onchange="app.updateQueueItemOrderType('${item.name}', 'LIST')">
                         <label>List (VIN Entry)</label>
                     </div>
+                    <div class="order-type-option maintenance">
+                        <input type="radio" name="orderType_${item.name.replace(/\s+/g, '_')}" 
+                               value="MAINTENANCE" ${item.orderType === 'MAINTENANCE' ? 'checked' : ''}
+                               onchange="app.updateQueueItemOrderType('${item.name}', 'MAINTENANCE')">
+                        <label>Maintenance</label>
+                    </div>
                 </div>
             </div>
         `).join('');
@@ -7415,7 +7421,7 @@ class MinisFornumApp {
             this.updateVinLogProgress('Processing manual VIN import...', 10);
             
             // Call API to import VINs to dealership-specific VIN log
-            const response = await fetch('http://127.0.0.1:5001/api/test-manual-vin-import', {
+            const response = await fetch('/api/manual-vin-import', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -7712,10 +7718,11 @@ class MinisFornumApp {
 class ModalOrderWizard {
     constructor() {
         this.currentStep = 0;
-        this.steps = ['initialize', 'cao', 'list', 'review', 'order', 'complete'];
+        this.steps = ['initialize', 'cao', 'list', 'review', 'orderNumber', 'complete'];
         this.queueData = [];
         this.caoOrders = [];
         this.listOrders = [];
+        this.maintenanceOrders = [];
         this.currentListIndex = 0;
         this.processedOrders = [];
         this.processingResults = {
@@ -7756,6 +7763,7 @@ class ModalOrderWizard {
         this.queueData = queueData;
         this.caoOrders = queueData.filter(item => item.orderType === 'CAO');
         this.listOrders = queueData.filter(item => item.orderType === 'LIST');
+        this.maintenanceOrders = queueData.filter(item => item.orderType === 'MAINTENANCE');
         this.processingResults.totalDealerships = queueData.length;
         
         // Set testing mode checkbox based on queue setting
@@ -7785,6 +7793,7 @@ class ModalOrderWizard {
         
         const caoCount = this.caoOrders.length;
         const listCount = this.listOrders.length;
+        const maintenanceCount = this.maintenanceOrders.length;
         
         summaryContainer.innerHTML = `
             <div class="queue-summary-grid">
@@ -7810,6 +7819,19 @@ class ModalOrderWizard {
                         <div class="card-value">${listCount}</div>
                         <div class="card-details">
                             ${this.listOrders.map(order => order.name).join(', ') || 'None'}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="summary-card maintenance-card">
+                    <div class="card-icon">
+                        <img src="/static/images/maintenance_icon.svg" alt="Maintenance" style="width: 20px; height: 20px; color: currentColor;">
+                    </div>
+                    <div class="card-content">
+                        <h4>Maintenance Orders (CAO + Manual)</h4>
+                        <div class="card-value">${maintenanceCount}</div>
+                        <div class="card-details">
+                            ${this.maintenanceOrders.map(order => order.name).join(', ') || 'None'}
                         </div>
                     </div>
                 </div>
@@ -7854,10 +7876,11 @@ class ModalOrderWizard {
         this.updateModalProgress('cao');
         this.showStep('cao');
         
+        // Process CAO orders only (maintenance has its own workflow)
         if (this.caoOrders.length > 0) {
             this.processCaoOrders();
         } else {
-            // Skip to list processing
+            // Skip to list processing (or maintenance if needed)
             setTimeout(() => {
                 this.proceedToListProcessing();
             }, 1000);
@@ -7999,6 +8022,12 @@ class ModalOrderWizard {
     }
     
     proceedToListProcessing() {
+        // Check if we have maintenance orders to process first
+        if (this.maintenanceOrders.length > 0) {
+            this.processMaintenanceOrders();
+            return;
+        }
+        
         if (this.listOrders.length === 0) {
             // No list orders, proceed to review
             this.proceedToReview();
@@ -8008,6 +8037,313 @@ class ModalOrderWizard {
         this.updateModalProgress('list');
         this.showStep('list');
         this.showCurrentListOrder();
+    }
+    
+    async processMaintenanceOrders() {
+        console.log('Processing maintenance orders...');
+        this.currentMaintenanceIndex = 0;
+        this.maintenanceResults = []; // Store CAO results for each maintenance order
+        
+        // Process each maintenance order (CAO + Manual VINs)
+        await this.processCurrentMaintenanceOrder();
+    }
+    
+    async processCurrentMaintenanceOrder() {
+        if (this.currentMaintenanceIndex >= this.maintenanceOrders.length) {
+            // All maintenance orders processed, move to regular list processing
+            if (this.listOrders.length > 0) {
+                this.updateModalProgress('list');
+                this.showStep('list');
+                this.showCurrentListOrder();
+            } else {
+                this.proceedToReview();
+            }
+            return;
+        }
+        
+        const currentOrder = this.maintenanceOrders[this.currentMaintenanceIndex];
+        console.log('Processing maintenance order for:', currentOrder.name);
+        
+        // Step 1: Run CAO for this dealership
+        try {
+            const caoResult = await this.processSingleCaoOrder(currentOrder);
+            
+            // Store CAO results for this maintenance order
+            this.maintenanceResults[this.currentMaintenanceIndex] = {
+                order: currentOrder,
+                caoResults: caoResult,
+                manualVins: []
+            };
+            
+            // Step 2: Show manual VIN entry form for this dealership
+            this.showMaintenanceVinEntry(currentOrder, caoResult);
+            
+        } catch (error) {
+            console.error('Error processing maintenance CAO for', currentOrder.name, error);
+            console.log('CAO failed, but showing manual VIN entry form anyway for maintenance order');
+            this.maintenanceResults[this.currentMaintenanceIndex] = {
+                order: currentOrder,
+                caoResults: null,
+                manualVins: [],
+                error: error.message
+            };
+            
+            // Even if CAO fails, still show manual VIN entry for maintenance orders
+            this.showMaintenanceVinEntry(currentOrder, null);
+        }
+    }
+    
+    async processSingleCaoOrder(order) {
+        console.log('Processing single CAO order for:', order.name);
+        
+        try {
+            const response = await fetch('/api/orders/process-cao', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    dealerships: [order.name],  // Backend expects array, just like regular CAO
+                    vehicle_types: null,  // Use dealership-specific filtering rules from database
+                    skip_vin_logging: document.getElementById('orderWizardTestingMode')?.checked || false
+                })
+            });
+            
+            const result = await response.json();
+            
+            // Backend returns array of results, get the first one
+            if (Array.isArray(result) && result.length > 0) {
+                const firstResult = result[0];
+                if (firstResult.success) {
+                    return await this.mapCaoResultForFrontend(firstResult);
+                } else {
+                    throw new Error(firstResult.message || 'CAO processing failed');
+                }
+            } else if (result.success) {
+                return await this.mapCaoResultForFrontend(result);
+            } else {
+                throw new Error(result.message || 'CAO processing failed');
+            }
+        } catch (error) {
+            console.error('Error in processSingleCaoOrder:', error);
+            throw error;
+        }
+    }
+    
+    async mapCaoResultForFrontend(result) {
+        // Map backend fields to frontend expected fields for maintenance orders
+        console.log('🔍 DEBUGGING Backend result keys:', Object.keys(result));
+        console.log('🔍 DEBUGGING Backend result:', result);
+        
+        // Try different possible field names for vehicles array
+        let vehiclesArray = result.vehicles || result.processed_vehicles || result.vehicle_data || result.vehicle_list || [];
+        console.log('🔍 DEBUGGING Found vehicles array:', vehiclesArray, 'Length:', vehiclesArray.length);
+        
+        // If no vehicles in response but we have a CSV file, fetch and parse it
+        if (vehiclesArray.length === 0 && (result.download_csv || result.csv_file)) {
+            // Use the web-accessible download_csv path instead of local csv_file path
+            const csvUrl = result.download_csv || result.csv_file;
+            console.log('🔍 DEBUGGING: No vehicles in response, attempting to fetch CSV data from:', csvUrl);
+            try {
+                vehiclesArray = await this.fetchVehiclesFromCsv(csvUrl);
+                console.log('🔍 DEBUGGING: Successfully parsed', vehiclesArray.length, 'vehicles from CSV');
+            } catch (error) {
+                console.error('❌ ERROR: Failed to fetch vehicles from CSV:', error);
+            }
+        }
+        
+        return {
+            vehicle_count: result.new_vehicles || result.vehicle_count || 0,
+            vehicles: vehiclesArray,
+            dealership: result.dealership,
+            success: result.success,
+            download_csv: result.download_csv,
+            qr_folder: result.qr_folder,
+            csv_file: result.csv_file,
+            timestamp: result.timestamp
+        };
+    }
+    
+    async fetchVehiclesFromCsv(csvPath) {
+        // Fetch CSV file and parse vehicle data for maintenance order display
+        console.log('📄 FETCHING CSV data from:', csvPath);
+        
+        try {
+            const response = await fetch(csvPath);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch CSV: ${response.status} ${response.statusText}`);
+            }
+            
+            const csvText = await response.text();
+            const vehicles = this.parseCsvToVehicles(csvText);
+            console.log('✅ SUCCESS: Parsed', vehicles.length, 'vehicles from CSV');
+            return vehicles;
+            
+        } catch (error) {
+            console.error('❌ ERROR: Failed to fetch/parse CSV:', error);
+            return [];
+        }
+    }
+    
+    parseCsvToVehicles(csvText) {
+        // Parse CSV text into vehicle objects for display
+        const lines = csvText.trim().split('\n');
+        if (lines.length <= 1) return []; // No data rows
+        
+        const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+        const vehicles = [];
+        
+        console.log('📋 CSV Headers found:', headers);
+        
+        for (let i = 1; i < lines.length; i++) {
+            const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+            const vehicle = {};
+            
+            // Map CSV columns to vehicle object
+            headers.forEach((header, index) => {
+                vehicle[header.toLowerCase()] = values[index] || '';
+            });
+            
+            // Standardize common field names for display
+            if (!vehicle.vin && vehicle.stock_number) vehicle.vin = vehicle.stock_number;
+            if (!vehicle.year && vehicle.model_year) vehicle.year = vehicle.model_year;
+            if (!vehicle.make && vehicle.vehicle_make) vehicle.make = vehicle.vehicle_make;
+            if (!vehicle.model && vehicle.vehicle_model) vehicle.model = vehicle.vehicle_model;
+            
+            vehicles.push(vehicle);
+        }
+        
+        console.log('🚗 Sample vehicle parsed:', vehicles[0]);
+        return vehicles;
+    }
+    
+    showMaintenanceVinEntry(order, caoResults) {
+        console.log('Showing maintenance VIN entry for:', order.name, 'CAO results:', caoResults);
+        
+        this.updateModalProgress('list');
+        this.showStep('list');
+        
+        const dealershipContainer = document.getElementById('modalListDealerships');
+        
+        if (dealershipContainer) {
+            dealershipContainer.innerHTML = `
+                <div class="maintenance-dealership-container">
+                    <div class="dealership-header">
+                        <div class="dealership-info">
+                            <h3>${order.name}</h3>
+                            <span class="order-type-badge maintenance-badge">
+                                <img src="/static/images/maintenance_icon.svg" alt="Maintenance" style="width: 14px; height: 14px; margin-right: 5px;">
+                                MAINTENANCE
+                            </span>
+                        </div>
+                        <div class="maintenance-summary">
+                            <div class="cao-results-summary">
+                                <strong>CAO Results:</strong> ${caoResults ? caoResults.vehicle_count || 0 : 0} vehicles
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="maintenance-sections">
+                        <div class="cao-results-section">
+                            <h4><i class="fas fa-robot"></i> CAO Results (${caoResults ? caoResults.vehicle_count || 0 : 0} vehicles)</h4>
+                            <div class="cao-results-preview">
+                                ${caoResults && caoResults.vehicles ? 
+                                    caoResults.vehicles.slice(0, 3).map(v => 
+                                        `<div class="vin-preview">${v.vin} - ${v.year} ${v.make} ${v.model}</div>`
+                                    ).join('') + 
+                                    (caoResults.vehicles.length > 3 ? `<div class="vin-preview">... and ${caoResults.vehicles.length - 3} more</div>` : '')
+                                : '<div class="no-results">No CAO results</div>'}
+                            </div>
+                        </div>
+                        
+                        <div class="manual-vin-section">
+                            <h4><i class="fas fa-plus"></i> Add Manual VINs</h4>
+                            <p>Enter additional VINs from your installer (one per line):</p>
+                            <textarea 
+                                id="maintenanceVinInput" 
+                                class="vin-textarea" 
+                                placeholder="Enter VINs here (one per line)&#10;Example:&#10;1HGBH41JXMN109186&#10;2HGFC2F59JH542637&#10;WAUBF98E07A012345"
+                                rows="8"
+                            ></textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="wizard-actions">
+                        <button class="btn-wizard secondary" onclick="window.modalWizard.skipMaintenanceVinEntry()">
+                            Skip Manual Entry
+                        </button>
+                        <button class="btn-wizard primary" onclick="window.modalWizard.processMaintenanceVins()">
+                            <i class="fas fa-arrow-right"></i>
+                            Combine & Continue
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    processMaintenanceVins() {
+        const vinInput = document.getElementById('maintenanceVinInput');
+        const manualVins = vinInput ? vinInput.value.trim().split('\n').filter(vin => vin.trim()) : [];
+        
+        // Store manual VINs for current maintenance order
+        if (this.maintenanceResults[this.currentMaintenanceIndex]) {
+            this.maintenanceResults[this.currentMaintenanceIndex].manualVins = manualVins;
+            
+            // Combine CAO results with manual VINs and add to processed orders
+            const caoResults = this.maintenanceResults[this.currentMaintenanceIndex].caoResults;
+            const caoVehicles = caoResults ? caoResults.vehicles || [] : [];
+            
+            // Create manual VIN objects
+            const manualVehicles = manualVins.map(vin => ({
+                vin: vin.trim(),
+                source: 'manual',
+                year: 'Unknown',
+                make: 'Manual Entry',
+                model: 'Manual Entry'
+            }));
+            
+            // Combine results
+            const combinedResults = {
+                dealership: this.maintenanceResults[this.currentMaintenanceIndex].order.name,
+                orderType: 'MAINTENANCE',
+                success: true,
+                vehicle_count: caoVehicles.length + manualVehicles.length,
+                vehicles: [...caoVehicles, ...manualVehicles],
+                caoCount: caoVehicles.length,
+                manualCount: manualVehicles.length
+            };
+            
+            this.processedOrders.push(combinedResults);
+            this.processingResults.totalVehicles += combinedResults.vehicle_count;
+        }
+        
+        // Move to next maintenance order
+        this.currentMaintenanceIndex++;
+        this.processCurrentMaintenanceOrder();
+    }
+    
+    skipMaintenanceVinEntry() {
+        // Just use CAO results without manual VINs
+        const caoResults = this.maintenanceResults[this.currentMaintenanceIndex].caoResults;
+        const caoVehicles = caoResults ? caoResults.vehicles || [] : [];
+        
+        const combinedResults = {
+            dealership: this.maintenanceResults[this.currentMaintenanceIndex].order.name,
+            orderType: 'MAINTENANCE',
+            success: true,
+            vehicle_count: caoVehicles.length,
+            vehicles: caoVehicles,
+            caoCount: caoVehicles.length,
+            manualCount: 0
+        };
+        
+        this.processedOrders.push(combinedResults);
+        this.processingResults.totalVehicles += combinedResults.vehicle_count;
+        
+        // Move to next maintenance order
+        this.currentMaintenanceIndex++;
+        this.processCurrentMaintenanceOrder();
     }
     
     showCurrentListOrder() {
@@ -8111,7 +8447,31 @@ Example:
         // Get all vehicles from processed orders
         let allVehicles = [];
         
-        // Generate sample vehicle data for all processed orders
+        // Handle maintenance orders - they're stored in this.maintenanceResults
+        if (this.maintenanceResults && this.maintenanceResults.length > 0) {
+            console.log('Processing maintenance results:', this.maintenanceResults);
+            this.maintenanceResults.forEach(maintenanceResult => {
+                if (maintenanceResult && maintenanceResult.caoResults && maintenanceResult.caoResults.vehicles) {
+                    console.log(`Found ${maintenanceResult.caoResults.vehicles.length} vehicles from maintenance CAO results for ${maintenanceResult.order.name}`);
+                    allVehicles.push(...maintenanceResult.caoResults.vehicles);
+                }
+                // Also include manual VINs if any
+                if (maintenanceResult && maintenanceResult.manualVins && maintenanceResult.manualVins.length > 0) {
+                    console.log(`Found ${maintenanceResult.manualVins.length} manual VINs for ${maintenanceResult.order.name}`);
+                    // Convert manual VINs to vehicle objects
+                    const manualVehicles = maintenanceResult.manualVins.map(vin => ({
+                        vin: vin,
+                        year: 'Manual',
+                        make: 'Entry',
+                        model: 'VIN',
+                        stock: 'MANUAL'
+                    }));
+                    allVehicles.push(...manualVehicles);
+                }
+            });
+        }
+        
+        // Generate sample vehicle data for all processed orders (regular CAO/LIST orders)
         this.processedOrders.forEach(order => {
             if (order.result) {
                 // CRITICAL FIX: Use REAL vehicle data from API instead of sample data
@@ -8166,6 +8526,23 @@ Example:
         });
         
         console.log('Total vehicles to display:', allVehicles.length);
+        
+        // If we have vehicles, render them immediately
+        if (allVehicles.length > 0) {
+            console.log('✅ DISPLAYING VEHICLES: Found', allVehicles.length, 'vehicles to display');
+            console.log('Sample vehicle data:', allVehicles[0]);
+            
+            // Hide placeholder and show table
+            if (noDataPlaceholder) noDataPlaceholder.style.display = 'none';
+            if (vehicleCountEl) vehicleCountEl.textContent = allVehicles.length.toString();
+            
+            // Store vehicle data globally for modal editing
+            window.reviewVehicleData = allVehicles;
+            
+            // Generate and render table rows
+            this.renderVehicleTable(allVehicles, tableBody);
+            return;
+        }
         
         // If still no vehicles, show placeholder
         if (allVehicles.length === 0) {
@@ -8393,7 +8770,7 @@ Example:
     
     proceedToQRGeneration() {
         this.updateModalProgress('order');
-        this.showStep('order');
+        this.showStep('orderNumber');
     }
     
     generateFinalOutput() {
@@ -8451,7 +8828,7 @@ Example:
                 this.proceedToListProcessing();
             } else if (nextStepName === 'review') {
                 this.proceedToReview();
-            } else if (nextStepName === 'order') {
+            } else if (nextStepName === 'orderNumber') {
                 this.proceedToQRGeneration();
             } else if (nextStepName === 'complete') {
                 this.completeProcessing();
@@ -9663,22 +10040,72 @@ console.log('✅ FINAL FIXES LOADED - All functions should work now!');
 
 console.log('🚨 LOADING EMERGENCY TEMPLATE CACHE BYPASS SOLUTIONS...');
 
+// DEBUG: Investigate available elements on ORDER # stage  
+window.debugOrderStage = function() {
+    console.log('🔍 DEBUGGING ORDER STAGE ELEMENTS...');
+    
+    // Log all visible elements
+    const allVisible = document.querySelectorAll('*:not([style*="display: none"]):not([hidden])');
+    console.log('All visible elements count:', allVisible.length);
+    
+    // Look for wizard steps
+    const wizardSteps = document.querySelectorAll('[data-step], .wizard-step, .step');
+    console.log('Wizard steps found:', wizardSteps.length);
+    wizardSteps.forEach((step, i) => {
+        console.log(`Step ${i}:`, {
+            element: step,
+            visible: step.style.display !== 'none' && !step.hidden,
+            text: step.textContent.substring(0, 100),
+            classes: step.className,
+            dataStep: step.getAttribute('data-step')
+        });
+    });
+    
+    // Look for order-related content
+    const orderElements = Array.from(allVisible).filter(el => {
+        const text = el.textContent.toLowerCase();
+        return text.includes('order') && text.includes('number');
+    });
+    console.log('Order-related elements:', orderElements.length);
+    orderElements.forEach((el, i) => {
+        console.log(`Order element ${i}:`, {
+            element: el,
+            text: el.textContent.substring(0, 100),
+            tag: el.tagName,
+            id: el.id,
+            classes: el.className
+        });
+    });
+    
+    // Check for modal content
+    const modalContent = document.querySelector('.modal-content, .wizard-content, .order-processing-modal');
+    if (modalContent) {
+        console.log('Modal content found:', modalContent);
+        console.log('Modal content innerHTML preview:', modalContent.innerHTML.substring(0, 500));
+    }
+    
+    return {wizardSteps, orderElements, modalContent};
+};
+
 // CRITICAL: Force Order Number Input Box to appear via DOM injection
 function forceOrderNumberInput() {
     console.log('🔧 Checking for missing order number input...');
     
-    // Look for the order number step
-    const orderStep = document.querySelector('[data-step="order-number"]');
+    // TARGETED FIX: Look for the specific step we found in debug
+    const orderStep = document.querySelector('#modalOrderNumberStep');
     if (orderStep) {
         console.log('📍 Found order number step, checking for input...');
         
         // Check if input already exists
-        const existingInput = document.getElementById('orderNumberInput');
+        const existingInput = document.getElementById('orderNumberInput') || document.getElementById('modalOrderNumber');
         if (!existingInput) {
             console.log('🚨 MISSING ORDER INPUT - INJECTING VIA DOM...');
             
-            // Find the step description area  
-            const stepDescription = orderStep.querySelector('.step-description');
+            // Find the step content area - try multiple selectors
+            const stepDescription = orderStep.querySelector('.step-description') ||
+                                   orderStep.querySelector('.step-content') ||
+                                   orderStep.querySelector('.wizard-content') ||
+                                   orderStep;
             if (stepDescription) {
                 // Create the missing form elements
                 const inputHTML = `
@@ -9716,6 +10143,41 @@ function forceOrderNumberInput() {
         } else {
             console.log('✅ Order input already exists - no injection needed');
         }
+    } else {
+        console.log('❌ Could not find order step, trying fallback approach...');
+        
+        // Fallback: Look for any visible step with order-related content
+        const allSteps = document.querySelectorAll('[data-step], .wizard-step, .step');
+        for (const step of allSteps) {
+            if (step.style.display !== 'none' && !step.hidden) {
+                const stepText = step.textContent.toLowerCase();
+                if (stepText.includes('order') || stepText.includes('number')) {
+                    console.log('📍 Found potential order step via fallback, injecting input...');
+                    
+                    const existingInput = document.getElementById('orderNumberInput') || document.getElementById('modalOrderNumber');
+                    if (!existingInput) {
+                        const inputHTML = `
+                            <div class="order-number-input" style="margin: 20px 0; padding: 20px; border: 2px solid #007bff; background: #f8f9fa;">
+                                <h3>Order Number Input</h3>
+                                <div class="form-group">
+                                    <label for="orderNumberInput">Order Number:</label>
+                                    <input type="text" id="orderNumberInput" class="form-control" 
+                                           placeholder="e.g., SF24001, Order123, etc." 
+                                           maxlength="20" required>
+                                </div>
+                                <button type="button" id="applyOrderNumberBtn" class="btn btn-primary" 
+                                        onclick="window.modalWizard.generateFinalOutput()">
+                                    Apply Order Number & Complete
+                                </button>
+                            </div>
+                        `;
+                        step.insertAdjacentHTML('beforeend', inputHTML);
+                        console.log('✅ FALLBACK ORDER INPUT INJECTED!');
+                        break;
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -9746,7 +10208,7 @@ function monitorWizardSteps() {
         console.log(`🎯 Wizard step changed to: ${currentStep}`);
         
         // Apply fixes based on current step
-        if (currentStep === 'order-number') {
+        if (currentStep === 'order-number' || currentStep === 'order') {
             setTimeout(forceOrderNumberInput, 500);
         } else if (currentStep === 'review') {
             setTimeout(forceFreshReviewData, 500);
@@ -9762,3 +10224,643 @@ setTimeout(() => {
 }, 2000);
 
 console.log('✅ EMERGENCY TEMPLATE CACHE BYPASS LOADED - DOM injection ready!');
+
+// FORCE INJECT MAINTENANCE OPTION INTO PROCESSING QUEUE PANELS
+console.log('🔧 FORCING MAINTENANCE OPTION INTO PROCESSING QUEUE...');
+
+const injectMaintenanceIntoQueue = () => {
+    console.log('🔍 MAINTENANCE INJECTION: Starting scan...');
+    
+    // Debug: Check what exists in the DOM
+    const processingQueue = document.getElementById('processingQueue');
+    console.log('Processing Queue element exists:', !!processingQueue);
+    
+    const dealerPanels = document.querySelectorAll('.dealer-panel');
+    console.log(`Found ${dealerPanels.length} total dealer panels in DOM`);
+    
+    // Look for order-type-toggle in multiple ways
+    const toggles1 = document.querySelectorAll('.order-type-toggle');
+    console.log(`Found ${toggles1.length} elements with class 'order-type-toggle'`);
+    
+    const toggles2 = document.querySelectorAll('.dealer-panel .order-type-toggle');
+    console.log(`Found ${toggles2.length} elements matching '.dealer-panel .order-type-toggle'`);
+    
+    const toggles3 = document.querySelectorAll('#processingQueue .order-type-toggle');
+    console.log(`Found ${toggles3.length} elements matching '#processingQueue .order-type-toggle'`);
+    
+    // Try to find radio buttons directly
+    const radioGroups = document.querySelectorAll('.dealer-panel input[type="radio"][name*="order_type"]');
+    console.log(`Found ${radioGroups.length} order type radio buttons`);
+    
+    // Log the actual HTML structure of first dealer panel if it exists
+    if (dealerPanels.length > 0) {
+        console.log('First dealer panel HTML structure:', dealerPanels[0].innerHTML.substring(0, 500));
+    }
+    
+    // Target the processing queue panels specifically
+    const queuePanels = document.querySelectorAll('#processingQueue .dealer-panel .order-type-toggle');
+    
+    if (queuePanels.length === 0) {
+        console.log('❌ No queue panels with .order-type-toggle found, checking alternative selectors...');
+        
+        // Try alternative selectors
+        const altPanels = document.querySelectorAll('#processingQueue .dealer-panel');
+        if (altPanels.length > 0) {
+            console.log(`Found ${altPanels.length} dealer panels in queue, but no .order-type-toggle elements`);
+            
+            // Check what's inside these panels
+            altPanels.forEach((panel, i) => {
+                const dealerName = panel.querySelector('.dealer-name')?.textContent || 'Unknown';
+                const radioInputs = panel.querySelectorAll('input[type="radio"]');
+                console.log(`Panel ${i} (${dealerName}): Has ${radioInputs.length} radio inputs`);
+                
+                // Look for toggle container by checking for radio buttons
+                const toggleContainer = panel.querySelector('.toggle-container') || 
+                                      panel.querySelector('.order-options') ||
+                                      panel.querySelector('.radio-group') ||
+                                      panel.querySelector('div:has(> input[type="radio"])');
+                                      
+                if (toggleContainer) {
+                    console.log(`Found potential toggle container in ${dealerName}:`, toggleContainer.className);
+                }
+            });
+        }
+        
+        return;
+    }
+    
+    console.log(`Found ${queuePanels.length} queue panels to update with MAINTENANCE option`);
+    
+    queuePanels.forEach((toggleGroup, index) => {
+        // Check if MAINTENANCE option already exists
+        const existingMaintenance = toggleGroup.querySelector('.toggle-option[data-value="maintenance"]');
+        
+        if (!existingMaintenance) {
+            const dealerPanel = toggleGroup.closest('.dealer-panel');
+            const dealerName = dealerPanel?.querySelector('.dealer-name')?.textContent || `Dealer_${index}`;
+            console.log(`Injecting MAINTENANCE option for ${dealerName}`);
+            
+            // Create MAINTENANCE option HTML
+            const maintenanceOption = document.createElement('div');
+            maintenanceOption.className = 'toggle-option';
+            maintenanceOption.setAttribute('data-value', 'maintenance');
+            maintenanceOption.style.display = 'flex';  // Force display
+            maintenanceOption.innerHTML = `
+                <input type="radio" id="orderTypeMaintenance_queue_${index}" name="order_type_queue_${index}" value="maintenance">
+                <label for="orderTypeMaintenance_queue_${index}" class="modern-radio-label">
+                    <div class="radio-indicator"></div>
+                    <div class="radio-content">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color: currentColor;">
+                            <path d="M21.71 8.71C22.1 8.32 22.1 7.69 21.71 7.3L16.7 2.29C16.31 1.9 15.68 1.9 15.29 2.29L13.29 4.29C12.9 4.68 12.9 5.31 13.29 5.7L15.29 7.7L9.29 13.7L7.29 11.7C6.9 11.31 6.27 11.31 5.88 11.7L3.88 13.7C3.49 14.09 3.49 14.72 3.88 15.11L8.89 20.12C9.28 20.51 9.91 20.51 10.3 20.12L12.3 18.12C12.69 17.73 12.69 17.1 12.3 16.71L10.3 14.71L16.3 8.71L18.3 10.71C18.69 11.1 19.32 11.1 19.71 10.71L21.71 8.71Z" fill="currentColor"/>
+                            <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+                        </svg>
+                        <span class="radio-title">MAINTENANCE</span>
+                        <span class="radio-desc">CAO + Manual VINs</span>
+                    </div>
+                </label>
+            `;
+            
+            // Add after LIST option (or at the end)
+            toggleGroup.appendChild(maintenanceOption);
+            
+            // Wire up the radio button functionality
+            const radioInput = maintenanceOption.querySelector('input[type="radio"]');
+            radioInput.addEventListener('change', function() {
+                if (this.checked) {
+                    console.log(`MAINTENANCE selected for ${dealerName}`);
+                    
+                    // Update the queue manager if available
+                    if (window.queueManager && window.queueManager.processingQueue) {
+                        const queueItem = window.queueManager.processingQueue.find(item => item.name === dealerName);
+                        if (queueItem) {
+                            queueItem.orderType = 'MAINTENANCE';
+                            console.log(`Updated ${dealerName} to MAINTENANCE order type in queue`);
+                        }
+                    }
+                    
+                    // Update visual state
+                    const panel = this.closest('.dealer-panel');
+                    if (panel) {
+                        panel.classList.remove('cao', 'list');
+                        panel.classList.add('maintenance');
+                    }
+                }
+            });
+            
+            console.log(`✅ MAINTENANCE option injected for ${dealerName}`);
+        }
+    });
+};
+
+// Try to inject immediately
+setTimeout(() => {
+    injectMaintenanceIntoQueue();
+    
+    // Monitor for queue changes
+    const queueContainer = document.getElementById('processingQueue');
+    if (queueContainer) {
+        console.log('Setting up queue observer for MAINTENANCE injection...');
+        const queueObserver = new MutationObserver((mutations) => {
+            // Re-inject when queue changes
+            setTimeout(injectMaintenanceIntoQueue, 100);
+        });
+        
+        queueObserver.observe(queueContainer, {
+            childList: true,
+            subtree: true
+        });
+    }
+}, 1000);
+
+// Also inject periodically in case of dynamic updates
+setInterval(() => {
+    const panels = document.querySelectorAll('#processingQueue .dealer-panel');
+    if (panels.length > 0) {
+        const needsInjection = Array.from(panels).some(panel => {
+            const toggle = panel.querySelector('.order-type-toggle');
+            return toggle && !toggle.querySelector('.toggle-option[data-value="maintenance"]');
+        });
+        
+        if (needsInjection) {
+            console.log('Found panels missing MAINTENANCE option, injecting...');
+            injectMaintenanceIntoQueue();
+        }
+    }
+}, 2000);
+
+console.log('✅ MAINTENANCE OPTION INJECTION SYSTEM LOADED');
+
+// MANUAL DEBUGGING FUNCTION - Can be called from console
+window.debugMaintenanceInjection = () => {
+    console.log('=== MANUAL MAINTENANCE DEBUG ===');
+    
+    // Try multiple selectors for the queue
+    const queue = document.getElementById('processingQueue') || 
+                  document.querySelector('.processing-queue') ||
+                  document.querySelector('[id*="queue"]') ||
+                  document.querySelector('[class*="queue"]');
+    
+    if (!queue) {
+        console.log('❌ No processing queue element found!');
+        console.log('Searching for queue-like elements...');
+        
+        // Search for any element containing "Bommarito Cadillac"
+        const allElements = document.querySelectorAll('*');
+        let foundQueue = null;
+        
+        for (let elem of allElements) {
+            if (elem.textContent && elem.textContent.includes('Bommarito Cadillac') && 
+                elem.textContent.includes('CAO')) {
+                console.log('Found element with Bommarito Cadillac:', elem);
+                console.log('Element ID:', elem.id);
+                console.log('Element classes:', elem.className);
+                
+                // Check if this looks like a queue panel
+                const parent = elem.closest('.dealer-panel') || elem.closest('[class*="panel"]');
+                if (parent) {
+                    foundQueue = parent.parentElement;
+                    console.log('Found parent queue container:', foundQueue);
+                    break;
+                }
+            }
+        }
+        
+        if (!foundQueue) {
+            console.log('Still no queue found. Looking for Processing Queue header...');
+            const headers = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5')).filter(h => 
+                h.textContent.includes('Processing Queue')
+            );
+            if (headers.length > 0) {
+                console.log('Found Processing Queue header:', headers[0]);
+                const nextSibling = headers[0].nextElementSibling;
+                console.log('Next sibling after header:', nextSibling);
+                foundQueue = nextSibling;
+            }
+        }
+        
+        if (foundQueue) {
+            queue = foundQueue;
+        } else {
+            return;
+        }
+    }
+    
+    console.log('✅ Processing queue found');
+    console.log('Queue HTML (first 1000 chars):', queue.innerHTML.substring(0, 1000));
+    
+    // Find all dealer panels
+    const panels = queue.querySelectorAll('.dealer-panel');
+    console.log(`Found ${panels.length} dealer panels in queue`);
+    
+    if (panels.length === 0) {
+        console.log('❌ No dealer panels in queue. Add a dealership first.');
+        return;
+    }
+    
+    // Examine first panel in detail
+    const firstPanel = panels[0];
+    console.log('First panel classes:', firstPanel.className);
+    
+    // Find all divs that might contain radio buttons
+    const allDivs = firstPanel.querySelectorAll('div');
+    console.log(`Panel has ${allDivs.length} div elements`);
+    
+    // Find radio buttons
+    const radios = firstPanel.querySelectorAll('input[type="radio"]');
+    console.log(`Panel has ${radios.length} radio buttons`);
+    
+    radios.forEach((radio, i) => {
+        console.log(`Radio ${i}: name="${radio.name}", value="${radio.value}", id="${radio.id}"`);
+        const label = firstPanel.querySelector(`label[for="${radio.id}"]`);
+        if (label) {
+            console.log(`  Label text: ${label.textContent.trim()}`);
+        }
+    });
+    
+    // Find the container that holds the radio buttons
+    if (radios.length > 0) {
+        const radioParent = radios[0].parentElement;
+        console.log('Radio button parent element:', radioParent.className || radioParent.tagName);
+        console.log('Radio button parent HTML:', radioParent.outerHTML.substring(0, 500));
+        
+        // Try to inject MAINTENANCE option here
+        console.log('🔧 ATTEMPTING FORCE INJECTION...');
+        
+        const maintenanceHTML = `
+            <div class="toggle-option" data-value="maintenance" style="display: flex !important;">
+                <input type="radio" id="orderTypeMaintenance_debug" name="${radios[0].name}" value="maintenance">
+                <label for="orderTypeMaintenance_debug" class="modern-radio-label">
+                    <div class="radio-indicator"></div>
+                    <div class="radio-content">
+                        <span style="color: orange;">🔧</span>
+                        <span class="radio-title">MAINTENANCE</span>
+                        <span class="radio-desc">CAO + Manual VINs</span>
+                    </div>
+                </label>
+            </div>
+        `;
+        
+        // Insert after the last radio option
+        const lastOption = radioParent.parentElement.querySelector('.toggle-option:last-child');
+        if (lastOption) {
+            lastOption.insertAdjacentHTML('afterend', maintenanceHTML);
+            console.log('✅ MAINTENANCE option injected after last option!');
+        } else {
+            radioParent.insertAdjacentHTML('beforeend', maintenanceHTML);
+            console.log('✅ MAINTENANCE option injected at end of container!');
+        }
+    }
+};
+
+console.log('🛠️ Manual debug function available: Run debugMaintenanceInjection() in console');
+
+// DIRECT FORCE INJECTION - Works on visible panels
+window.forceMaintenanceOption = () => {
+    console.log('🔧 FORCE INJECTING MAINTENANCE OPTION...');
+    
+    // Find ALL panels that have Bommarito Cadillac
+    const allPanels = Array.from(document.querySelectorAll('*')).filter(elem => {
+        return elem.textContent && 
+               elem.textContent.includes('Bommarito Cadillac') && 
+               (elem.textContent.includes('CAO') || elem.textContent.includes('List'));
+    });
+    
+    console.log(`Found ${allPanels.length} elements with Bommarito text`);
+    
+    if (allPanels.length === 0) {
+        console.log('❌ No Bommarito panels found. Make sure it\'s added to queue.');
+        return;
+    }
+    
+    // Find the one that looks like a dealer panel
+    let targetPanel = null;
+    for (let panel of allPanels) {
+        // Look for radio buttons nearby
+        const radios = panel.querySelectorAll('input[type="radio"]');
+        if (radios.length > 0) {
+            targetPanel = panel;
+            console.log('✅ Found panel with radio buttons:', panel);
+            break;
+        }
+    }
+    
+    if (!targetPanel) {
+        // Try the parent of the first match
+        targetPanel = allPanels[0];
+        console.log('Using first matching panel:', targetPanel);
+    }
+    
+    // Find where the radio buttons are
+    const existingRadios = targetPanel.querySelectorAll('input[type="radio"]');
+    console.log(`Found ${existingRadios.length} existing radio buttons`);
+    
+    if (existingRadios.length === 0) {
+        console.log('❌ No radio buttons found in panel');
+        return;
+    }
+    
+    // Check if MAINTENANCE already exists
+    const existingMaintenance = Array.from(existingRadios).find(r => r.value === 'maintenance');
+    if (existingMaintenance) {
+        console.log('✅ MAINTENANCE option already exists!');
+        existingMaintenance.checked = true;
+        return;
+    }
+    
+    // Get the container that holds the radio options
+    const firstRadio = existingRadios[0];
+    const optionContainer = firstRadio.closest('.toggle-option') || firstRadio.parentElement;
+    const toggleGroup = optionContainer.parentElement;
+    
+    console.log('Radio container:', toggleGroup);
+    
+    // Create and inject MAINTENANCE option
+    const maintenanceDiv = document.createElement('div');
+    maintenanceDiv.className = 'toggle-option';
+    maintenanceDiv.setAttribute('data-value', 'maintenance');
+    maintenanceDiv.style.cssText = 'display: flex !important; visibility: visible !important;';
+    
+    // Get the name from existing radios
+    const radioName = firstRadio.name || 'order_type';
+    const uniqueId = 'orderTypeMaintenance_' + Date.now();
+    
+    maintenanceDiv.innerHTML = `
+        <input type="radio" id="${uniqueId}" name="${radioName}" value="maintenance" style="display: block !important;">
+        <label for="${uniqueId}" class="modern-radio-label" style="display: flex !important;">
+            <div class="radio-indicator"></div>
+            <div class="radio-content">
+                <i class="fas fa-wrench" style="color: #ff6b35;"></i>
+                <span class="radio-title">MAINTENANCE</span>
+                <span class="radio-desc">CAO + Manual VINs</span>
+            </div>
+        </label>
+    `;
+    
+    // Add it to the container
+    toggleGroup.appendChild(maintenanceDiv);
+    
+    console.log('✅ MAINTENANCE option injected successfully!');
+    
+    // Wire up the functionality
+    const newRadio = maintenanceDiv.querySelector('input[type="radio"]');
+    newRadio.addEventListener('change', function() {
+        if (this.checked) {
+            console.log('MAINTENANCE selected!');
+            
+            // Update visual state
+            const panel = this.closest('.dealer-panel');
+            if (panel) {
+                panel.classList.remove('cao', 'list');
+                panel.classList.add('maintenance');
+                
+                // Update the data
+                const dealerName = panel.querySelector('.dealer-name')?.textContent || 'Unknown';
+                console.log(`Updated ${dealerName} to MAINTENANCE type`);
+            }
+        }
+    });
+    
+    // Select it
+    newRadio.checked = true;
+    newRadio.dispatchEvent(new Event('change'));
+};
+
+console.log('🎯 Direct injection available: Run forceMaintenanceOption() in console');
+
+// FORCE SHOW MAINTENANCE - Makes the existing hidden option visible
+window.showMaintenanceOption = () => {
+    console.log('🔍 SEARCHING FOR HIDDEN MAINTENANCE OPTION...');
+    
+    // Find ALL radio buttons with value="maintenance"
+    const maintenanceRadios = document.querySelectorAll('input[type="radio"][value="maintenance"]');
+    console.log(`Found ${maintenanceRadios.length} MAINTENANCE radio buttons`);
+    
+    if (maintenanceRadios.length === 0) {
+        console.log('❌ No MAINTENANCE radio buttons found');
+        return;
+    }
+    
+    // Make each one and its container visible
+    maintenanceRadios.forEach((radio, index) => {
+        console.log(`Processing MAINTENANCE radio ${index + 1}:`);
+        console.log('  Radio ID:', radio.id);
+        console.log('  Radio name:', radio.name);
+        console.log('  Current checked state:', radio.checked);
+        console.log('  Current display:', window.getComputedStyle(radio).display);
+        
+        // Force the radio button to be visible
+        radio.style.display = 'block !important';
+        radio.style.visibility = 'visible !important';
+        radio.style.opacity = '1 !important';
+        
+        // Find the parent toggle-option container
+        let container = radio.closest('.toggle-option');
+        if (!container) {
+            container = radio.parentElement;
+            console.log('  No .toggle-option container, using parent:', container.className);
+        }
+        
+        if (container) {
+            console.log('  Container class:', container.className);
+            console.log('  Container current display:', window.getComputedStyle(container).display);
+            
+            // Force container to be visible with inline styles
+            container.style.cssText = 'display: flex !important; visibility: visible !important; opacity: 1 !important; height: auto !important; overflow: visible !important;';
+            container.removeAttribute('hidden');
+            container.removeAttribute('aria-hidden');
+            
+            // Also check if it has a data-value attribute
+            const dataValue = container.getAttribute('data-value');
+            console.log('  Container data-value:', dataValue);
+            
+            // Check parent containers too
+            let parent = container.parentElement;
+            while (parent && parent !== document.body) {
+                const parentDisplay = window.getComputedStyle(parent).display;
+                if (parentDisplay === 'none') {
+                    console.log('  ⚠️ Parent container is hidden:', parent.className);
+                    parent.style.display = 'block !important';
+                }
+                parent = parent.parentElement;
+            }
+        }
+        
+        // Find and fix the label
+        const label = document.querySelector(`label[for="${radio.id}"]`);
+        if (label) {
+            console.log('  Label found, making visible');
+            label.style.display = 'flex !important';
+            label.style.visibility = 'visible !important';
+            label.style.opacity = '1 !important';
+        }
+        
+        // Check final visibility
+        const finalDisplay = window.getComputedStyle(radio).display;
+        const containerFinalDisplay = container ? window.getComputedStyle(container).display : 'N/A';
+        console.log(`  ✅ Final radio display: ${finalDisplay}`);
+        console.log(`  ✅ Final container display: ${containerFinalDisplay}`);
+    });
+    
+    // Also remove any CSS that might be hiding maintenance options
+    const style = document.createElement('style');
+    style.innerHTML = `
+        .toggle-option[data-value="maintenance"] {
+            display: flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            height: auto !important;
+            overflow: visible !important;
+        }
+        input[value="maintenance"] {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+        label[for*="Maintenance"] {
+            display: flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+    `;
+    document.head.appendChild(style);
+    console.log('✅ Added override CSS to force visibility');
+    
+    // Try to click the first maintenance radio to select it
+    if (maintenanceRadios.length > 0) {
+        maintenanceRadios[0].click();
+        console.log('✅ Clicked MAINTENANCE radio button to select it');
+    }
+};
+
+console.log('🎨 Visibility fix available: Run showMaintenanceOption() in console');
+
+// TARGET THE CORRECT QUEUE PANELS - Not the modal!
+window.addMaintenanceToQueue = () => {
+    console.log('🎯 TARGETING ACTUAL QUEUE PANELS (not modal)...');
+    
+    // Look for the queue container by its content
+    const possibleQueues = [
+        document.querySelector('.queue-container'),
+        document.querySelector('.processing-queue'),
+        document.querySelector('[class*="queue"]'),
+        document.querySelector('.queue-items'),
+        document.querySelector('.order-queue')
+    ].filter(Boolean);
+    
+    console.log(`Found ${possibleQueues.length} potential queue containers`);
+    
+    // Find the container that has Bommarito Cadillac in it
+    let queueContainer = null;
+    const allContainers = document.querySelectorAll('*');
+    
+    for (let container of allContainers) {
+        // Skip the modal
+        if (container.classList.contains('modal') || container.closest('.modal')) {
+            continue;
+        }
+        
+        // Look for container with Bommarito Cadillac that's NOT in a modal
+        if (container.textContent && 
+            container.textContent.includes('Bommarito Cadillac') &&
+            container.textContent.includes('CAO') &&
+            !container.classList.contains('modal') &&
+            container.querySelector && 
+            container.querySelector('input[type="radio"]')) {
+            
+            console.log('Found potential queue panel:', container);
+            console.log('Container classes:', container.className);
+            console.log('Container ID:', container.id);
+            
+            queueContainer = container;
+            break;
+        }
+    }
+    
+    if (!queueContainer) {
+        console.log('❌ No queue panels found with Bommarito Cadillac');
+        console.log('Looking for ANY panel with radio buttons that is NOT in a modal...');
+        
+        // Find all radio buttons
+        const allRadios = document.querySelectorAll('input[type="radio"][name*="order"]');
+        console.log(`Found ${allRadios.length} order-related radio buttons`);
+        
+        for (let radio of allRadios) {
+            // Skip if in modal
+            if (radio.closest('.modal')) {
+                console.log('Skipping radio in modal:', radio.name);
+                continue;
+            }
+            
+            console.log('Found radio NOT in modal:', {
+                name: radio.name,
+                value: radio.value,
+                id: radio.id,
+                checked: radio.checked
+            });
+            
+            // Get the panel this radio is in
+            const panel = radio.closest('.dealer-panel') || 
+                         radio.closest('[class*="panel"]') ||
+                         radio.parentElement.parentElement;
+            
+            if (panel) {
+                console.log('Found panel containing radio:', panel);
+                queueContainer = panel;
+                break;
+            }
+        }
+    }
+    
+    if (!queueContainer) {
+        console.log('❌ Still no queue panels found');
+        return;
+    }
+    
+    console.log('✅ Found queue container, looking for radio buttons...');
+    
+    // Find the radio buttons in this container
+    const radios = queueContainer.querySelectorAll('input[type="radio"]');
+    console.log(`Found ${radios.length} radio buttons in queue panel`);
+    
+    // Check if MAINTENANCE already exists
+    const existingMaintenance = Array.from(radios).find(r => r.value === 'maintenance');
+    if (existingMaintenance) {
+        console.log('✅ MAINTENANCE already exists in queue panel!');
+        existingMaintenance.checked = true;
+        existingMaintenance.click();
+        return;
+    }
+    
+    // Need to add MAINTENANCE option
+    if (radios.length > 0) {
+        const firstRadio = radios[0];
+        const radioContainer = firstRadio.parentElement.parentElement;
+        
+        console.log('Adding MAINTENANCE option to:', radioContainer);
+        
+        const maintenanceHTML = `
+            <div class="toggle-option" data-value="maintenance" style="display: flex !important;">
+                <input type="radio" id="${firstRadio.name}_maintenance" name="${firstRadio.name}" value="maintenance">
+                <label for="${firstRadio.name}_maintenance" class="modern-radio-label" style="display: flex !important;">
+                    <div class="radio-indicator"></div>
+                    <div class="radio-content">
+                        <i class="fas fa-wrench" style="color: #ff6b35;"></i>
+                        <span class="radio-title">MAINTENANCE</span>
+                        <span class="radio-desc">CAO + Manual</span>
+                    </div>
+                </label>
+            </div>
+        `;
+        
+        radioContainer.insertAdjacentHTML('beforeend', maintenanceHTML);
+        
+        // Click it
+        const newRadio = radioContainer.querySelector('input[value="maintenance"]');
+        if (newRadio) {
+            newRadio.click();
+            console.log('✅ MAINTENANCE option added and selected!');
+        }
+    }
+};
+
+console.log('🔧 Queue injection available: Run addMaintenanceToQueue() in console');
