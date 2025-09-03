@@ -106,16 +106,26 @@ class ScraperImportManager:
                 try:
                     # Normalize vehicle data
                     condition_data = vehicle.get('type', '')
-                    normalized_type = normalizer.normalize_vehicle_type(condition_data)
-                    lot_status = normalizer.normalize_lot_status(vehicle.get('status', ''))
+                    status_data = vehicle.get('status', '')
+                    stock_data = vehicle.get('stock')
                     
-                    # Convert to database format
-                    db_lot_status = 'on lot' if lot_status in ['onlot', 'on lot'] else 'off lot'
+                    normalized_type = normalizer.normalize_vehicle_type(condition_data)
+                    lot_status = normalizer.normalize_lot_status(status_data)
+                    
+                    # CRITICAL FIX: Override lot status if no stock number OR in-transit
+                    if not stock_data or 'in-transit' in status_data.lower() or 'in transit' in status_data.lower():
+                        lot_status = 'offlot'  # Force offlot for missing stock OR in-transit
+                    
+                    # Use consistent format for database - CAO system expects 'onlot'/'offlot'
+                    db_lot_status = 'offlot' if lot_status in ['offlot', 'off lot'] else 'onlot'
+                    
+                    # CRITICAL FIX: Handle NULL stock values for database constraint
+                    stock_value = stock_data if stock_data else 'AUTO'
                     
                     normalized_tuple = (
                         vehicle['id'],  # raw_data_id
                         vehicle['vin'],
-                        vehicle['stock'],
+                        stock_value,  # Use 'AUTO' for NULL stock to satisfy NOT NULL constraint
                         normalized_type,  # vehicle_condition
                         vehicle['year'],
                         vehicle['make'],

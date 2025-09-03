@@ -134,21 +134,13 @@ I am Claude, your expert-level coding and social media management assistant, con
 - **Usage**: I can help with code review, documentation, and deployment
 - **Access Method**: Provide specific repository URLs when needed
 
-#### **Google Workspace**
-- **Gmail**: Share relevant email threads via forwarding or screenshots
-- **Drive**: Export documents to local files for analysis
-- **Sheets**: Download as Excel/CSV for processing in this environment
-- **Apps Script**: Develop and test scripts locally, then deploy
 
 #### **Pipedrive CRM**
 - **Data Export**: Regular CSV exports for analysis
 - **API Integration**: Develop integrations within this secure environment
 - **Custom Fields**: Document field mappings in `docs/business-context/`
 
-#### **Social Media Platforms**
-- **Analytics Data**: Export performance data for analysis
-- **Content Planning**: Develop strategies and schedules locally
-- **Asset Management**: Store creative assets in organized folders
+
 
 #### **🆕 Enhanced Business Integrations**
 
@@ -380,7 +372,7 @@ AND import_date = (SELECT MAX(import_date) FROM...)  -- NEVER DO THIS
 **⚙️ GM Network:** Rusty Drewing Cadillac, Rusty Drewing Chevrolet Buick GMC, Suntrup Buick GMC, Weber Chevrolet
 **🔑 Hyundai/Kia:** Auffenberg Hyundai, HW Kia, Kia of Columbia, Suntrup Hyundai South, Suntrup Kia South
 **🚙 Chrysler/Jeep:** Glendale Chrysler Jeep, South County Autos, Joe Machens CDJR
-**🏛️ Lincoln Network:** Dave Sinclair Lincoln, Dave Sinclair Lincoln South, Dave Sinclair Lincoln St. Peters
+1**🏛️ Lincoln Network:** Dave Sinclair Lincoln, Dave Sinclair Lincoln South, Dave Sinclair Lincoln St. Peters
 **🌟 Specialty:** Land Rover Ranch Mirage, Mini of St. Louis, West County Volvo Cars
 **🏭 Multi-Brand:** Joe Machens (Nissan, Hyundai, Toyota), Pappas Toyota, Bommarito West County
 
@@ -436,28 +428,7 @@ AND import_date = (SELECT MAX(import_date) FROM...)  -- NEVER DO THIS
 2. **No Comparison Needed**: Skip VIN history check (we already know what needs graphics)
 3. **Direct to Processing**: Generate QR codes and CSV for listed vehicles
 
-### **🔧 CRITICAL PROCESSING SEQUENCE**
 
-**IMPORTANT: The order of operations below is MANDATORY for Adobe integration**
-
-#### **Step 1: Generate QR Codes FIRST**
-- **Individual QR codes** for each vehicle needing graphics
-- **Links to EXACT vehicle URL** on dealership website (NOT homepage)
-- **File format**: 388x388 PNG
-- **File naming**: `[DealershipName]_QR_Code_[Index].png`
-- **Storage location**: Organized by dealership and date
-
-#### **Step 2: Export Variable Data CSV**
-- **Contains all vehicle information** for Adobe template processing
-- **MUST INCLUDE QR code file paths** as a data column
-- **Format**: Adobe-compatible variable data structure
-- **Critical requirement**: QR codes must exist BEFORE CSV creation
-
-**Why This Order Matters:**
-- Adobe InDesign/Illustrator needs the QR code file paths in the CSV
-- The CSV acts as a data merge source for the graphic templates
-- Adobe pulls both vehicle data AND QR codes to create final graphics
-- Without QR file paths in CSV, Adobe cannot complete the graphics
 
 #### **Step 3: Update VIN History (CRITICAL)**
 **This step is ABSOLUTELY CRITICAL for system accuracy**
@@ -565,9 +536,7 @@ After processing is complete:
 
 ## 🚀 Current Project Priorities
 
-### **Primary Focus: Technology Development**
-1. **PipeDrive Integration** - 2-month transition currently underway for complete CRM automation
-2. **✅ Scraper System Integration - COMPLETE** - All 36 scrapers integrated with enhanced error handling
+
 3. **Mobile Tools Development** - VIN scanning, QR verification for installation team efficiency
 4. **Order Form Integration** - Dynamic PipeDrive-embedded order processing system
 5. **Business Intelligence Dashboard** - Executive dashboard for real-time business insights
@@ -1013,5 +982,6 @@ When CAO returns wrong vehicle counts:
 - Never allow multiple import datasets in normalized_vehicle_data simultaneously  
 - Never skip the normalization step after marking an import as active
 - Never assume normalized data automatically stays in sync with raw data
+- Never try to use raw scraper data compared against dealer-specific vinlogs for cao. ALWAYS USE THE NORMALIZED SCRAPER DATA SET COMPARED AGAINST DEALER-SPECIFIC VINLOGS FOR CAO
 
 **This fix resolves the most critical system reliability issue and ensures accurate CAO processing for all dealerships.**
