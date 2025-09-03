@@ -182,6 +182,14 @@ class MinisFornumApp {
         };
         
         // Progress tracking
+        
+        // Listen for modal wizard completion events
+        window.addEventListener('modalWizardComplete', (event) => {
+            if (event.detail.action === 'clearQueue') {
+                console.log('🧹 IMMEDIATE: Clearing queue on modal completion');
+                this.clearQueue();
+            }
+        });
         this.progressData = {
             totalScrapers: 0,
             completedScrapers: 0,
@@ -3258,6 +3266,10 @@ class MinisFornumApp {
     }
     
     addDealershipToQueue(dealershipName) {
+        // Debug logging to identify trigger source
+        console.log('🔍 DEBUG: addDealershipToQueue called for:', dealershipName);
+        console.trace('Call stack trace:');
+        
         if (this.processingQueue.has(dealershipName)) {
             this.addTerminalMessage(`${dealershipName} already in queue`, 'warning');
             return;
@@ -3314,7 +3326,13 @@ class MinisFornumApp {
                     <p class="help-text">Select dealerships or day buttons to add to queue</p>
                 </div>
             `;
-            if (processBtn) processBtn.disabled = true;
+            if (processBtn) {
+                processBtn.disabled = true;
+                processBtn.innerHTML = `
+                    <i class="fas fa-play"></i>
+                    Process Queue (0)
+                `;
+            }
             return;
         }
         
@@ -3369,6 +3387,8 @@ class MinisFornumApp {
     }
     
     clearQueue() {
+        console.log('🧹 DEBUG: clearQueue called - clearing', this.processingQueue.size, 'items');
+        console.trace('Clear queue call stack:');
         this.processingQueue.clear();
         this.renderQueue();
         this.addTerminalMessage('Queue cleared', 'success');
@@ -3414,10 +3434,8 @@ class MinisFornumApp {
                 // Open wizard modal
                 this.showModal('orderWizardModal');
                 
-                // Initialize the modal wizard
-                if (typeof window.modalWizard === 'undefined') {
-                    window.modalWizard = new ModalOrderWizard();
-                }
+                // Always create a fresh modal wizard instance to prevent state persistence issues
+                window.modalWizard = new ModalOrderWizard();
                 
                 window.modalWizard.initializeFromQueue(queueData);
                 this.addTerminalMessage(`Launched modal wizard for ${this.processingQueue.size} dealerships`, 'success');
@@ -3441,10 +3459,8 @@ class MinisFornumApp {
                 this.addTerminalMessage(`Launched standalone wizard for ${this.processingQueue.size} dealerships`, 'success');
             }
             
-            // Clear queue after launching wizard
-            setTimeout(() => {
-                this.clearQueue();
-            }, 1000);
+            // Queue will be cleared when modal wizard completes successfully
+            // No longer clearing automatically to prevent premature clearing
             
         } catch (error) {
             console.error('Error opening wizard:', error);
@@ -8858,8 +8874,15 @@ Example:
     closeModal() {
         const modal = document.getElementById('orderWizardModal');
         if (modal) {
-            modal.style.display = 'none';
+            modal.classList.remove('show');
+            // Also remove any inline style that might interfere
+            modal.style.display = '';
         }
+        
+        // Dispatch custom event to clear the main app's processing queue
+        window.dispatchEvent(new CustomEvent('modalWizardComplete', {
+            detail: { action: 'clearQueue' }
+        }));
         
         // Reset wizard state
         this.currentStep = 0;

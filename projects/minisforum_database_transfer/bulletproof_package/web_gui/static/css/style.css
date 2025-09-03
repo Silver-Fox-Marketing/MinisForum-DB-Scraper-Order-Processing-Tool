@@ -483,7 +483,7 @@ body {
 
 .header-content {
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
     max-width: 1400px;
     margin: 0 auto;
@@ -493,6 +493,21 @@ body {
     display: flex;
     align-items: center;
     gap: var(--spacing-md);
+    justify-content: center;
+}
+
+.title-with-logo {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    justify-content: center;
+}
+
+.title-text {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    text-align: center;
 }
 
 .header-logo {
@@ -539,11 +554,12 @@ body {
 
 .company-name {
     font-family: var(--font-accent);
-    font-size: 0.9rem;
+    font-size: 1.5rem;
     font-weight: 500;
-    opacity: 0.9;
+    opacity: 1.0;
     letter-spacing: 2px;
     text-transform: uppercase;
+    color: #ffffff !important;
 }
 
 .app-title {
@@ -621,6 +637,29 @@ body {
 .sidebar.collapsed .sidebar-status-section .status-icon {
     font-size: 14px;
     margin: 0;
+}
+
+/* Sidebar Scrape Section - Last scrape info between status and order processing */
+.sidebar-scrape-section {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 4px 20px;
+    margin-bottom: 8px;
+}
+
+.sidebar-scrape-section .last-scrape {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--theme-text-secondary, #94a3b8);
+    text-align: center;
+    opacity: 0.8;
+    white-space: nowrap;
+}
+
+/* Collapsed sidebar - hide last scrape text */
+.sidebar.collapsed .sidebar-scrape-section .last-scrape {
+    display: none;
 }
 
 .status-icon {
@@ -2006,6 +2045,110 @@ body {
 .completion-summary {
     text-align: center;
     padding: 40px 20px;
+}
+
+/* MAINTENANCE Order Styling */
+.maintenance-card .card-icon {
+    background: linear-gradient(135deg, #ff8c00, #ffa500);
+}
+
+.maintenance-badge {
+    background: linear-gradient(135deg, #ff8c00, #ffa500) !important;
+    color: white !important;
+    display: inline-flex;
+    align-items: center;
+}
+
+.maintenance-dealership-container {
+    background: var(--theme-surface);
+    border-radius: 12px;
+    padding: 24px;
+    border: 2px solid rgba(255, 140, 0, 0.2);
+}
+
+.maintenance-sections {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin: 20px 0;
+}
+
+.cao-results-section, .manual-vin-section {
+    background: var(--theme-bg-primary);
+    border-radius: 8px;
+    padding: 20px;
+    border: 1px solid var(--theme-border);
+}
+
+.cao-results-section h4, .manual-vin-section h4 {
+    color: var(--theme-text-primary);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cao-results-preview {
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.vin-preview {
+    padding: 8px;
+    background: var(--theme-surface);
+    border-radius: 4px;
+    margin-bottom: 6px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    border-left: 3px solid var(--primary-red);
+}
+
+.no-results {
+    color: var(--theme-text-secondary);
+    font-style: italic;
+    padding: 12px;
+    text-align: center;
+}
+
+.vin-textarea {
+    width: 100%;
+    min-height: 120px;
+    padding: 12px;
+    border: 2px solid var(--theme-border);
+    border-radius: 6px;
+    background: var(--theme-bg-primary);
+    color: var(--theme-text-primary);
+    font-family: 'Courier New', monospace;
+    resize: vertical;
+    transition: border-color 0.3s ease;
+}
+
+.vin-textarea:focus {
+    border-color: var(--primary-red);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(253, 65, 13, 0.1);
+}
+
+.maintenance-summary {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 8px;
+}
+
+.cao-results-summary {
+    color: var(--theme-text-secondary);
+    font-size: 14px;
+}
+
+@media (max-width: 768px) {
+    .maintenance-sections {
+        grid-template-columns: 1fr;
+    }
+    
+    .queue-summary-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .completion-icon {
@@ -3548,6 +3691,11 @@ body {
 
 .order-type-option.list label {
     color: var(--primary-red);
+}
+
+.order-type-option.maintenance label {
+    color: #ff8c00;
+    font-weight: 600;
 }
 
 /* Queue Actions - Fixed/Sticky on Right Side */
@@ -9864,5 +10012,185 @@ body[data-manual-mode="true"] #startVinLogImport {
     .btn-edit {
         padding: 0.4rem 0.6rem;
         font-size: 0.75rem;
+    }
+}
+
+/* CRITICAL TEMPLATE CACHE BYPASS: Force MAINTENANCE option visibility */
+.toggle-option[data-value="maintenance"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    height: auto !important;
+    overflow: visible !important;
+}
+
+.toggle-option[data-value="maintenance"] input[type="radio"] {
+    display: block !important;
+}
+
+.toggle-option[data-value="maintenance"] .modern-radio-label {
+    display: flex !important;
+    visibility: visible !important;
+}
+
+/* =========================================================================== */
+/* MODERN TESTING MODE TOGGLE PANEL                                           */
+/* =========================================================================== */
+
+.modern-testing-toggle {
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border: 2px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+    user-select: none;
+}
+
+.modern-testing-toggle::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%);
+    transition: left 0.6s ease;
+    z-index: 1;
+}
+
+.modern-testing-toggle:hover::before {
+    left: 100%;
+}
+
+.modern-testing-toggle:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+    border-color: #cbd5e1;
+}
+
+.modern-testing-toggle.active {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border-color: #047857;
+    color: white;
+    box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+}
+
+.modern-testing-toggle.active:hover {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    box-shadow: 0 12px 28px rgba(16, 185, 129, 0.4);
+}
+
+.toggle-content {
+    position: relative;
+    z-index: 2;
+}
+
+.toggle-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.toggle-icon {
+    font-size: 20px;
+    margin-right: 12px;
+    color: #6366f1;
+    transition: all 0.3s ease;
+}
+
+.modern-testing-toggle.active .toggle-icon {
+    color: rgba(255, 255, 255, 0.9);
+    transform: scale(1.1);
+}
+
+.toggle-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1f2937;
+    transition: color 0.3s ease;
+    flex: 1;
+}
+
+.modern-testing-toggle.active .toggle-title {
+    color: white;
+}
+
+.toggle-switch {
+    width: 50px;
+    height: 26px;
+    background: #e5e7eb;
+    border-radius: 13px;
+    position: relative;
+    transition: all 0.3s ease;
+    border: 2px solid #d1d5db;
+}
+
+.modern-testing-toggle.active .toggle-switch {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.switch-slider {
+    width: 20px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    position: absolute;
+    top: 1px;
+    left: 2px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.modern-testing-toggle.active .switch-slider {
+    transform: translateX(24px);
+    background: white;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.toggle-description {
+    font-size: 13px;
+    color: #6b7280;
+    margin: 0;
+    line-height: 1.4;
+    transition: color 0.3s ease;
+}
+
+.modern-testing-toggle.active .toggle-description {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .modern-testing-toggle {
+        padding: 16px;
+        border-radius: 12px;
+    }
+    
+    .toggle-title {
+        font-size: 15px;
+    }
+    
+    .toggle-icon {
+        font-size: 18px;
+    }
+    
+    .toggle-switch {
+        width: 44px;
+        height: 24px;
+    }
+    
+    .switch-slider {
+        width: 18px;
+        height: 18px;
+    }
+    
+    .modern-testing-toggle.active .switch-slider {
+        transform: translateX(20px);
     }
 }

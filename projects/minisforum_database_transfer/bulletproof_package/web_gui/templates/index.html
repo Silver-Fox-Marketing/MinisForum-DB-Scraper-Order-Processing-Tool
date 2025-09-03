@@ -1675,18 +1675,19 @@ SF24002
 
     <!-- Floating Queue Actions Panel - Moved outside main container for fixed positioning -->
     <div class="queue-actions" id="floatingQueueActions" style="display: none;">
-        <!-- Testing Mode Toggle -->
-        <div class="testing-mode-toggle">
-            <label style="display: flex; align-items: center; cursor: pointer; margin: 0;">
-                <input type="checkbox" id="queueTestingMode" style="margin-right: 10px; width: 18px; height: 18px; cursor: pointer;">
-                <span style="font-weight: 500;">
-                    <i class="fas fa-flask" style="margin-right: 5px;"></i>
-                    Testing Mode
-                </span>
-            </label>
-            <p style="margin: 8px 0 0 28px; font-size: 12px; line-height: 1.3;">
-                Skip VIN history logging for testing
-            </p>
+        <!-- Modern Testing Mode Toggle Panel -->
+        <div class="modern-testing-toggle" id="modernTestingToggle" onclick="toggleTestingMode()">
+            <div class="toggle-content">
+                <div class="toggle-header">
+                    <i class="fas fa-flask toggle-icon"></i>
+                    <span class="toggle-title">Testing Mode</span>
+                    <div class="toggle-switch">
+                        <div class="switch-slider"></div>
+                    </div>
+                </div>
+                <p class="toggle-description">Skip VIN history logging for testing</p>
+            </div>
+            <input type="checkbox" id="queueTestingMode" style="display: none;">
         </div>
         
         <button class="btn btn-primary btn-large" id="processQueueBtn" disabled>
@@ -1696,7 +1697,64 @@ SF24002
     </div>
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?cache-bust=order-fix-{{ range(10000, 99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?cache-bust=modern-toggle-{{ range(10000, 99999) | random }}"></script>
+    
+    <!-- MODERN TESTING MODE TOGGLE FUNCTION -->
+    <script>
+    function toggleTestingMode() {
+        const toggle = document.getElementById('modernTestingToggle');
+        const checkbox = document.getElementById('queueTestingMode');
+        
+        // Toggle the active state
+        const isActive = toggle.classList.contains('active');
+        
+        if (isActive) {
+            toggle.classList.remove('active');
+            checkbox.checked = false;
+        } else {
+            toggle.classList.add('active');
+            checkbox.checked = true;
+        }
+        
+        // Add a nice ripple effect
+        const ripple = document.createElement('div');
+        ripple.style.position = 'absolute';
+        ripple.style.borderRadius = '50%';
+        ripple.style.background = isActive ? 'rgba(255, 255, 255, 0.3)' : 'rgba(16, 185, 129, 0.3)';
+        ripple.style.transform = 'scale(0)';
+        ripple.style.animation = 'ripple 0.6s linear';
+        ripple.style.left = '50%';
+        ripple.style.top = '50%';
+        ripple.style.width = '20px';
+        ripple.style.height = '20px';
+        ripple.style.marginLeft = '-10px';
+        ripple.style.marginTop = '-10px';
+        ripple.style.zIndex = '3';
+        
+        toggle.appendChild(ripple);
+        
+        setTimeout(() => {
+            if (ripple.parentNode) {
+                ripple.parentNode.removeChild(ripple);
+            }
+        }, 600);
+        
+        console.log('Testing mode:', checkbox.checked ? 'ENABLED' : 'DISABLED');
+    }
+    
+    // Add ripple animation CSS
+    if (!document.getElementById('ripple-animation')) {
+        const style = document.createElement('style');
+        style.id = 'ripple-animation';
+        style.textContent = `
+            @keyframes ripple {
+                0% { transform: scale(0); opacity: 1; }
+                100% { transform: scale(4); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    </script>
     
     <!-- INLINE MANUAL VIN ENTRY FUNCTIONS - CACHE BYPASS -->
     <script>
