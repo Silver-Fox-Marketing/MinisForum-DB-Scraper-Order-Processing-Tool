@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MinisForum Database Control - Silver Fox Marketing</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=2025081920&cache-bust={{ range(1000, 9999) | random }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=logo-update-{{ range(10000, 99999) | random }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/vin_log_update.css') }}?v=2025081903">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -74,7 +74,7 @@
                     <div class="title-section">
                         <div class="title-with-logo">
                             <div class="title-text">
-                                <span class="company-name">Database & Order Processor</span>
+                                <span class="company-name"></span>
                             </div>
                             <img src="{{ url_for('static', filename='images/car_logo_orange.png') }}?v=123" alt="LotSherpa" class="car-logo">
                         </div>
@@ -473,11 +473,9 @@
                                 
                                 <button class="btn btn-secondary" id="clearQueueBtn">
                                     <i class="fas fa-trash"></i>
-                                    Clear Queue
                                 </button>
                                 <button class="btn btn-primary" id="refreshQueueBtn">
                                     <i class="fas fa-sync"></i>
-                                    Refresh
                                 </button>
                             </div>
                         </div>
@@ -1339,7 +1337,7 @@ SF24002
         <div class="modal-content wizard-modal">
             <div class="modal-header">
                 <div class="modal-header-logo-section">
-                    <img src="{{ url_for('static', filename='images/LS_GLYPH-PRIMARY.svg') }}" alt="LotSherpa" class="modal-wizard-logo">
+                    <img src="{{ url_for('static', filename='images/LS_GLYPH_SMALL_PRIMARY.png') }}" alt="LotSherpa" class="modal-wizard-logo">
                     <div class="modal-header-text">
                         <h3 class="modal-wizard-title">Order Processing System</h3>
                     </div>
@@ -1697,7 +1695,7 @@ SF24002
     </div>
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?cache-bust=modern-toggle-{{ range(10000, 99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?cache-bust=wizard-redesign-{{ range(10000, 99999) | random }}"></script>
     
     <!-- MODERN TESTING MODE TOGGLE FUNCTION -->
     <script>

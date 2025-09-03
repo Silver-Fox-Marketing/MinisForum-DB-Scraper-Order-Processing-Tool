@@ -8827,14 +8827,71 @@ Example:
                         <div class="stat-label">Total Vehicles</div>
                     </div>
                 </div>
-                
-                <div class="completion-message">
-                    <p>Your order processing is complete! All generated files are available for download.</p>
-                </div>
             `;
+            
+            // FORCE DARK MODE FIXES - Bypass CSS caching
+            setTimeout(() => {
+                this.forceDarkModeStyles();
+            }, 100);
         }
     }
     
+    forceDarkModeStyles() {
+        // CRITICAL: Force dark mode styles when CSS caching interferes
+        const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+        if (!isDarkMode) return;
+        
+        console.log('FORCING DARK MODE STYLES - CSS CACHE BYPASS');
+        
+        // Force all summary cards dark styling
+        const summaryCards = document.querySelectorAll('#orderWizardModal .summary-card');
+        summaryCards.forEach(card => {
+            card.style.background = 'rgba(15, 23, 42, 0.95)';
+            card.style.border = '1px solid rgba(51, 65, 85, 0.5)';
+            
+            const cardTitle = card.querySelector('h4');
+            if (cardTitle) {
+                cardTitle.style.color = '#f8fafc';
+                cardTitle.style.fontWeight = '600';
+            }
+            
+            const cardCount = card.querySelector('.card-count');
+            if (cardCount) {
+                cardCount.style.color = '#ffffff';
+                cardCount.style.fontWeight = '700';
+            }
+            
+            const cardText = card.querySelectorAll('p');
+            cardText.forEach(p => {
+                p.style.color = '#cbd5e1';
+            });
+            
+            const cardValues = card.querySelectorAll('.card-value, .card-details');
+            cardValues.forEach(val => {
+                val.style.color = '#ffffff';
+                val.style.fontWeight = '600';
+            });
+        });
+        
+        // Force statistics cards (stat-card class)
+        const statCards = document.querySelectorAll('.stat-card');
+        statCards.forEach(card => {
+            card.style.background = 'rgba(15, 23, 42, 0.95)';
+            card.style.border = '1px solid rgba(51, 65, 85, 0.5)';
+            
+            const statValue = card.querySelector('.stat-value');
+            if (statValue) {
+                statValue.style.color = '#ffffff';
+                statValue.style.fontWeight = '700';
+            }
+            
+            const statLabel = card.querySelector('.stat-label');
+            if (statLabel) {
+                statLabel.style.color = '#cbd5e1';
+            }
+        });
+    }
+
     nextStep() {
         if (this.currentStep < this.steps.length - 1) {
             this.currentStep++;
