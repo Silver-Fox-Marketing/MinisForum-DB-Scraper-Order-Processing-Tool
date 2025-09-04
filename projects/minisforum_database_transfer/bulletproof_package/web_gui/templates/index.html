@@ -4,62 +4,164 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MinisForum Database Control - Silver Fox Marketing</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=edit-button-fixes-{{ range(100000, 999999) | random }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=positioning-and-background-fix-{{ range(100000, 999999) | random }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/vin_log_update.css') }}?v=2025081903">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- Inline CSS to force display fixes -->
+    <!-- Modern Dealership Panel Styles -->
     <style>
-        .dealership-item {
-            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
-            border: 2px solid #e2e8f0 !important;
-            border-radius: 12px !important;
-            padding: 16px 20px !important;
-            margin-bottom: 8px !important;
-            cursor: pointer !important;
+        /* Clean, Modern Dealership Panels */
+        .modern-dealer-panel {
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .modern-dealer-panel:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border-color: #fd410d;
+        }
+        
+        /* Dark mode support */
+        [data-theme="dark"] .modern-dealer-panel {
+            background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+            border-color: #4a5568;
+        }
+        
+        [data-theme="dark"] .modern-dealer-panel:hover {
+            border-color: #fd410d;
+        }
+        
+        /* Panel Content Structure */
+        .modern-dealer-panel .panel-content {
             display: flex;
-            align-items: center !important;
-            justify-content: space-between !important;
-            min-height: 60px !important;
-            overflow: visible !important;
+            flex-direction: column;
+            gap: 12px;
         }
         
-        .dealership-name {
-            font-weight: 600 !important;
-            flex: 1 !important;
-            color: #1e293b !important;
-            font-size: 1rem !important;
-            line-height: 1.4 !important;
-            padding-right: 12px !important;
+        .modern-dealer-panel .dealer-title {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #1e293b;
+            letter-spacing: -0.02em;
         }
         
-        .dealership-type {
-            font-size: 0.75rem !important;
-            font-weight: 600 !important;
-            background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%) !important;
-            color: #475569 !important;
-            padding: 4px 12px !important;
-            border-radius: 20px !important;
-            text-transform: uppercase !important;
-            letter-spacing: 0.5px !important;
-            border: 1px solid #cbd5e1 !important;
-            min-width: 50px !important;
-            text-align: center !important;
+        [data-theme="dark"] .modern-dealer-panel .dealer-title {
+            color: #f1f5f9;
         }
         
-        .dealership-type.cao {
-            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%) !important;
-            color: #1e40af !important;
-            border-color: #bfdbfe !important;
+        .modern-dealer-panel .panel-details {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         
-        .dealership-type.list {
-            background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%) !important;
-            color: #16a34a !important;
-            border-color: #bbf7d0 !important;
+        .modern-dealer-panel .detail-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            font-size: 0.9rem;
+        }
+        
+        .modern-dealer-panel .detail-label {
+            color: #64748b;
+            font-weight: 500;
+        }
+        
+        .modern-dealer-panel .detail-value {
+            color: #334155;
+            font-weight: 600;
+        }
+        
+        [data-theme="dark"] .modern-dealer-panel .detail-label {
+            color: #94a3b8;
+        }
+        
+        [data-theme="dark"] .modern-dealer-panel .detail-value {
+            color: #e2e8f0;
+        }
+        
+        /* Order Type Badge */
+        .modern-dealer-panel .order-type-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .modern-dealer-panel .order-type-badge.cao {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+        }
+        
+        .modern-dealer-panel .order-type-badge.list {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+        
+        /* Selected State */
+        .modern-dealer-panel.selected {
+            background: linear-gradient(135deg, #fd410d, #ff6b3d);
+            border-color: #fd410d;
+        }
+        
+        .modern-dealer-panel.selected .dealer-title,
+        .modern-dealer-panel.selected .detail-label,
+        .modern-dealer-panel.selected .detail-value {
+            color: white;
+        }
+        
+        /* Dragging State */
+        .modern-dealer-panel.dragging {
+            opacity: 0.5;
+            transform: rotate(2deg);
         }
     </style>
+    
+    <style>
+    /* Old dealership card styles - TO BE REMOVED */
+    [data-theme="dark"] .dealership-card,
+    [data-theme="dark"] .dealership-cards-grid .dealership-card,
+    body[data-theme="dark"] .dealership-card {
+        background: #3a3a3a !important;
+        background-color: #3a3a3a !important;
+        border: 1px solid #4a4a4a !important;
+        border-radius: 8px !important;
+        padding: 24px !important;
+        color: #f8fafc !important;
+        margin-bottom: 16px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 16px !important;
+    }
+    
+    [data-theme="dark"] .dealership-card .dealership-name,
+    [data-theme="dark"] .dealership-card h3,
+    [data-theme="dark"] .dealership-name,
+    body[data-theme="dark"] .dealership-name {
+        color: #f8fafc !important;
+        background: transparent !important;
+        font-weight: 600 !important;
+        font-size: 1rem !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        position: relative !important;
+        top: auto !important;
+        left: auto !important;
+        transform: none !important;
+    }
+    </style>
+
 </head>
 <body>
     <div class="app-container">
@@ -505,23 +607,23 @@
                                     <div class="day-buttons">
                                         <button class="day-btn" data-day="monday">
                                             <i class="fas fa-calendar-day"></i>
-                                            Monday
+                                            MON
                                         </button>
                                         <button class="day-btn" data-day="tuesday">
                                             <i class="fas fa-calendar-day"></i>
-                                            Tuesday
+                                            TUES
                                         </button>
                                         <button class="day-btn" data-day="wednesday">
                                             <i class="fas fa-calendar-day"></i>
-                                            Wednesday
+                                            WED
                                         </button>
                                         <button class="day-btn" data-day="thursday">
                                             <i class="fas fa-calendar-day"></i>
-                                            Thursday
+                                            THURS
                                         </button>
                                         <button class="day-btn" data-day="friday">
                                             <i class="fas fa-calendar-day"></i>
-                                            Friday
+                                            FRI
                                         </button>
                                     </div>
                                 </div>

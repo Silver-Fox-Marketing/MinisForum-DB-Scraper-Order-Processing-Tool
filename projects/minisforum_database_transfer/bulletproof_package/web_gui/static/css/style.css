@@ -208,7 +208,7 @@ Silver Fox Marketing Brand Colors and Typography
     /* Theme System - Light Mode (Default) */
     --theme-bg-primary: #ffffff;
     --theme-bg-secondary: #f8fafc;
-    --theme-bg-tertiary: #f1f5f9;
+    --theme-bg-tertiary: #6b7280;
     --theme-surface: #ffffff;
     --theme-surface-elevated: #ffffff;
     --theme-border: #e2e8f0;
@@ -224,7 +224,7 @@ Silver Fox Marketing Brand Colors and Typography
 :root[data-theme="dark"] {
     --theme-bg-primary: #1a1a1a;      /* Professional dark background */
     --theme-bg-secondary: #2d2d2d;    /* Slightly lighter dark */
-    --theme-bg-tertiary: #3a3a3a;     /* Medium dark for cards */
+    --theme-bg-tertiary: #6b7280;     /* Grey for cards */
     --theme-surface: #2a2a2a;         /* Card backgrounds */
     --theme-surface-elevated: #404040; /* Elevated card backgrounds */
     --theme-border: #4a4a4a;          /* Subtle borders */
@@ -3085,7 +3085,7 @@ body {
 
 /* Selection Panel (Left Side) */
 .selection-panel {
-    background: var(--theme-bg-primary);
+    background: var(--theme-bg-secondary);
     border: 1px solid var(--theme-border);
     border-radius: 16px;
     padding: var(--spacing-xl);
@@ -3140,70 +3140,137 @@ body {
     overflow-y: auto;
 }
 
-/* Day Buttons */
+/* Modern Professional Day Buttons */
 .day-buttons {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-    gap: var(--spacing-md);
-    padding: 8px;
-    margin: -8px;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: var(--spacing-lg);
+    padding: var(--spacing-md);
+    margin: -var(--spacing-sm);
 }
 
 .day-btn {
-    background: var(--theme-bg-tertiary);
-    border: 2px solid var(--theme-border);
-    border-radius: 12px;
-    transition: background-color 0.3s ease, border-color 0.3s ease;
-    padding: var(--spacing-md) var(--spacing-sm);
+    background: linear-gradient(135deg, var(--theme-surface) 0%, var(--theme-bg-tertiary) 100%);
+    border: 1px solid var(--theme-border);
+    border-radius: 16px;
+    padding: var(--spacing-lg) var(--spacing-md);
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.4s cubic-bezier(0.23, 1, 0.320, 1);
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--spacing-xs);
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--theme-text-secondary);
-    transition: color 0.3s ease;
+    gap: var(--spacing-sm);
+    font-size: 0.95rem;
+    font-weight: 650;
+    color: var(--primary-red);
+    text-shadow: 0 0 10px rgba(253, 65, 13, 0.5), 0 0 20px rgba(253, 65, 13, 0.3);
     position: relative;
     overflow: hidden;
+    backdrop-filter: blur(10px);
+    box-shadow: 
+        0 4px 6px -1px rgba(0, 0, 0, 0.1),
+        0 2px 4px -1px rgba(0, 0, 0, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    min-height: 80px;
+    justify-content: center;
+}
+
+.day-btn:before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    border-radius: 16px;
 }
 
 .day-btn:hover {
-    background: var(--theme-surface-elevated);
-    border-color: var(--primary-red);
-    transform: translateY(-2px) scale(1.02);
-    box-shadow: 0 8px 25px -8px rgba(231, 76, 60, 0.3), 0 0 0 1px rgba(231, 76, 60, 0.1);
+    background: linear-gradient(135deg, var(--theme-surface-elevated) 0%, var(--theme-surface) 100%);
+    border-color: rgba(253, 65, 13, 0.4);
+    transform: translateY(-6px) scale(1.03);
+    box-shadow: 
+        0 20px 25px -5px rgba(253, 65, 13, 0.15),
+        0 10px 10px -5px rgba(253, 65, 13, 0.1),
+        0 0 0 1px rgba(253, 65, 13, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
     color: var(--primary-red);
+    text-shadow: 0 0 15px rgba(253, 65, 13, 0.8), 0 0 30px rgba(253, 65, 13, 0.5), 0 0 40px rgba(253, 65, 13, 0.3);
 }
 
 .day-btn:hover:before {
+    opacity: 1;
+}
+
+.day-btn:hover:after {
     content: '';
     position: absolute;
     top: 0;
     left: -100%;
     width: 100%;
     height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
-    animation: shimmer 0.6s ease-out;
+    background: linear-gradient(90deg, transparent, rgba(253, 65, 13, 0.1), transparent);
+    animation: modernShimmer 0.8s ease-out;
 }
 
-@keyframes shimmer {
+@keyframes modernShimmer {
     to {
         left: 100%;
     }
 }
 
 .day-btn.active {
-    background: linear-gradient(135deg, var(--primary-red) 0%, #ff4757 100%);
+    background: linear-gradient(135deg, var(--primary-red) 0%, #e73c4c 50%, #fd410d 100%);
     color: var(--white);
     border-color: var(--primary-red);
-    box-shadow: 0 8px 25px -8px rgba(231, 76, 60, 0.4), 0 0 0 1px rgba(231, 76, 60, 0.2);
-    transform: translateY(-1px);
+    box-shadow: 
+        0 20px 25px -5px rgba(253, 65, 13, 0.4),
+        0 10px 10px -5px rgba(253, 65, 13, 0.2),
+        0 0 0 1px rgba(253, 65, 13, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.1);
+    transform: translateY(-3px) scale(1.02);
+    font-weight: 700;
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.8), 0 0 30px rgba(253, 65, 13, 0.6), 0 0 40px rgba(253, 65, 13, 0.4);
+}
+
+.day-btn.active:before {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%);
+    opacity: 1;
+}
+
+.day-btn.active:hover {
+    transform: translateY(-8px) scale(1.05);
+    box-shadow: 
+        0 25px 30px -5px rgba(253, 65, 13, 0.5),
+        0 15px 15px -5px rgba(253, 65, 13, 0.25),
+        0 0 0 1px rgba(253, 65, 13, 0.6),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    text-shadow: 0 0 25px rgba(255, 255, 255, 1), 0 0 35px rgba(253, 65, 13, 0.8), 0 0 50px rgba(253, 65, 13, 0.6);
 }
 
 .day-btn i {
-    font-size: 0.9rem;
+    font-size: 1.1rem;
+    opacity: 0.9;
+    color: var(--primary-red);
+    filter: drop-shadow(0 0 8px rgba(253, 65, 13, 0.4)) drop-shadow(0 0 15px rgba(253, 65, 13, 0.2));
+    transition: all 0.3s ease;
+}
+
+.day-btn:hover i {
+    opacity: 1;
+    transform: scale(1.1);
+    filter: drop-shadow(0 0 12px rgba(253, 65, 13, 0.7)) drop-shadow(0 0 25px rgba(253, 65, 13, 0.4)) drop-shadow(0 0 35px rgba(253, 65, 13, 0.2));
+}
+
+.day-btn.active i {
+    opacity: 1;
+    color: var(--white);
+    filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 25px rgba(253, 65, 13, 0.6)) drop-shadow(0 0 35px rgba(253, 65, 13, 0.4));
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
 }
 
 /* Modern Sleek Search Bar */
@@ -3326,64 +3393,8 @@ body {
     padding: 8px;
 }
 
-.dealership-item {
-    background: var(--theme-bg-tertiary);
-    border: 2px solid var(--theme-border);
-    border-radius: 16px;
-    transition: background-color 0.3s ease, border-color 0.3s ease;
-    padding: 16px;
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: space-between;
-    position: relative;
-    overflow: visible;
-    min-height: 100px;
-    height: 100px;
-}
+/* REMOVED OLD DEALERSHIP-ITEM STYLES - USING MODERN-DEALER-PANEL INSTEAD */
 
-.dealership-item:hover {
-    background: var(--theme-surface-elevated);
-    border-color: var(--primary-red);
-    transform: translateY(-4px) scale(1.02);
-    box-shadow: 0 12px 32px rgba(253, 65, 13, 0.15), 0 0 0 1px rgba(253, 65, 13, 0.1);
-}
-
-.dealership-item:hover:before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(231, 76, 60, 0.08), transparent);
-    animation: slideIn 0.5s ease-out;
-}
-
-@keyframes slideIn {
-    to {
-        left: 100%;
-    }
-}
-
-.dealership-item.selected {
-    background: linear-gradient(135deg, var(--primary-red), var(--light-red));
-    border-color: var(--primary-red);
-    color: var(--white);
-    box-shadow: 0 8px 24px rgba(253, 65, 13, 0.3);
-}
-
-.dealership-item.selected .dealership-name {
-    color: white !important;
-}
-
-.dealership-item.selected .dealership-type {
-    background: rgba(255, 255, 255, 0.2);
-    color: white;
-    border-color: rgba(255, 255, 255, 0.3);
-}
 
 /* Modern Card Content */
 .dealership-card-header {
@@ -3477,35 +3488,6 @@ body {
     border-color: #bbf7d0;
 }
 
-/* Remove old inline styles that conflict */
-.dealership-item .dealership-name {
-    font-weight: 700 !important;
-    color: #1e293b !important;
-    font-size: 0.95rem !important;
-    line-height: 1.3 !important;
-    margin-bottom: 4px !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    white-space: nowrap !important;
-    padding-right: 0 !important;
-    flex: none !important;
-}
-
-/* Drag and Drop Styles */
-.dealership-item[draggable="true"] {
-    cursor: grab;
-}
-
-.dealership-item[draggable="true"]:active {
-    cursor: grabbing;
-}
-
-.dealership-item.dragging {
-    opacity: 0.5;
-    cursor: grabbing;
-    transform: scale(0.95);
-    transition: all 0.2s ease;
-}
 
 .dealership-name {
     font-weight: 600;
@@ -5351,79 +5333,147 @@ body {
     color: var(--text-secondary);
 }
 
-/* Modern Analytics Sub-Tab Navigation */
+/* Modern Professional Sub-Tab Navigation */
 .sub-tab-navigation {
     display: flex;
-    gap: 12px;
-    margin: 24px 0;
-    padding: 8px;
-    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-    border-radius: 16px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    gap: var(--spacing-lg);
+    margin: var(--spacing-xl) 0;
+    padding: var(--spacing-lg);
+    background: linear-gradient(135deg, var(--theme-surface) 0%, var(--theme-bg-tertiary) 100%);
+    border: 1px solid var(--theme-border);
+    border-radius: 20px;
+    backdrop-filter: blur(10px);
+    box-shadow: 
+        0 8px 16px -4px rgba(0, 0, 0, 0.1),
+        0 4px 8px -2px rgba(0, 0, 0, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    position: relative;
+    overflow: hidden;
+}
+
+.sub-tab-navigation:before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+    border-radius: 20px;
 }
 
 .sub-tab-button {
-    background: transparent;
-    border: 2px solid transparent;
-    color: #64748b;
-    padding: 12px 20px;
-    border-radius: 12px;
+    background: linear-gradient(135deg, var(--theme-surface-elevated) 0%, var(--theme-surface) 100%);
+    border: 1px solid var(--theme-border);
+    color: var(--primary-red);
+    text-shadow: 0 0 8px rgba(253, 65, 13, 0.3), 0 0 15px rgba(253, 65, 13, 0.2);
+    padding: var(--spacing-lg) var(--spacing-xl);
+    border-radius: 16px;
     cursor: pointer;
-    font-size: 0.9rem;
-    font-weight: 600;
+    font-size: 1rem;
+    font-weight: 650;
     display: flex;
     align-items: center;
-    gap: 8px;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    gap: var(--spacing-sm);
+    transition: all 0.4s cubic-bezier(0.23, 1, 0.320, 1);
     position: relative;
     overflow: hidden;
-    min-height: 44px;
-    box-shadow: none;
+    min-height: 56px;
+    backdrop-filter: blur(8px);
+    box-shadow: 
+        0 4px 6px -1px rgba(0, 0, 0, 0.1),
+        0 2px 4px -1px rgba(0, 0, 0, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    z-index: 1;
 }
 
-.sub-tab-button::before {
+.sub-tab-button:before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    border-radius: 16px;
+}
+
+.sub-tab-button:hover:before {
+    opacity: 1;
+}
+
+.sub-tab-button:hover:after {
     content: '';
     position: absolute;
     top: 0;
     left: -100%;
     width: 100%;
     height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-    transition: left 0.6s ease;
-}
-
-.sub-tab-button:hover::before {
-    left: 100%;
+    background: linear-gradient(90deg, transparent, rgba(253, 65, 13, 0.15), transparent);
+    animation: modernShimmer 0.8s ease-out;
+    z-index: -1;
 }
 
 .sub-tab-button:hover {
-    background: linear-gradient(135deg, rgba(253, 65, 13, 0.08), rgba(253, 65, 13, 0.12));
-    color: var(--dark-red);
-    border-color: rgba(253, 65, 13, 0.2);
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(253, 65, 13, 0.15);
+    background: linear-gradient(135deg, var(--theme-surface) 0%, var(--theme-surface-elevated) 100%);
+    border-color: rgba(253, 65, 13, 0.4);
+    transform: translateY(-4px) scale(1.02);
+    text-shadow: 0 0 12px rgba(253, 65, 13, 0.6), 0 0 25px rgba(253, 65, 13, 0.4), 0 0 35px rgba(253, 65, 13, 0.2);
+    box-shadow: 
+        0 16px 20px -4px rgba(253, 65, 13, 0.15),
+        0 8px 12px -2px rgba(253, 65, 13, 0.1),
+        0 0 0 1px rgba(253, 65, 13, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .sub-tab-button.active {
-    background: linear-gradient(135deg, var(--primary-red), var(--dark-red));
-    color: white;
+    background: linear-gradient(135deg, var(--primary-red) 0%, #e73c4c 50%, #fd410d 100%);
+    color: var(--white);
     border-color: var(--primary-red);
-    box-shadow: 0 8px 24px rgba(253, 65, 13, 0.3);
-    transform: translateY(-2px) scale(1.02);
+    text-shadow: 0 0 15px rgba(255, 255, 255, 0.8), 0 0 25px rgba(253, 65, 13, 0.6), 0 0 35px rgba(253, 65, 13, 0.4);
+    transform: translateY(-3px) scale(1.02);
+    font-weight: 700;
+    box-shadow: 
+        0 16px 20px -4px rgba(253, 65, 13, 0.4),
+        0 8px 12px -2px rgba(253, 65, 13, 0.2),
+        0 0 0 1px rgba(253, 65, 13, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.1);
+}
+
+.sub-tab-button.active:before {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%);
+    opacity: 1;
+}
+
+.sub-tab-button.active:hover {
+    transform: translateY(-6px) scale(1.04);
+    text-shadow: 0 0 20px rgba(255, 255, 255, 1), 0 0 30px rgba(253, 65, 13, 0.8), 0 0 45px rgba(253, 65, 13, 0.6);
+    box-shadow: 
+        0 20px 25px -4px rgba(253, 65, 13, 0.5),
+        0 12px 16px -2px rgba(253, 65, 13, 0.25),
+        0 0 0 1px rgba(253, 65, 13, 0.6),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 .sub-tab-button.active i {
-    color: white;
+    color: var(--white);
+    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 20px rgba(253, 65, 13, 0.6)) drop-shadow(0 0 30px rgba(253, 65, 13, 0.4));
     transform: scale(1.1);
 }
 
 .sub-tab-button i {
-    font-size: 1rem;
-    transition: all 0.2s ease;
+    font-size: 1.1rem;
+    color: var(--primary-red);
+    filter: drop-shadow(0 0 6px rgba(253, 65, 13, 0.4)) drop-shadow(0 0 12px rgba(253, 65, 13, 0.2));
+    transition: all 0.3s ease;
 }
 
 .sub-tab-button:hover i {
-    transform: scale(1.05);
+    transform: scale(1.08);
+    filter: drop-shadow(0 0 10px rgba(253, 65, 13, 0.7)) drop-shadow(0 0 20px rgba(253, 65, 13, 0.4)) drop-shadow(0 0 30px rgba(253, 65, 13, 0.2));
 }
 
 /* Sub-tab panels */
@@ -10793,6 +10843,205 @@ html[data-theme="dark"] #orderWizardModal .completion-message::before {
 
 [data-theme="dark"] #orderWizardModal .btn-save.btn-icon-only:hover {
     background: #047857;
+}
+
+/* CRITICAL DARK MODE FIX: CAO Processing Stage Text Colors */
+[data-theme="dark"] #orderWizardModal .cao-progress,
+[data-theme="dark"] #orderWizardModal .processing-dealership,
+[data-theme="dark"] #orderWizardModal .processing-status,
+[data-theme="dark"] #orderWizardModal .cao-processing-item {
+    color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] #orderWizardModal .processing-dealership span,
+[data-theme="dark"] #orderWizardModal .processing-status span,
+[data-theme="dark"] #orderWizardModal .cao-progress span {
+    color: #f8fafc !important;
+    font-weight: 500 !important;
+}
+
+[data-theme="dark"] #orderWizardModal .step-title {
+    color: #f9fafb !important;
+}
+
+[data-theme="dark"] #orderWizardModal .step-description {
+    color: #d1d5db !important;
+}
+
+/* Force override any hardcoded black text in processing areas */
+[data-theme="dark"] #orderWizardModal .cao-progress *,
+[data-theme="dark"] #orderWizardModal #modalCaoProgress *,
+[data-theme="dark"] #orderWizardModal #caoProcessingStatus * {
+    color: #e2e8f0 !important;
+}
+
+/* Emergency fix for any remaining black text */
+[data-theme="dark"] #orderWizardModal .wizard-step * {
+    color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] #orderWizardModal .wizard-step h2,
+[data-theme="dark"] #orderWizardModal .wizard-step h3 {
+    color: #f9fafb !important;
+}
+
+/* CRITICAL DARK MODE FIX: Sub-Tab Navigation (Order Queue/Scraper Control) */
+[data-theme="dark"] .sub-tab-navigation {
+    background: linear-gradient(135deg, #1f2937 0%, #111827 100%) !important;
+    border: 1px solid rgba(55, 65, 81, 0.6) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] .sub-tab-button {
+    color: #d1d5db !important;
+    background: transparent !important;
+    border-color: transparent !important;
+}
+
+[data-theme="dark"] .sub-tab-button:hover {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.25)) !important;
+    color: #ef4444 !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+[data-theme="dark"] .sub-tab-button.active {
+    background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+    color: #ffffff !important;
+    border-color: #ef4444 !important;
+    box-shadow: 0 8px 24px rgba(239, 68, 68, 0.4) !important;
+}
+
+[data-theme="dark"] .sub-tab-button.active i {
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] .sub-tab-button i {
+    color: #9ca3af !important;
+}
+
+[data-theme="dark"] .sub-tab-button:hover i {
+    color: #ef4444 !important;
+}
+
+/* Force override any cached light styles */
+[data-theme="dark"] .sub-tab-navigation,
+body[data-theme="dark"] .sub-tab-navigation,
+html[data-theme="dark"] .sub-tab-navigation {
+    background: linear-gradient(135deg, #1f2937 0%, #111827 100%) !important;
+    box-shadow: inset 0 1px 0 rgba(55, 65, 81, 0.6) !important;
+}
+
+/* CRITICAL DARK MODE FIX: Individual Dealership Cards (Left Panel) */
+[data-theme="dark"] .dealership-cards-grid .dealership-card {
+    background: var(--theme-bg-tertiary) !important;
+    border: 1px solid var(--theme-border) !important;
+    color: var(--theme-text-primary) !important;
+}
+
+[data-theme="dark"] .dealership-card-header {
+    border-bottom: 1px solid var(--theme-border) !important;
+}
+
+[data-theme="dark"] .dealership-card-header h4,
+[data-theme="dark"] .dealership-name {
+    color: var(--theme-text-primary) !important;
+}
+
+[data-theme="dark"] .dealership-subtitle {
+    color: var(--theme-text-secondary) !important;
+}
+
+[data-theme="dark"] .dealership-card:hover {
+    background: var(--theme-bg-secondary) !important;
+    border-color: var(--primary-red) !important;
+}
+
+/* Force maximum specificity for dealership cards in Individual Dealerships section */
+[data-theme="dark"] #order-queue-panel .dealership-cards-grid .dealership-card,
+body[data-theme="dark"] .dealership-cards-grid .dealership-card,
+html[data-theme="dark"] .dealership-cards-grid .dealership-card {
+    background: rgba(55, 65, 81, 0.8) !important;
+    border: 1px solid rgba(75, 85, 99, 0.6) !important;
+    color: #f8fafc !important;
+}
+
+/* ABSOLUTE OVERRIDE: Force Individual Dealerships to match Processing Queue exactly */
+[data-theme="dark"] .selection-panel,
+[data-theme="dark"] .queue-layout .selection-panel,
+body[data-theme="dark"] .selection-panel,
+html[data-theme="dark"] .selection-panel {
+    background: var(--theme-bg-primary) !important;
+    background-color: var(--theme-bg-primary) !important;
+}
+
+/* ABSOLUTE OVERRIDE: Individual Dealerships grid container to match Processing Queue */
+[data-theme="dark"] .dealership-cards-grid,
+body[data-theme="dark"] .dealership-cards-grid,
+html[data-theme="dark"] .dealership-cards-grid {
+    background: var(--theme-bg-primary) !important;
+    background-color: var(--theme-bg-primary) !important;
+}
+
+/* ABSOLUTE OVERRIDE: Individual dealership cards to match Processing Queue exactly */
+[data-theme="dark"] .dealership-card,
+[data-theme="dark"] .dealership-cards-grid .dealership-card,
+[data-theme="dark"] #dealershipCardsGrid .dealership-card,
+body[data-theme="dark"] .dealership-card,
+html[data-theme="dark"] .dealership-card,
+[data-theme="dark"] div[class*="dealership-card"] {
+    background: var(--theme-bg-tertiary) !important;
+    background-color: var(--theme-bg-tertiary) !important;
+    border: 1px solid var(--theme-border) !important;
+    border-radius: var(--radius-md) !important;
+    padding: var(--spacing-lg) !important;
+    color: #f8fafc !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: var(--spacing-md) !important;
+    margin-bottom: var(--spacing-md) !important;
+}
+
+/* ABSOLUTE OVERRIDE: All dealership names to match Processing Queue styling with proper positioning */
+[data-theme="dark"] .queue-item .queue-dealership-name,
+[data-theme="dark"] .queue-dealership-name,
+[data-theme="dark"] .dealership-card .dealership-name,
+[data-theme="dark"] .dealership-card h3,
+[data-theme="dark"] .dealership-name,
+body[data-theme="dark"] .queue-dealership-name,
+body[data-theme="dark"] .dealership-name,
+html[data-theme="dark"] .queue-dealership-name,
+html[data-theme="dark"] .dealership-name {
+    color: #f8fafc !important;
+    background: transparent !important;
+    font-weight: 600 !important;
+    font-size: 1rem !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    transform: none !important;
+    z-index: auto !important;
+}
+
+/* FIX: Dealership card content structure and alignment */
+[data-theme="dark"] .dealership-card .dealership-header,
+[data-theme="dark"] .dealership-card .card-content,
+body[data-theme="dark"] .dealership-card .dealership-header,
+body[data-theme="dark"] .dealership-card .card-content {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    width: 100% !important;
+    position: relative !important;
+}
+
+/* NUCLEAR FALLBACK: Override any remaining positioning issues */
+[data-theme="dark"] .selection-panel *,
+[data-theme="dark"] .dealership-cards-grid *,
+body[data-theme="dark"] .selection-panel *,
+html[data-theme="dark"] .selection-panel * {
+    background: inherit !important;
 }
 
 /* Responsive design */
