@@ -10708,6 +10708,93 @@ html[data-theme="dark"] #orderWizardModal .completion-message::before {
     color: #cbd5e1 !important;
 }
 
+/* Icon-only edit button styling */
+#orderWizardModal .btn-edit.btn-icon-only {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 4px;
+    background: #4a5568;
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease;
+}
+
+#orderWizardModal .btn-edit.btn-icon-only:hover {
+    background: #5a6578;
+}
+
+#orderWizardModal .btn-edit.btn-icon-only i {
+    font-size: 14px;
+}
+
+/* Save button styling to match edit button */
+#orderWizardModal .btn-save.btn-icon-only {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 4px;
+    background: #059669;
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#orderWizardModal .btn-save.btn-icon-only:hover {
+    background: #047857;
+}
+
+#orderWizardModal .btn-save.btn-icon-only i {
+    font-size: 14px;
+}
+
+/* VIN column width fix for review table */
+#orderWizardModal .vehicle-data-table td:nth-child(6) {
+    min-width: 160px;
+    font-family: monospace;
+    font-size: 0.9rem;
+}
+
+#orderWizardModal .vin-display {
+    white-space: nowrap;
+    font-family: monospace;
+}
+
+/* Editable input styling */
+#orderWizardModal .edit-input {
+    width: 100%;
+    padding: 4px 8px;
+    border: 1px solid #4a5568;
+    border-radius: 4px;
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+/* Dark mode edit button */
+[data-theme="dark"] #orderWizardModal .btn-edit.btn-icon-only {
+    background: #374151;
+}
+
+[data-theme="dark"] #orderWizardModal .btn-edit.btn-icon-only:hover {
+    background: #4b5563;
+}
+
+[data-theme="dark"] #orderWizardModal .btn-save.btn-icon-only {
+    background: #065f46;
+}
+
+[data-theme="dark"] #orderWizardModal .btn-save.btn-icon-only:hover {
+    background: #047857;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
     #orderWizardModal .wizard-modal {

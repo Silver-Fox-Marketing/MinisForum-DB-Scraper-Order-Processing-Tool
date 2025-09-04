@@ -1475,9 +1475,13 @@ def import_vin_log_csv():
 def manual_vin_import():
     """Import VINs manually entered by user into dealership-specific VIN log"""
     try:
+        logger.info("=== MANUAL VIN IMPORT STARTED ===")
+        
         data = request.get_json()
+        logger.info(f"Request data received: {data}")
         
         if not data:
+            logger.error("No data provided in request")
             return jsonify({'error': 'No data provided'}), 400
         
         dealership_name = data.get('dealership_name')
@@ -1485,13 +1489,18 @@ def manual_vin_import():
         import_date = data.get('import_date')
         source = data.get('source', 'manual_entry')
         
+        logger.info(f"Parsed request - Dealership: {dealership_name}, VIN count: {len(vins)}, Import date: {import_date}, Source: {source}")
+        
         if not dealership_name:
+            logger.error("No dealership name provided")
             return jsonify({'error': 'Dealership name is required'}), 400
             
         if not vins or len(vins) == 0:
+            logger.error("No VINs provided")
             return jsonify({'error': 'No VINs provided'}), 400
         
         logger.info(f"Manual VIN import for {dealership_name}: {len(vins)} VINs")
+        logger.info(f"VIN data structure: {vins[:2] if len(vins) > 1 else vins}")  # Show first 2 VINs
         
         # Get dealership-specific VIN log table name (match existing format)
         def get_dealership_vin_log_table(dealership_name):
@@ -1510,6 +1519,7 @@ def manual_vin_import():
         logger.info(f"Using VIN log table: {table_name}")
         
         # Check if table exists, create if not
+        logger.info("Checking if VIN log table exists...")
         table_check = db_manager.execute_query("""
             SELECT table_name 
             FROM information_schema.tables 
@@ -1517,75 +1527,101 @@ def manual_vin_import():
             AND table_name = %s
         """, ('public', table_name))
         
+        logger.info(f"Table check result: {table_check}")
+        
         if not table_check:
-            logger.info(f"Creating VIN log table: {table_name}")
+            logger.info(f"Table doesn't exist, creating VIN log table: {table_name}")
             create_table_sql = f"""
             CREATE TABLE {table_name} (
                 vin VARCHAR(17) NOT NULL,
-                processed_date TIMESTAMP DEFAULT NOW(),
+                order_number VARCHAR(100),
+                processed_date DATE NOT NULL,
                 order_type VARCHAR(50),
                 template_type VARCHAR(50),
-                order_number VARCHAR(100),
-                order_date TIMESTAMP,
-                source VARCHAR(50) DEFAULT 'manual_entry',
                 created_at TIMESTAMP DEFAULT NOW(),
-                updated_at TIMESTAMP DEFAULT NOW(),
+                imported_at TIMESTAMP DEFAULT NOW(),
                 PRIMARY KEY (vin, processed_date)
             );
             """
             db_manager.execute_query(create_table_sql)
-            logger.info(f"Created VIN log table: {table_name}")
+            logger.info(f"SUCCESS: Created VIN log table: {table_name}")
+        else:
+            logger.info(f"Table exists: {table_name}")
         
         # Process VINs
         imported_count = 0
         errors = []
         
-        for vin_data in vins:
+        logger.info(f"Starting to process {len(vins)} VINs...")
+        
+        for i, vin_data in enumerate(vins):
             try:
+                logger.info(f"=== Processing VIN {i+1}/{len(vins)} ===")
+                logger.info(f"VIN data: {vin_data}")
+                
                 vin = vin_data['vin'].strip().upper()
                 order_number = vin_data.get('order_number', '')
                 processed_date = vin_data.get('processed_date', import_date)
                 
+                logger.info(f"Extracted VIN: '{vin}' (length: {len(vin)})")
+                logger.info(f"Order number: '{order_number}'")
+                logger.info(f"Processed date: {processed_date}")
+                
                 if not vin or len(vin) != 17:
-                    errors.append(f"Invalid VIN: {vin}")
+                    error_msg = f"Invalid VIN: '{vin}' (length: {len(vin)}, expected 17)"
+                    errors.append(error_msg)
+                    logger.warning(error_msg)
                     continue
                 
                 # Check if VIN already exists (prevent duplicates)
+                logger.info(f"Checking if VIN {vin} already exists in {table_name}...")
                 existing_check = db_manager.execute_query(f"""
                     SELECT vin FROM {table_name} WHERE vin = %s
                 """, (vin,))
+                
+                logger.info(f"Duplicate check result: {existing_check}")
                 
                 if existing_check:
                     logger.info(f"VIN {vin} already exists in {table_name}, skipping")
                     continue
                 
                 # Insert VIN into dealership-specific VIN log
+                logger.info(f"Inserting VIN {vin} into {table_name}...")
                 insert_sql = f"""
                     INSERT INTO {table_name} 
-                    (vin, order_number, order_date, source, processed_date, order_type, template_type) 
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    (vin, order_number, processed_date, order_type, template_type) 
+                    VALUES (%s, %s, %s, %s, %s)
                 """
                 
-                db_manager.execute_query(insert_sql, (
+                logger.info(f"Insert SQL: {insert_sql}")
+                insert_params = (
                     vin,
                     order_number,
-                    processed_date,  # Use as order_date
-                    source,
                     processed_date,  # Use as processed_date
                     'manual',        # order_type
                     'manual_entry'   # template_type
-                ))
+                )
+                logger.info(f"Insert params: {insert_params}")
+                
+                db_manager.execute_query(insert_sql, insert_params)
                 
                 imported_count += 1
-                logger.info(f"Imported VIN {vin} to {table_name}")
+                logger.info(f"SUCCESS: Imported VIN {vin} to {table_name} (total imported: {imported_count})")
                 
             except Exception as e:
                 error_msg = f"Error processing VIN {vin_data.get('vin', 'unknown')}: {str(e)}"
                 errors.append(error_msg)
                 logger.error(error_msg)
+                logger.error(f"Exception details: {type(e).__name__}: {e}")
+                import traceback
+                logger.error(f"Stack trace: {traceback.format_exc()}")
+        
+        logger.info(f"=== FINAL RESULTS ===")
+        logger.info(f"Imported count: {imported_count}")
+        logger.info(f"Errors: {errors}")
         
         if imported_count > 0:
-            logger.info(f"Manual VIN import completed: {imported_count} VINs imported to {table_name}")
+            logger.info(f"SUCCESS: Manual VIN import completed: {imported_count} VINs imported to {table_name}")
             return jsonify({
                 'success': True,
                 'imported_count': imported_count,
@@ -1594,15 +1630,26 @@ def manual_vin_import():
                 'table_name': table_name
             })
         else:
+            logger.error(f"FAILED: No VINs were imported. Errors: {errors}")
             return jsonify({
                 'success': False,
                 'error': 'No VINs were imported',
-                'errors': errors
+                'errors': errors,
+                'dealership': dealership_name,
+                'table_name': table_name,
+                'total_vins_processed': len(vins)
             }), 400
     
     except Exception as e:
-        logger.error(f"Error in manual VIN import: {e}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"CRITICAL ERROR in manual VIN import: {e}")
+        logger.error(f"Exception type: {type(e).__name__}")
+        import traceback
+        logger.error(f"Full stack trace: {traceback.format_exc()}")
+        return jsonify({
+            'error': str(e),
+            'type': type(e).__name__,
+            'endpoint': 'manual-vin-import'
+        }), 500
 
 @app.route('/download_csv/<filename>')
 def download_csv(filename):
@@ -3214,6 +3261,9 @@ def save_csv_data():
     """Save edited CSV data back to file"""
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Invalid JSON data'}), 400
+            
         filename = data.get('filename')
         csv_data = data.get('data')
         
@@ -3225,7 +3275,7 @@ def save_csv_data():
             return jsonify({'error': 'Invalid file type'}), 400
         
         # Find the file in orders directory
-        orders_dir = Path(__file__).parent.parent / "scripts" / "orders"
+        orders_dir = Path(__file__).parent.parent / "orders"
         
         csv_file = None
         for root, dirs, files in os.walk(orders_dir):
@@ -3243,17 +3293,22 @@ def save_csv_data():
             shutil.copy2(csv_file, backup_file)
         
         # Write updated data
-        import csv
         with open(csv_file, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-            
-            # Write headers
-            if csv_data.get('headers'):
-                writer.writerow(csv_data['headers'])
-            
-            # Write data rows
-            for row in csv_data.get('rows', []):
-                writer.writerow(row)
+            # If csv_data is a string (raw CSV content), write it directly
+            if isinstance(csv_data, str):
+                f.write(csv_data)
+            else:
+                # If csv_data is structured (legacy format), handle it
+                import csv
+                writer = csv.writer(f)
+                
+                # Write headers
+                if csv_data.get('headers'):
+                    writer.writerow(csv_data['headers'])
+                
+                # Write data rows
+                for row in csv_data.get('rows', []):
+                    writer.writerow(row)
         
         logger.info(f"CSV data saved successfully: {filename}")
         return jsonify({'success': True, 'message': 'Data saved successfully'})
@@ -4065,12 +4120,12 @@ def csv_import():
                         'error': str(e)
                     })
         
-        # Update import statistics
+        # CRITICAL FIX: Finalize import (includes normalization + stats update)
         try:
-            import_manager.update_import_stats(import_id)
-            logger.info(f"Updated import statistics for import_id: {import_id}")
+            import_manager.finalize_import(import_id)
+            logger.info(f"Finalized import {import_id} with stats and normalization")
         except Exception as e:
-            logger.warning(f"Failed to update import statistics: {e}")
+            logger.warning(f"Failed to finalize import: {e}")
         
         # Calculate processing time
         end_time = datetime.now()

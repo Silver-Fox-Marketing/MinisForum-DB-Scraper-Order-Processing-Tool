@@ -8572,17 +8572,16 @@ Example:
         // Hide placeholder
         if (noDataPlaceholder) noDataPlaceholder.style.display = 'none';
         
-        // Store vehicle data globally for modal editing
-        reviewVehicleData = allVehicles;
+        // Store vehicle data for modal editing
+        this.reviewVehicleData = allVehicles;
         
         // Generate table rows
         const tableRows = allVehicles.map((vehicle, index) => {
             return `
                 <tr id="vehicle-row-${index}" data-editing="false">
                     <td>
-                        <button class="btn-edit" onclick="toggleRowEdit(${index})" id="edit-btn-${index}">
+                        <button class="btn-edit btn-icon-only" onclick="window.modalWizard.toggleRowEdit(${index})" id="edit-btn-${index}" title="Edit row">
                             <i class="fas fa-edit"></i>
-                            Edit
                         </button>
                     </td>
                     <td class="editable-cell" data-field="year-make" data-index="${index}">
@@ -8602,7 +8601,7 @@ Example:
                         <input type="text" class="edit-input" value="${vehicle.stock || ''}" style="display: none;">
                     </td>
                     <td class="editable-cell" data-field="vin" data-index="${index}">
-                        <span class="display-value vin-display" title="${vehicle.vin || ''}">${this.truncateVin(vehicle.vin || '')}</span>
+                        <span class="display-value vin-display" title="${vehicle.vin || ''}">${vehicle.vin || ''}</span>
                         <input type="text" class="edit-input" value="${vehicle.vin || ''}" style="display: none;" maxlength="17">
                     </td>
                     <td>
@@ -8661,6 +8660,173 @@ Example:
     truncateVin(vin) {
         if (!vin || vin.length <= 10) return vin;
         return vin.substring(0, 8) + '...';
+    }
+
+    toggleRowEdit(index) {
+        const row = document.getElementById(`vehicle-row-${index}`);
+        const editBtn = document.getElementById(`edit-btn-${index}`);
+        const saveBtn = document.getElementById(`save-btn-${index}`);
+        const isEditing = row.getAttribute('data-editing') === 'true';
+        
+        if (isEditing) {
+            // Cancel edit mode without saving
+            this.setRowEditMode(index, false);
+            editBtn.innerHTML = '<i class="fas fa-edit"></i>';
+            editBtn.title = 'Edit row';
+            saveBtn.style.display = 'none';
+        } else {
+            // Switch to edit mode
+            this.setRowEditMode(index, true);
+            editBtn.innerHTML = '<i class="fas fa-times"></i>';
+            editBtn.title = 'Cancel edit';
+            saveBtn.style.display = 'inline-flex';
+        }
+    }
+    
+    saveRowEdit(index) {
+        // Save the changes and exit edit mode
+        this.saveRowChanges(index);
+        this.setRowEditMode(index, false);
+        
+        // Reset buttons
+        const editBtn = document.getElementById(`edit-btn-${index}`);
+        const saveBtn = document.getElementById(`save-btn-${index}`);
+        editBtn.innerHTML = '<i class="fas fa-edit"></i>';
+        editBtn.title = 'Edit row';
+        saveBtn.style.display = 'none';
+        
+        console.log(`Saved changes for row ${index}`);
+    }
+
+    setRowEditMode(index, editing) {
+        const row = document.getElementById(`vehicle-row-${index}`);
+        row.setAttribute('data-editing', editing);
+        
+        const cells = row.querySelectorAll('.editable-cell');
+        cells.forEach(cell => {
+            const displayValue = cell.querySelector('.display-value');
+            const editInput = cell.querySelector('.edit-input');
+            
+            if (editing) {
+                displayValue.style.display = 'none';
+                editInput.style.display = 'block';
+                editInput.focus();
+            } else {
+                displayValue.style.display = 'block';
+                editInput.style.display = 'none';
+            }
+        });
+    }
+
+    async saveRowChanges(index) {
+        const row = document.getElementById(`vehicle-row-${index}`);
+        const cells = row.querySelectorAll('.editable-cell');
+        
+        cells.forEach(cell => {
+            const field = cell.getAttribute('data-field');
+            const displayValue = cell.querySelector('.display-value');
+            const editInput = cell.querySelector('.edit-input');
+            
+            // Update display value with edited value
+            if (field === 'year-make') {
+                displayValue.textContent = editInput.value;
+                // Parse year and make if needed
+                const parts = editInput.value.split(' ');
+                if (this.reviewVehicleData && this.reviewVehicleData[index]) {
+                    this.reviewVehicleData[index].year = parts[0];
+                    this.reviewVehicleData[index].make = parts.slice(1).join(' ');
+                    // Update YEARMAKE field for CSV
+                    this.reviewVehicleData[index].YEARMAKE = editInput.value;
+                }
+            } else {
+                displayValue.textContent = editInput.value;
+                // Update the vehicle data
+                if (this.reviewVehicleData && this.reviewVehicleData[index]) {
+                    // Map display field names to CSV field names
+                    const fieldMapping = {
+                        'model': 'MODEL',
+                        'trim': 'TRIM', 
+                        'stock': 'STOCK',
+                        'vin': 'VIN'
+                    };
+                    const csvField = fieldMapping[field] || field;
+                    this.reviewVehicleData[index][csvField] = editInput.value;
+                }
+            }
+        });
+        
+        console.log('Row changes saved for index:', index);
+        
+        // Save changes to CSV file
+        await this.saveToCSVFile();
+    }
+    
+    async saveToCSVFile() {
+        if (!this.reviewVehicleData || this.reviewVehicleData.length === 0) {
+            console.log('No review vehicle data to save');
+            return;
+        }
+        
+        // Get the CSV filename from processed orders
+        const csvFilename = this.processedOrders.length > 0 && 
+                           this.processedOrders[0].result && 
+                           this.processedOrders[0].result.download_csv ? 
+                           this.processedOrders[0].result.download_csv.split('/').pop() : null;
+                           
+        if (!csvFilename) {
+            console.error('Could not determine CSV filename for saving');
+            return;
+        }
+        
+        try {
+            // Convert vehicle data back to CSV format
+            const csvData = this.convertVehicleDataToCSV(this.reviewVehicleData);
+            
+            // Save to server
+            const response = await fetch('/api/csv/save-data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    filename: csvFilename,
+                    data: csvData
+                })
+            });
+            
+            if (response.ok) {
+                console.log('✅ Changes saved to CSV file successfully');
+            } else {
+                console.error('❌ Failed to save changes to CSV file:', response.statusText);
+            }
+        } catch (error) {
+            console.error('❌ Error saving changes to CSV file:', error);
+        }
+    }
+    
+    convertVehicleDataToCSV(vehicleData) {
+        if (!vehicleData || vehicleData.length === 0) {
+            return '';
+        }
+        
+        // Get headers from first vehicle object
+        const headers = Object.keys(vehicleData[0]);
+        
+        // Create CSV content
+        const csvRows = [headers.join(',')];
+        
+        vehicleData.forEach(vehicle => {
+            const row = headers.map(header => {
+                const value = vehicle[header] || '';
+                // Escape commas and quotes in values
+                return typeof value === 'string' && (value.includes(',') || value.includes('"')) 
+                    ? `"${value.replace(/"/g, '""')}"` 
+                    : value;
+            });
+            csvRows.push(row.join(','));
+        });
+        
+        return csvRows.join('\n');
     }
     
     async fetchVehicleDataFromCSV(csvUrl, dealership) {
@@ -8738,23 +8904,41 @@ Example:
             return;
         }
         
+        // Store vehicles for editing
+        this.reviewVehicleData = vehicles;
+        
         // Generate table rows with actual vehicle data - map CSV columns to display format
         const rows = vehicles.map((vehicle, index) => {
             return `
-                <tr>
+                <tr id="vehicle-row-${index}" data-editing="false">
                     <td>
-                        <button class="btn-sm btn-secondary" onclick="app.editVehicle(${index})">
-                            Edit
+                        <button class="btn-edit btn-icon-only" onclick="window.modalWizard.toggleRowEdit(${index})" id="edit-btn-${index}" title="Edit row">
+                            <i class="fas fa-edit"></i>
                         </button>
                     </td>
-                    <td>${vehicle.YEARMAKE || vehicle.year || ''}</td>
-                    <td>${vehicle.MODEL || vehicle.model || ''}</td>
-                    <td>${vehicle.TRIM || vehicle.trim || ''}</td>
-                    <td>${vehicle.STOCK || vehicle.stock || vehicle.stock_number || ''}</td>
-                    <td>${this.truncateVin(vehicle.VIN || vehicle.vin || '')}</td>
+                    <td class="editable-cell" data-field="year-make" data-index="${index}">
+                        <span class="display-value">${vehicle.YEARMAKE || vehicle.year || ''}</span>
+                        <input type="text" class="edit-input" value="${vehicle.YEARMAKE || vehicle.year || ''}" style="display: none;">
+                    </td>
+                    <td class="editable-cell" data-field="model" data-index="${index}">
+                        <span class="display-value">${vehicle.MODEL || vehicle.model || ''}</span>
+                        <input type="text" class="edit-input" value="${vehicle.MODEL || vehicle.model || ''}" style="display: none;">
+                    </td>
+                    <td class="editable-cell" data-field="trim" data-index="${index}">
+                        <span class="display-value">${vehicle.TRIM || vehicle.trim || ''}</span>
+                        <input type="text" class="edit-input" value="${vehicle.TRIM || vehicle.trim || ''}" style="display: none;">
+                    </td>
+                    <td class="editable-cell" data-field="stock" data-index="${index}">
+                        <span class="display-value stock-badge">${vehicle.STOCK || vehicle.stock || vehicle.stock_number || ''}</span>
+                        <input type="text" class="edit-input" value="${vehicle.STOCK || vehicle.stock || vehicle.stock_number || ''}" style="display: none;">
+                    </td>
+                    <td class="editable-cell" data-field="vin" data-index="${index}">
+                        <span class="display-value vin-display" title="${vehicle.VIN || vehicle.vin || ''}">${vehicle.VIN || vehicle.vin || ''}</span>
+                        <input type="text" class="edit-input" value="${vehicle.VIN || vehicle.vin || ''}" style="display: none;" maxlength="17">
+                    </td>
                     <td>
-                        <button class="btn-sm btn-primary qr-btn" onclick="app.showQRCode('${vehicle.VIN || vehicle.vin || ''}')">
-                            QR
+                        <button class="btn-save btn-icon-only" onclick="window.modalWizard.saveRowEdit(${index})" id="save-btn-${index}" title="Save changes" style="display: none;">
+                            <i class="fas fa-save"></i>
                         </button>
                     </td>
                 </tr>

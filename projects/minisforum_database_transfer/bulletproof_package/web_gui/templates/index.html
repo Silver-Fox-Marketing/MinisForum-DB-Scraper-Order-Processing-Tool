@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MinisForum Database Control - Silver Fox Marketing</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=logo-update-{{ range(10000, 99999) | random }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=edit-button-fixes-{{ range(100000, 999999) | random }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/vin_log_update.css') }}?v=2025081903">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -1483,13 +1483,13 @@ SF24002
                                     <table class="vehicle-data-table" id="modalVehicleDataTable">
                                         <thead>
                                             <tr>
-                                                <th>Actions</th>
+                                                <th></th>
                                                 <th>Year/Make</th>
                                                 <th>Model</th>
                                                 <th>Trim</th>
                                                 <th>Stock</th>
                                                 <th>VIN</th>
-                                                <th>QR</th>
+                                                <th></th>
                                             </tr>
                                         </thead>
                                         <tbody id="modalVehicleDataBody">
@@ -1695,7 +1695,7 @@ SF24002
     </div>
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?cache-bust=wizard-redesign-{{ range(10000, 99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?cache-bust=edit-fixes-{{ range(100000, 999999) | random }}"></script>
     
     <!-- MODERN TESTING MODE TOGGLE FUNCTION -->
     <script>
