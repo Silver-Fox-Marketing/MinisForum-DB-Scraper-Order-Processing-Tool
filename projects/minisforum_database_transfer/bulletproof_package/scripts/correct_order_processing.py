@@ -61,7 +61,19 @@ class CorrectOrderProcessor:
         Returns:
             The PostgreSQL table name for this dealership's VIN log
         """
-        # Create slug from dealership name
+        # CRITICAL FIX: Handle special cases where table names don't follow the standard pattern
+        vin_log_table_overrides = {
+            'HW Kia': 'handw_kia_vin_log',  # Standard pattern would be 'hw_kia_vin_log' but table is 'handw_kia_vin_log'
+            'H&W Kia': 'handw_kia_vin_log', # Legacy name mapping
+        }
+        
+        # Check for override first
+        if dealership_name in vin_log_table_overrides:
+            table_name = vin_log_table_overrides[dealership_name]
+            logger.info(f"[VIN LOG] Using override mapping: '{dealership_name}' -> '{table_name}'")
+            return table_name
+        
+        # Create slug from dealership name using standard pattern
         slug = dealership_name.lower()
         slug = slug.replace(' ', '_')
         slug = slug.replace('&', 'and')
@@ -72,7 +84,7 @@ class CorrectOrderProcessor:
         slug = slug.replace('__', '_')
         
         table_name = f'{slug}_vin_log'
-        logger.debug(f"Dealership '{dealership_name}' -> table '{table_name}'")
+        logger.info(f"[VIN LOG] Standard mapping: '{dealership_name}' -> '{table_name}'")
         return table_name
     
     def process_cao_order(self, dealership_name: str, template_type: str = "shortcut_pack", skip_vin_logging: bool = False) -> Dict[str, Any]:
@@ -362,8 +374,9 @@ class CorrectOrderProcessor:
         # Build query with filters - use actual location name for data lookup
         # CRITICAL: Only process vehicles from the ACTIVE scraper import that are physically on the lot
         # Use normalized_vehicle_data for proper vehicle type filtering (po, cpo, new instead of raw values)
+        # ENHANCEMENT: Include raw_status for UI review stage
         query = """
-            SELECT nvd.* FROM normalized_vehicle_data nvd
+            SELECT nvd.*, rvd.status as raw_status FROM normalized_vehicle_data nvd
             JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
             JOIN scraper_imports si ON rvd.import_id = si.import_id
             WHERE nvd.location = %s 
@@ -810,6 +823,7 @@ class CorrectOrderProcessor:
                     trim = vehicle.get('trim', '')
                     stock = vehicle.get('stock', '')
                     vin = vehicle.get('vin', '')
+                    raw_status = vehicle.get('raw_status', 'N/A')  # Get raw_status from database query
                     type_prefix = self._get_type_prefix(vehicle.get('vehicle_condition', ''))
                     
                     qr_path = qr_paths[idx] if idx < len(qr_paths) else ''

@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function filterDealershipSettings(query) {
-    const dealershipItems = document.querySelectorAll('.dealership-item');
+    const dealershipItems = document.querySelectorAll('.modern-dealer-panel');
     let visibleCount = 0;
     
     dealershipItems.forEach(item => {
@@ -2907,19 +2907,26 @@ class MinisFornumApp {
                     .join('')
                     .toUpperCase();
                 
-                // Generate mock vehicle count (replace with real data later)
-                const vehicleCount = Math.floor(Math.random() * 300) + 50;
-                const lastUpdate = new Date().toLocaleDateString();
+                // Get last order date (mock for now, replace with real data)
+                const lastOrderDate = new Date().toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric', 
+                    year: 'numeric' 
+                });
                 
-                console.log(`🏢 Active Dealership: ${dealership.name} -> Type: ${dealershipType} -> Class: ${typeClass}`);
                 return `
-                    <div class="dealership-item" data-dealership="${dealership.name}" draggable="true">
-                        <div class="dealership-card-header">
-                            <div class="dealership-info">
-                                <div class="dealership-name">${dealership.name}</div>
-                                <div class="dealership-subtitle">${vehicleCount} vehicles • ${lastUpdate}</div>
+                    <div class="modern-dealer-panel" data-dealership="${dealership.name}" draggable="true">
+                        <div class="panel-content">
+                            <h3 class="dealer-title">${dealership.name}</h3>
+                            <div class="panel-details">
+                                <div class="detail-row">
+                                    <span class="detail-label">Last Order:</span>
+                                    <span class="detail-value">${lastOrderDate}</span>
+                                </div>
+                                <div class="order-type-badge ${typeClass}">
+                                    ${dealershipType}
+                                </div>
                             </div>
-                            <div class="dealership-type ${typeClass}">${dealershipType}</div>
                         </div>
                     </div>
                 `;
@@ -2945,7 +2952,7 @@ class MinisFornumApp {
         
         // Create bound handler function
         this.dealershipClickHandler = (e) => {
-            const dealershipItem = e.target.closest('.dealership-item');
+            const dealershipItem = e.target.closest('.modern-dealer-panel');
             if (dealershipItem) {
                 const dealershipName = dealershipItem.getAttribute('data-dealership');
                 if (dealershipName) {
@@ -2969,7 +2976,7 @@ class MinisFornumApp {
         
         // Add dragstart event to all dealership items
         dealershipList.addEventListener('dragstart', (e) => {
-            const dealershipItem = e.target.closest('.dealership-item');
+            const dealershipItem = e.target.closest('.modern-dealer-panel');
             if (dealershipItem) {
                 e.dataTransfer.effectAllowed = 'copy';
                 e.dataTransfer.setData('text/plain', dealershipItem.getAttribute('data-dealership'));
@@ -2977,13 +2984,12 @@ class MinisFornumApp {
                 
                 // Store the dragged element
                 this.draggedDealership = dealershipItem.getAttribute('data-dealership');
-                console.log('🎯 Started dragging:', this.draggedDealership);
             }
         });
         
         // Add dragend event to clean up
         dealershipList.addEventListener('dragend', (e) => {
-            const dealershipItem = e.target.closest('.dealership-item');
+            const dealershipItem = e.target.closest('.modern-dealer-panel');
             if (dealershipItem) {
                 dealershipItem.classList.remove('dragging');
             }
@@ -3086,7 +3092,7 @@ class MinisFornumApp {
         }
         
         const searchTerm = searchInput.value.toLowerCase().trim();
-        const dealershipItems = dealershipList.querySelectorAll('.dealership-item');
+        const dealershipItems = dealershipList.querySelectorAll('.modern-dealer-panel');
         
         console.log('🔍 Search details:', {
             searchTerm,
@@ -3166,7 +3172,7 @@ class MinisFornumApp {
         
         const searchInput = document.getElementById('dealershipSearchInput');
         const dealershipList = document.getElementById('dealershipList');
-        const items = dealershipList ? dealershipList.querySelectorAll('.dealership-item') : [];
+        const items = dealershipList ? dealershipList.querySelectorAll('.modern-dealer-panel') : [];
         
         console.log('Test results:', {
             searchInput: !!searchInput,
@@ -3286,7 +3292,7 @@ class MinisFornumApp {
         this.addTerminalMessage(`Added ${dealershipName} to queue`, 'success');
         
         // Highlight the dealership item temporarily
-        const dealershipItems = document.querySelectorAll('.dealership-item');
+        const dealershipItems = document.querySelectorAll('.modern-dealer-panel');
         dealershipItems.forEach(item => {
             if (item.querySelector('.dealership-name').textContent === dealershipName) {
                 item.classList.add('selected');
@@ -8192,7 +8198,51 @@ class ModalOrderWizard {
             
             const csvText = await response.text();
             const vehicles = this.parseCsvToVehicles(csvText);
-            console.log('✅ SUCCESS: Parsed', vehicles.length, 'vehicles from CSV');
+            
+            // Fetch raw_status data for review stage display
+            console.log(`🔍 ATTEMPTING to fetch raw_status for: ${dealership}`);
+            try {
+                const rawStatusUrl = `/api/vehicles/raw-status/${encodeURIComponent(dealership)}`;
+                console.log(`📡 Making API call to: ${rawStatusUrl}`);
+                
+                const rawStatusResponse = await fetch(rawStatusUrl, {
+                    cache: 'no-cache'
+                });
+                
+                console.log(`📊 API response status: ${rawStatusResponse.status}`);
+                
+                if (rawStatusResponse.ok) {
+                    const rawStatusData = await rawStatusResponse.json();
+                    console.log(`✅ Retrieved raw_status for ${Object.keys(rawStatusData).length} vehicles from ${dealership}`);
+                    console.log(`🎯 Raw status sample data:`, Object.keys(rawStatusData).slice(0, 3).map(vin => `${vin}: ${rawStatusData[vin]}`));
+                    
+                    // Merge raw_status data into vehicles for UI display (not for CSV export)
+                    vehicles.forEach(vehicle => {
+                        const vin = vehicle.VIN || vehicle.vin || '';
+                        if (vin && rawStatusData[vin]) {
+                            vehicle.raw_status = rawStatusData[vin] || 'Empty';
+                            console.log(`🔗 Mapped ${vin} -> ${vehicle.raw_status}`);
+                        } else {
+                            vehicle.raw_status = 'N/A';
+                            console.log(`❌ No mapping for VIN: ${vin}`);
+                        }
+                    });
+                } else {
+                    console.warn(`❌ Failed to fetch raw_status for ${dealership}:`, rawStatusResponse.statusText);
+                    // Set all vehicles to N/A if API call fails
+                    vehicles.forEach(vehicle => {
+                        vehicle.raw_status = 'API_FAILED';
+                    });
+                }
+            } catch (error) {
+                console.error(`💥 Error fetching raw_status for ${dealership}:`, error);
+                // Set all vehicles to N/A if API call fails
+                vehicles.forEach(vehicle => {
+                    vehicle.raw_status = 'FETCH_ERROR';
+                });
+            }
+            
+            console.log('✅ SUCCESS: Parsed', vehicles.length, 'vehicles from CSV with raw_status data');
             return vehicles;
             
         } catch (error) {
@@ -8804,13 +8854,52 @@ Example:
         }
     }
     
+    deleteVehicleRow(index) {
+        if (!this.reviewVehicleData || index >= this.reviewVehicleData.length) {
+            console.error('Invalid vehicle index for deletion:', index);
+            return;
+        }
+        
+        // Get the vehicle info for confirmation
+        const vehicle = this.reviewVehicleData[index];
+        const vehicleInfo = `${vehicle.YEARMAKE || vehicle.year || 'Unknown'} ${vehicle.MODEL || vehicle.model || ''} - ${vehicle.VIN || vehicle.vin || 'No VIN'}`;
+        
+        // Confirm deletion
+        if (confirm(`Are you sure you want to delete this vehicle?\n\n${vehicleInfo}`)) {
+            // Remove from data array
+            this.reviewVehicleData.splice(index, 1);
+            
+            // Update vehicle count
+            const vehicleCountElement = document.getElementById('modalVehicleCount');
+            if (vehicleCountElement) {
+                vehicleCountElement.textContent = this.reviewVehicleData.length;
+            }
+            
+            // Re-render the table with updated indexes
+            const tableBody = document.getElementById('modalVehicleDataBody');
+            if (tableBody) {
+                this.renderVehicleTable(this.reviewVehicleData, tableBody);
+            }
+            
+            // Save changes to CSV
+            this.saveToCSVFile();
+            
+            console.log(`Deleted vehicle at index ${index}: ${vehicleInfo}`);
+        }
+    }
+    
     convertVehicleDataToCSV(vehicleData) {
         if (!vehicleData || vehicleData.length === 0) {
             return '';
         }
         
-        // Get headers from first vehicle object
-        const headers = Object.keys(vehicleData[0]);
+        // Get headers from first vehicle object, exclude raw_status from CSV output
+        const allHeaders = Object.keys(vehicleData[0]);
+        const headers = allHeaders.filter(header => 
+            !['raw_status', 'RAW_STATUS'].includes(header)
+        );
+        
+        console.log('CSV export headers (raw_status excluded):', headers);
         
         // Create CSV content
         const csvRows = [headers.join(',')];
@@ -8900,7 +8989,7 @@ Example:
     
     renderVehicleTable(vehicles, tableBody) {
         if (!vehicles || vehicles.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="7">No vehicles to display</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="8">No vehicles to display</td></tr>';
             return;
         }
         
@@ -8936,9 +9025,15 @@ Example:
                         <span class="display-value vin-display" title="${vehicle.VIN || vehicle.vin || ''}">${vehicle.VIN || vehicle.vin || ''}</span>
                         <input type="text" class="edit-input" value="${vehicle.VIN || vehicle.vin || ''}" style="display: none;" maxlength="17">
                     </td>
+                    <td class="raw-status-cell" data-field="raw_status" data-index="${index}">
+                        <span class="display-value">${vehicle.raw_status || vehicle.RAW_STATUS || 'N/A'}</span>
+                    </td>
                     <td>
                         <button class="btn-save btn-icon-only" onclick="window.modalWizard.saveRowEdit(${index})" id="save-btn-${index}" title="Save changes" style="display: none;">
                             <i class="fas fa-save"></i>
+                        </button>
+                        <button class="btn-delete-row btn-icon-only" onclick="window.modalWizard.deleteVehicleRow(${index})" id="delete-btn-${index}" title="Delete row">
+                            <i class="fas fa-trash"></i>
                         </button>
                     </td>
                 </tr>
@@ -8947,6 +9042,66 @@ Example:
         
         tableBody.innerHTML = rows;
         console.log(`Rendered ${vehicles.length} vehicle rows in table`);
+        
+        // EMERGENCY: Force raw_status data via DOM injection (bypasses all caching)
+        this.injectRawStatusData(vehicles, tableBody);
+    }
+    
+    async injectRawStatusData(vehicles, tableBody) {
+        console.log('🚨 EMERGENCY DOM INJECTION: Forcing raw_status data into table cells');
+        
+        // Get current dealership from the first order
+        const currentOrder = this.processedOrders && this.processedOrders[0];
+        if (!currentOrder || !currentOrder.dealership) {
+            console.error('❌ Cannot inject raw_status: No dealership found');
+            return;
+        }
+        
+        const dealership = currentOrder.dealership;
+        console.log(`🎯 Injecting raw_status for dealership: ${dealership}`);
+        
+        try {
+            // Fetch raw_status data directly 
+            const response = await fetch(`/api/vehicles/raw-status/${encodeURIComponent(dealership)}`, {
+                cache: 'no-cache'
+            });
+            
+            if (!response.ok) {
+                console.error('❌ Raw status API failed:', response.status);
+                return;
+            }
+            
+            const rawStatusData = await response.json();
+            console.log(`✅ Retrieved raw_status for ${Object.keys(rawStatusData).length} vehicles`);
+            
+            // Force inject raw_status into existing table cells
+            const rows = tableBody.querySelectorAll('tr');
+            rows.forEach((row, index) => {
+                if (index < vehicles.length) {
+                    const vehicle = vehicles[index];
+                    let vin = vehicle.VIN || vehicle.vin || '';
+                    
+                    // Extract actual VIN from formatted string (e.g., "USED - 1FA6P8CF3R5408633" -> "1FA6P8CF3R5408633")
+                    if (vin.includes(' - ')) {
+                        vin = vin.split(' - ').pop();
+                    }
+                    
+                    const rawStatus = rawStatusData[vin] || 'N/A';
+                    
+                    // Find the raw_status cell and force update it
+                    const rawStatusCell = row.querySelector('.raw-status-cell .display-value');
+                    if (rawStatusCell) {
+                        rawStatusCell.textContent = rawStatus;
+                        console.log(`🔗 INJECTED: ${vin} -> ${rawStatus}`);
+                    } else {
+                        console.warn(`❌ No raw_status cell found for row ${index}`);
+                    }
+                }
+            });
+            
+        } catch (error) {
+            console.error('💥 Raw status injection failed:', error);
+        }
     }
     
     updateModalDownloadButton() {
@@ -11128,3 +11283,4 @@ window.addMaintenanceToQueue = () => {
 };
 
 console.log('🔧 Queue injection available: Run addMaintenanceToQueue() in console');
+console.log('🎯 RAW STATUS FETCH ENABLED - TIMESTAMP: Mon, Sep  8, 2025 12:39:02 PM');

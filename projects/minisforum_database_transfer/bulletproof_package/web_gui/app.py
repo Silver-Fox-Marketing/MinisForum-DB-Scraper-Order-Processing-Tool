@@ -967,6 +967,28 @@ def process_cao_orders():
         logger.error(f"Error processing CAO orders: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/vehicles/raw-status/<dealership_name>', methods=['GET'])
+def get_vehicle_raw_status(dealership_name):
+    """Get raw_status data for vehicles from a specific dealership (for review stage only)"""
+    try:
+        # Use the same query logic from CorrectOrderProcessor to get raw_status data
+        vehicles_with_raw_status = order_processor._get_dealership_vehicles(dealership_name)
+        
+        # Create a mapping of VIN -> raw_status for frontend use
+        raw_status_map = {}
+        for vehicle in vehicles_with_raw_status:
+            vin = vehicle.get('vin', '')
+            raw_status = vehicle.get('raw_status', 'N/A')
+            if vin:
+                raw_status_map[vin] = raw_status
+        
+        logger.info(f"Retrieved raw_status for {len(raw_status_map)} vehicles from {dealership_name}")
+        return jsonify(raw_status_map)
+        
+    except Exception as e:
+        logger.error(f"Error getting raw_status for {dealership_name}: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/orders/process-daily-cao', methods=['POST'])
 def process_daily_cao():
     """Process all daily CAO orders"""
