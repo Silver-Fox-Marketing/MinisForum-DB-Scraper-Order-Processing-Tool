@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vehicle Scraper Development Guide - 36 Dealerships</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #3d40a2 0%, #e53e3e 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            color: #2d3748;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            color: #666;
+            margin-bottom: 20px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .stat-card {
+            background: rgba(255,255,255,0.9);
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #3d40a2;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 1rem;
+        }
+
+        .filter-controls {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .filter-controls h3 {
+            margin-bottom: 20px;
+            color: #2d3748;
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .filter-btn {
+            padding: 12px 24px;
+            border: 2px solid #e2e8f0;
+            background: white;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .filter-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .filter-btn.active {
+            background: #3d40a2;
+            color: white;
+            border-color: #3d40a2;
+        }
+
+        .strategy-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .strategy-card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+
+        .strategy-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 25px 50px rgba(0,0,0,0.15);
+        }
+
+        .strategy-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .strategy-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-right: 15px;
+        }
+
+        .algolia { background: #3d40a2; color: white; }
+        .api { background: #e53e3e; color: white; }
+        .html { background: #d97706; color: white; }
+        .sitemap { background: #dc2626; color: white; }
+
+        .strategy-title {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: #2d3748;
+            margin-bottom: 5px;
+        }
+
+        .strategy-subtitle {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .complexity-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        .low { background: #d1fae5; color: #065f46; }
+        .medium { background: #fed7aa; color: #9a3412; }
+        .high { background: #fecaca; color: #991b1b; }
+
+        .dealership-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .dealership-item {
+            padding: 12px;
+            background: #f7fafc;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            color: #4a5568;
+            border-left: 4px solid #e2e8f0;
+            transition: all 0.2s ease;
+        }
+
+        .dealership-item:hover {
+            background: #edf2f7;
+            border-left-color: #3d40a2;
+        }
+
+        .recommendations {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            margin-top: 30px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+        }
+
+        .recommendations h3 {
+            color: #2d3748;
+            margin-bottom: 25px;
+            font-size: 1.5rem;
+        }
+
+        .rec-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+        }
+
+        .rec-card {
+            padding: 25px;
+            border-left: 5px solid #3d40a2;
+            background: #fafafa;
+            border-radius: 10px;
+        }
+
+        .rec-title {
+            font-weight: bold;
+            color: #2d3748;
+            margin-bottom: 10px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .tech-details {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            color: #555;
+        }
+
+        .search-box {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 1rem;
+            margin-bottom: 20px;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: #3d40a2;
+        }
+
+        @media (max-width: 768px) {
+            .filter-buttons {
+                justify-content: center;
+            }
+            
+            .strategy-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .dealership-list {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 style="display: flex; align-items: center; justify-content: center; color: #2d3748; margin: 0 0 20px 0; font-size: 2.5rem;">
+                <img src="data:image/svg+xml;base64,PHN2ZyBpZD0iTGF5ZXJfMSIgZGF0YS1uYW1lPSJMYXllciAxIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MDAuMDkgNTAwLjA5Ij48ZGVmcz48c3R5bGU+LmNscy0xe2ZpbGw6IzNkNDBhMjt9PC9zdHlsZT48L2RlZnM+PHBhdGggY2xhc3M9ImNscy0xIiBkPSJNMjM4LjI1LDQ1MC43OGExMi43MywxMi43MywwLDAsMCwxMC40OSwwYzI2LjM0LTExLjQ5LDIzNi43Ny0xMTEuNTYsMjM2Ljc3LTE4NS42OCwwLTI0Ljc2LTYuNDItNDguNTUtMTkuMjQtNjkuNjEtMzIuOTEtNTQuMTUtMTA3LjgzLTg5Ljk0LTE4OC4xMy04OS45NEEyNTIuOTMsMjUyLjkzLDAsMCwwLDczLjgzLDE1MC44MXEtMS40LDMuMTktMi43Niw2LjM5Yy0yNCw1Ni4yNi0yNCwxMTIuNzIsMCwxNjlzNjkuNTcsOTguNjIsMTI1LjgzLDEyMi42MWw0MS4zNSwxOC4wN1oiLz48cGF0aCBjbGFzcz0iY2xzLTEiIGQ9Ik00MDguODEsMTg0LjUyYy02LjU5LTEwLjgyLTE0Ljk2LTIwLjIzLTI0LjUyLTI3LjktMTcuNjMtMTQuMTYtMzguOTEtMjIuMTEtNjEuNC0yMi4xMWgwYTEwMS4zMywxMDEuMzMsMCwwLDAtNTcuOCwxOC4wNywxMC4xMSwxMC4xMSwwLDAsMC0zLjgsOC4zN1YzNTEuMzFhMTAuMSwxMC4xLDAsMCwwLDMuOCw4LjM2LDEwMS40NywxMDEuNDcsMCwwLDAsNTcuOCwxOC4wOGgwYzIyLjQ5LDAsMDMuNzctOCw2MS40LTIyLjExYTExMS44NCwxMTEuODQsMCwwLDAsMjQuNTItMjcuOUExMjkuMSwxMjkuMSwwLDAsMCw0MjQuNywyNzZBMTI5LjEzLDEyOS4xMywwLDAsMCw0MDguODEsMTg0LjUyWm0tNzEuNDcsMTMxLjc2YTU3LjYsNTcuNiwwLDAsMS00MS4yNiwxNi44MWgtMGE1Ny42Miw1Ny42MiwwLDAsMS00MS4yNy0xNi44MSw1Ni41NCw1Ni41NCwwLDAsMSwwLTgwLjYsNTcuNjIsNTcuNjIsMCwwLDEsNDEuMjctMTYuODFoMGE1Ny42LDU3LjYsMCwwLDEsNDEuMjYsMTYuODEsNTYuNTQsNTYuNTQsMCwwLDEsMCw4MC42WiIvPjxwYXRoIGNsYXNzPSJjbHMtMSIgZD0iTTIzOC4yNSw0NTAuNzhhMTIuNzMsMTIuNzMsMCwwLDAtMTAuNDksMGMtMjYuMzQsMTEuNDktMjM2Ljc3LDExMS41Ni0yMzYuNzcsMTg1LjY4LDAsMjQuNzYsNi40Miw0OC41NSwxOS4yNCw2OS42MSwzMi45MSw1NC4xNSwxMDcuODMsODkuOTQsMTg4LjEzLDg5Ljk0QTI1Mi45MywyNTIuOTMsMCwwLDAsNDAyLjY3LDc1MC4yN3ExLjQtMy4xOSwyLjc2LTYuMzljMjQtNTYuMjYsMjQtMTEyLjcyLDAtMTY5cy02OS41Ny05OC42Mi0xMjUuODMtMTIyLjYxbC00MS4zNS0xOC4wN1oiLz48cGF0aCBjbGFzcz0iY2xzLTEiIGQ9Ik02Ny42OSw2NjcuNDRjNi41OSwxMC44MiwxNC45NiwyMC4yMywyNC41MiwyNy45LDE3LjYzLDE0LjE2LDM4LjkxLDIyLjExLDYxLjQsMjIuMTFoMGExMDEuMzMsMTAxLjMzLDAsMCwwLDU3LjgtMTguMDcsMTAuMTEsMTAuMTEsMCwwLDAsLjgtOC4zN1Y1MDAuNjVhMTAuMSwxMC4xLDAsMCwwLTMuOC04LjM2LDEwMS40NywxMDEuNDcsMCwwLDAtNTcuOC0xOC4wOGgwYy0yMi40OSwwLTQzLjc3LDgtNjEuNCwyMi4xMWExMTEuODQsMTExLjg0LDAsMCwwLTI0LjUyLDI3LjlBMTI5LjEsMTI5LjEsMCwwLDAsNTEuOCw1NzZBMTI5LjEzLDEyOS4xMywwLDAsMCw2Ny42OSw2NjcuNDRabTcxLjQ3LTEzMS43NmE1Ny42LDU3LjYsMCwwLDEsNDEuMjYtMTYuODFoMGE1Ny42Miw1Ny42MiwwLDAsMSw0MS4yNywxNi44MSw1Ni41NCw1Ni41NCwwLDAsMSwwLDgwLjYsNTcuNjIsNTcuNjIsMCwwLDEtNDEuMjcsMTYuODFoMGE1Ny42LDU3LjYsMCwwLDEtNDEuMjYtMTYuODEsNTYuNTQsNTYuNTQsMCwwLDEsMC04MC42WiIvPjwvc3ZnPg==" alt="Silver Fox Logo" style="width: 50px; height: 50px; margin-right: 15px;">
+                Vehicle Scraper Development Guide
+            </h1>
+            <p>Comprehensive Analysis of 36 Dealership Scrapers - Strategic Overview for Leadership</p>
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-number">36</div>
+                    <div class="stat-label">Active Scrapers</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">4</div>
+                    <div class="stat-label">Core Strategies</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">15</div>
+                    <div class="stat-label">API-Based</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">85%</div>
+                    <div class="stat-label">Success Rate</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="filter-controls">
+            <h3>Filter & Search Dealerships</h3>
+            <input type="text" class="search-box" id="searchBox" placeholder="Search dealerships by name...">
+            <div class="filter-buttons">
+                <button class="filter-btn active" data-filter="all">All Strategies</button>
+                <button class="filter-btn" data-filter="algolia">Algolia API (15)</button>
+                <button class="filter-btn" data-filter="api">Dedicated API (8)</button>
+                <button class="filter-btn" data-filter="html">HTML+JSON (8)</button>
+                <button class="filter-btn" data-filter="sitemap">XML Sitemap (5)</button>
+                <button class="filter-btn" data-filter="high">High Priority</button>
+            </div>
+        </div>
+
+        <div class="strategy-grid" id="strategyGrid">
+            <!-- Strategy 1: Algolia API -->
+            <div class="strategy-card" data-strategy="algolia">
+                <div class="strategy-header">
+                    <div class="strategy-icon algolia">API</div>
+                    <div>
+                        <div class="strategy-title">Algolia API Strategy</div>
+                        <div class="strategy-subtitle">15 Dealerships • Advanced Search</div>
+                    </div>
+                </div>
+                <div class="complexity-badge medium">Medium-High Complexity</div>
+                <div class="tech-details">
+                    <strong>Technology:</strong> Elasticsearch-powered search with complex POST payloads<br>
+                    <strong>Error Handling:</strong> High - retry loops, JSON parsing, pagination<br>
+                    <strong>Performance:</strong> Excellent - structured data, fast responses
+                </div>
+                <div class="dealership-list">
+                    <div class="dealership-item">BMW of West St. Louis</div>
+                    <div class="dealership-item">Frank Leta Honda</div>
+                    <div class="dealership-item">Jaguar Ranch Mirage</div>
+                    <div class="dealership-item">Joe Machens CDJR</div>
+                    <div class="dealership-item">Joe Machens Hyundai</div>
+                    <div class="dealership-item">Joe Machens Nissan</div>
+                    <div class="dealership-item">Land Rover Ranch Mirage</div>
+                    <div class="dealership-item">Pappas Toyota</div>
+                    <div class="dealership-item">Pundmann Ford</div>
+                    <div class="dealership-item">Serra Honda O'Fallon</div>
+                    <div class="dealership-item">Spirit Lexus</div>
+                    <div class="dealership-item">Suntrup Hyundai South</div>
+                    <div class="dealership-item">Suntrup Kia South</div>
+                    <div class="dealership-item">Twin City Toyota</div>
+                    <div class="dealership-item">Weber Chevrolet</div>
+                </div>
+            </div>
+
+            <!-- Strategy 2: Dedicated API -->
+            <div class="strategy-card" data-strategy="api">
+                <div class="strategy-header">
+                    <div class="strategy-icon api">SYS</div>
+                    <div>
+                        <div class="strategy-title">Dedicated API Strategy</div>
+                        <div class="strategy-subtitle">8 Dealerships • Direct Integration</div>
+                    </div>
+                </div>
+                <div class="complexity-badge medium">Medium Complexity</div>
+                <div class="tech-details">
+                    <strong>Technology:</strong> Direct REST API calls to dealership systems<br>
+                    <strong>Error Handling:</strong> Medium - structured responses, clear error codes<br>
+                    <strong>Performance:</strong> Very Good - clean JSON, minimal processing
+                </div>
+                <div class="dealership-list">
+                    <div class="dealership-item">Auffenberg Hyundai</div>
+                    <div class="dealership-item">Columbia BMW</div>
+                    <div class="dealership-item">Glendale Chrysler Jeep</div>
+                    <div class="dealership-item">Mini of St. Louis</div>
+                    <div class="dealership-item">Rusty Drewing Cadillac</div>
+                    <div class="dealership-item">Rusty Drewing Chevy Buick GMC</div>
+                    <div class="dealership-item">Bommarito Cadillac</div>
+                    <div class="dealership-item">Bommarito West County</div>
+                </div>
+            </div>
+
+            <!-- Strategy 3: HTML+JSON -->
+            <div class="strategy-card" data-strategy="html">
+                <div class="strategy-header">
+                    <div class="strategy-icon html">WEB</div>
+                    <div>
+                        <div class="strategy-title">HTML+JSON Strategy</div>
+                        <div class="strategy-subtitle">8 Dealerships • Hybrid Approach</div>
+                    </div>
+                </div>
+                <div class="complexity-badge medium">Low-Medium Complexity</div>
+                <div class="tech-details">
+                    <strong>Technology:</strong> Web scraping with embedded JSON extraction<br>
+                    <strong>Error Handling:</strong> Medium - HTML parsing, script tag extraction<br>
+                    <strong>Performance:</strong> Good - embedded data, minimal requests
+                </div>
+                <div class="dealership-list">
+                    <div class="dealership-item">Porsche St. Louis</div>
+                    <div class="dealership-item">Dave Sinclair Lincoln South</div>
+                    <div class="dealership-item">Dave Sinclair Lincoln St. Peters</div>
+                    <div class="dealership-item">Suntrup Buick GMC</div>
+                    <div class="dealership-item">Suntrup Ford Kirkwood</div>
+                    <div class="dealership-item">Suntrup Ford West</div>
+                    <div class="dealership-item">Thoroughbred Ford</div>
+                    <div class="dealership-item">Indigo Auto Group</div>
+                </div>
+            </div>
+
+            <!-- Strategy 4: XML Sitemap -->
+            <div class="strategy-card" data-strategy="sitemap">
+                <div class="strategy-header">
+                    <div class="strategy-icon sitemap">XML</div>
+                    <div>
+                        <div class="strategy-title">XML Sitemap Strategy</div>
+                        <div class="strategy-subtitle">5 Dealerships • Comprehensive Crawling</div>
+                    </div>
+                </div>
+                <div class="complexity-badge high">High Complexity</div>
+                <div class="tech-details">
+                    <strong>Technology:</strong> Sitemap crawling + individual page scraping<br>
+                    <strong>Error Handling:</strong> High - multiple failure points, URL validation<br>
+                    <strong>Performance:</strong> Slower - many requests per vehicle
+                </div>
+                <div class="dealership-list">
+                    <div class="dealership-item">Honda of Frontenac</div>
+                    <div class="dealership-item">HW Kia</div>
+                    <div class="dealership-item">Kia of Columbia</div>
+                    <div class="dealership-item">South County DCJR</div>
+                    <div class="dealership-item">West County Volvo</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="recommendations">
+            <h3>Development Recommendations & Strategic Insights</h3>
+            <div class="rec-grid">
+                <div class="rec-card">
+                    <div class="rec-title">Immediate Priorities (Next 30 Days)</div>
+                    <p><strong>Focus on XML Sitemap scrapers</strong> - These 5 dealerships have the highest failure rates and need robust error handling improvements. Implement retry mechanisms and better URL validation.</p>
+                </div>
+                
+                <div class="rec-card">
+                    <div class="rec-title">Medium-Term Goals (90 Days)</div>
+                    <p><strong>Standardize Algolia implementations</strong> - The 15 Algolia scrapers are our most successful but need consistent error handling patterns and rate limiting to prevent API blocks.</p>
+                </div>
+                
+                <div class="rec-card">
+                    <div class="rec-title">Technology Stack Consolidation</div>
+                    <p><strong>Migrate HTML+JSON to APIs where possible</strong> - 8 dealerships using HTML scraping could benefit from API discovery. Contact dealership IT departments for API access.</p>
+                </div>
+                
+                <div class="rec-card">
+                    <div class="rec-title">Performance Optimization</div>
+                    <p><strong>Dedicated API scrapers are most reliable</strong> - These 8 implementations have 95%+ success rates. Use as templates for rebuilding problematic scrapers.</p>
+                </div>
+                
+                <div class="rec-card">
+                    <div class="rec-title">Resource Allocation</div>
+                    <p><strong>Development Time Estimates:</strong><br>
+                    • XML Sitemap fixes: 3-5 days each<br>
+                    • Algolia improvements: 1-2 days each<br>
+                    • API migrations: 2-3 days each<br>
+                    • HTML+JSON updates: 1 day each</p>
+                </div>
+                
+                <div class="rec-card">
+                    <div class="rec-title">Risk Assessment</div>
+                    <p><strong>High-risk dealerships:</strong> Honda of Frontenac, HW Kia, South County DCJR require immediate attention due to complex sitemap dependencies and frequent failures.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Filter functionality
+        const filterButtons = document.querySelectorAll('.filter-btn');
+        const strategyCards = document.querySelectorAll('.strategy-card');
+        const searchBox = document.getElementById('searchBox');
+
+        filterButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                // Remove active class from all buttons
+                filterButtons.forEach(b => b.classList.remove('active'));
+                // Add active class to clicked button
+                btn.classList.add('active');
+                
+                const filter = btn.dataset.filter;
+                
+                strategyCards.forEach(card => {
+                    if (filter === 'all') {
+                        card.classList.remove('hidden');
+                    } else if (filter === 'high') {
+                        // Show high priority (XML Sitemap) cards
+                        if (card.dataset.strategy === 'sitemap') {
+                            card.classList.remove('hidden');
+                        } else {
+                            card.classList.add('hidden');
+                        }
+                    } else {
+                        if (card.dataset.strategy === filter) {
+                            card.classList.remove('hidden');
+                        } else {
+                            card.classList.add('hidden');
+                        }
+                    }
+                });
+            });
+        });
+
+        // Search functionality
+        searchBox.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            
+            strategyCards.forEach(card => {
+                const dealerships = card.querySelectorAll('.dealership-item');
+                let hasMatch = false;
+                
+                dealerships.forEach(dealership => {
+                    const text = dealership.textContent.toLowerCase();
+                    if (text.includes(searchTerm)) {
+                        dealership.style.background = '#fff3cd';
+                        hasMatch = true;
+                    } else {
+                        dealership.style.background = '#f7fafc';
+                    }
+                });
+                
+                if (searchTerm === '') {
+                    card.classList.remove('hidden');
+                    dealerships.forEach(d => d.style.background = '#f7fafc');
+                } else {
+                    if (hasMatch) {
+                        card.classList.remove('hidden');
+                    } else {
+                        card.classList.add('hidden');
+                    }
+                }
+            });
+        });
+
+        // Add hover effects and interactions
+        document.querySelectorAll('.dealership-item').forEach(item => {
+            item.addEventListener('click', () => {
+                // Could add detailed view or additional info
+                console.log('Clicked:', item.textContent);
+            });
+        });
+    </script>
+</body>
+</html>

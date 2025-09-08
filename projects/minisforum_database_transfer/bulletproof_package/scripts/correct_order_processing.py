@@ -449,9 +449,13 @@ class CorrectOrderProcessor:
             query += " AND nvd.stock IS NOT NULL AND nvd.stock != %s AND nvd.stock != %s"
             params.extend(['', '*'])
             
-        # Apply price filter - ONLY for Glendale by default
+        # Apply price filter - Enhanced to exclude placeholder values
         if filtering_rules.get('exclude_missing_price', False):
-            query += " AND price IS NOT NULL AND price > 0"
+            # Enhanced price filtering: exclude NULL, 0, negative values, and common placeholders
+            query += " AND nvd.price IS NOT NULL AND nvd.price > 0"
+            # Also check raw price data for placeholder values that might have been normalized incorrectly
+            query += " AND rvd.price IS NOT NULL AND rvd.price NOT IN ('*', '', 'Call', 'TBD', 'N/A', '0', '$0')"
+            query += " AND rvd.price NOT LIKE '%*%' AND rvd.price NOT LIKE '%Call%'"
         
         query += " ORDER BY created_at DESC"
         
@@ -476,7 +480,7 @@ class CorrectOrderProcessor:
             # CRITICAL: Still only process vehicles from ACTIVE import that are on the lot
             # Use normalized_vehicle_data for consistent data structure
             simplified_query = """
-                SELECT nvd.* FROM normalized_vehicle_data nvd
+                SELECT nvd.*, rvd.status as raw_status FROM normalized_vehicle_data nvd
                 JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
                 JOIN scraper_imports si ON rvd.import_id = si.import_id
                 WHERE nvd.location = %s 

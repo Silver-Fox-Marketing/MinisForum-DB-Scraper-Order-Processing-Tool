@@ -1,0 +1,37 @@
+Dealership,Status,NEW ORDER METHOD,NEW CVRG,USED ORDER METHOD,USED CVRG,LOCALITY,Monthly Program,PPM
+Auffenberg Hyundai,,Scraper,MANUAL CUSTOM,CAO - SCHEDULED,ShortCut Pack,LOCAL,,
+BMW of Columbia,,Scraper,MANUAL,MANUAL,ShortCut Pack,NON-LOCAL,,
+BMW West St. Louis,TRANSITIONING,Scraper,,MANUAL,ShortCut Pack,LOCAL,Y,1200
+Bommarito Cadillac,,Scraper,MANUAL,MANUAL,ShortCut Pack,LOCAL,Custom,
+Bommarito West County PO,Pricing Conflict,Scraper,,CAO - SCHEDULED,Flyout,LOCAL,Custom,
+Columbia Honda,,Scraper,,MANUAL,ShortCut Pack,NON-LOCAL,,
+Dave Sinclair Lincoln,TRANSITIONING,Scraper,MANUAL,MANUAL,ShortCut Pack,LOCAL,Y,750
+Dave Sinclair Lincoln St. Peters,,Scraper,MANUAL,MANUAL,None,LOCAL,Y,760
+Frank Leta Honda,TRANSITIONING,Scraper,,CAO - SCHEDULED,ShortCut Pack,LOCAL,Y,1650
+Glendale CDJR,,Scraper,,CAO - SCHEDULED,ShortCut Pack,LOCAL,Custom,
+Honda of Frontenac,,Scraper,MANUAL CUSTOM,CAO - SCHEDULED,ShortCut Pack,LOCAL,Custom,
+HW KIA,TRANSITIONING,Scraper,,CAO - SCHEDULED,ShortCut Pack,LOCAL,Custom,~500
+Indigo Auto Group,,Scraper,,MANUAL,ShortCut Pack,DIRECT,N,
+Jaguar Rancho Mirage,,Scraper,,MANUAL,None,DIRECT,N,
+Joe Machens CDJR,,Scraper,MANUAL,MANUAL,ShortCut Pack,NON-LOCAL,,
+Joe Machens Hyundai,,Scraper,,,,,,,
+Joe Machens Nissan,,Scraper,MANUAL CUSTOM,MANUAL,ShortCut Pack,NON-LOCAL,,
+Joe Machens Toyota,,Scraper,MANUAL,MANUAL,ShortCut Pack,NON-LOCAL,,
+KIA of Columbia,,Scraper,MANUAL CUSTOM,MANUAL,ShortCut Pack,NON-LOCAL,,
+Land Rover Rancho Mirage,,Scraper,,MANUAL,None,DIRECT,N,
+Mini of St. Louis,,Scraper,,MANUAL,Flyout,LOCAL,Y,500
+Pappas Toyota,,Scraper,CAO - SCHEDULED,Custom,Custom,LOCAL,Custom,
+Porsche St. Louis,,Scraper,CAO - SCHEDULED,CAO - SCHEDULED,ShortCut,LOCAL,Custom,
+Pundmann Ford,,Scraper,MANUAL,MANUAL,ShortCut Pack,LOCAL,Y,1350
+Rusty Drewing Chevy BGMC,,Scraper,MANUAL,MANUAL,ShortCut Pack,NON-LOCAL,,
+Rusty Drewing Cadillac,,Scraper,MANUAL,MANUAL,None,NON-LOCAL,,
+Serra Honda O'Fallon,,Scraper,CAO - SCHEDULED,CAO - SCHEDULED,ShortCut Pack,LOCAL,,
+South County DCJR,,Scraper,,CAO - SCHEDULED,ShortCut Pack,NON-LOCAL,Custom,
+Spirit Lexus,,Scraper,,CAO - SCHEDULED,Custom,LOCAL,Custom,
+Suntrup Buick GMC,Used Disinterest,Scraper,CAO - SCHEDULED,CAO - SCHEDULED,Flyout,LOCAL,,
+Suntrup Ford Kirkwood,,Scraper,,CAO - SCHEDULED,Flyout,LOCAL,Y,440
+Suntrup Ford West,,Scraper,,CAO - SCHEDULED,ShortCut Pack,LOCAL,Y,440
+Suntrup Hyundai South,,Scraper,,MANUAL CUSTOM,None,LOCAL,Custom,
+Suntrup Kia South,,Scraper,,MANUAL,None,LOCAL,Y,900
+Thoroughbred Ford,,Scraper,,CAO - SCHEDULED,ShortCut Pack,DIRECT,,
+Weber Chevrolet,,Scraper,,CAO - SCHEDULED,Custom,LOCAL,,

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TEMPLATE CACHE BYPASS TEST - SEARCH BAR VISIBLE</title>
+    <style>
+        body { 
+            background: #ff0000; 
+            color: white; 
+            font-family: Arial, sans-serif; 
+            padding: 50px; 
+        }
+        .test-search {
+            background: #00ff00;
+            color: black;
+            padding: 30px;
+            margin: 20px 0;
+            border: 5px solid yellow;
+            border-radius: 10px;
+        }
+        .test-search input {
+            padding: 15px;
+            font-size: 18px;
+            width: 100%;
+            max-width: 500px;
+        }
+    </style>
+</head>
+<body>
+    <h1>TEMPLATE CACHE BYPASS WORKING!</h1>
+    <div class="test-search">
+        <h2>🔍 DEALERSHIP SEARCH BAR TEST</h2>
+        <input type="text" placeholder="This proves template caching is bypassed!">
+    </div>
+    <p>If you can see this page, the template cache bypass technique is working!</p>
+    <p>Time: {{ moment().format() if moment else 'No timestamp available' }}</p>
+</body>
+</html>

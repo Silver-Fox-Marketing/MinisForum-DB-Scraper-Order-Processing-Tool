@@ -36,6 +36,7 @@ sys.path.insert(0, str(scrapers_path))
 from database_connection import db_manager
 from realtime_scraper_progress import ScraperProgressReporter
 from scraper_data_normalizer import normalizer
+from scraper_import_manager import ScraperImportManager
 
 class RealScraperIntegration:
     """Integration system for real working scrapers"""
@@ -90,7 +91,7 @@ class RealScraperIntegration:
             'Suntrup Kia South': 'suntrupkiasouth.py',
             'Thoroughbred Ford': 'thoroughbredford.py',
             'Twin City Toyota': 'twincitytoyota.py',
-            'West County Volvo Cars': 'wcvolvocars.py',
+            'Volvo Cars West County': 'wcvolvocars.py',
             'Weber Chevrolet': 'weberchev.py'
         }
         
@@ -135,7 +136,7 @@ class RealScraperIntegration:
             'Suntrup Kia South': 25,
             'Thoroughbred Ford': 35,
             'Twin City Toyota': 30,
-            'West County Volvo Cars': 25,
+            'Volvo Cars West County': 25,
             'Weber Chevrolet': 40
         }
         
@@ -221,7 +222,7 @@ class RealScraperIntegration:
                 'Suntrup Kia South': 'suntrupkiasouth.com',
                 'Thoroughbred Ford': 'thoroughbredford.com',
                 'Twin City Toyota': 'twincitytoyota.com',
-                'West County Volvo Cars': 'wcvolvocars.com',
+                'Volvo Cars West County': 'wcvolvocars.com',
                 'Weber Chevrolet': 'weberchev.com'
             }
             
@@ -297,16 +298,20 @@ class RealScraperIntegration:
             return result
     
     def import_vehicles_to_database(self, vehicles: List[Dict], dealership_name: str) -> Dict[str, Any]:
-        """Import scraped vehicles into the database"""
+        """Import scraped vehicles into the database using proper import manager"""
         try:
             if not vehicles:
                 return {'success': False, 'error': 'No vehicles to import'}
             
             self.logger.info(f"Importing {len(vehicles)} vehicles for {dealership_name}")
             
-            imported_count = 0
-            updated_count = 0
+            # Use ScraperImportManager for proper import process
+            import_manager = ScraperImportManager()
             
+            # Create new import (archives previous imports and creates new active one)
+            import_id = import_manager.create_new_import(dealership_name, len(vehicles))
+            
+            imported_count = 0
             for vehicle in vehicles:
                 try:
                     # Check if vehicle already exists

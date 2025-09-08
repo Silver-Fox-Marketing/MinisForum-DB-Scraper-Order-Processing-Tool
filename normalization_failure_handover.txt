@@ -1,0 +1,115 @@
+NORMALIZATION FAILURE HANDOVER DOCUMENT
+Date: August 29, 2025
+==========================================
+
+CRITICAL ISSUE IDENTIFIED: NORMALIZATION MAPPING NOT WORKING
+============================================================
+
+STATUS: URGENT FIX REQUIRED - CAO SYSTEM RETURNING INCORRECT RESULTS
+
+PROBLEM SUMMARY:
+---------------
+The CAO (Comparative Analysis Order) system is returning incorrect vehicle counts because the normalization process is FAILING to properly apply the lot status mapping rules. Vehicles marked as "In-Transit" in raw data are being incorrectly normalized as "onlot" instead of "offlot", causing them to appear in CAO results when they should be excluded.
+
+SPECIFIC EXAMPLES:
+-----------------
+- VIN YV4062PF7T1449367 (Volvo Cars West County): Marked as "onlot" in normalized data when it should be "offlot" 
+- Kia of Columbia CAO: Returning 23 vehicles instead of expected 8 due to similar normalization failures
+- Extra 15 vehicles in Kia results are legitimate inventory but incorrectly normalized as "onlot"
+
+NORMALIZATION MAP LOCATION:
+--------------------------
+File: C:\Users\Workstation_1\Documents\Tools\ClaudeCode\projects\shared_resources\Scraper Data Normalization Map - Sheet1 (3).csv
+
+CRITICAL MAPPING RULES NOT BEING APPLIED:
+-----------------------------------------
+Raw Status → Should Normalize To:
+- In-transit → offlot
+- In-Transit → offlot  
+- Allocated → offlot
+- In-Build-Phase → offlot
+- In Transit → offlot
+- In Transit to U.S. → offlot
+- Arriving Soon → offlot
+- In Production → offlot
+- Build Phase → offlot
+- Being Built → offlot
+- Courtesy Vehicle → offlot
+- In-Service Courtesy Vehicle → offlot
+- Dealer Ordered → offlot
+- In-Service FCTP → offlot
+- In-service → offlot
+
+ONLY THESE SHOULD BE "onlot":
+- On-Lot → onlot
+- In-Lot → onlot
+- InStock → onlot
+- In Stock → onlot
+- In-stock → onlot
+- Available → onlot
+- On Lot → onlot
+- Available at Retailer → onlot
+
+IMPACT ON CAO SYSTEM:
+--------------------
+The CAO system queries: 
+SELECT * FROM normalized_vehicle_data WHERE on_lot_status IN ('onlot', 'on lot')
+
+When vehicles that should be "offlot" are incorrectly marked as "onlot", they appear in CAO results and get processed for graphics when they shouldn't. This causes:
+- Incorrect vehicle counts in CAO orders
+- Wasted graphics processing on unavailable vehicles  
+- Client confusion about which vehicles actually need graphics
+
+TECHNICAL INVESTIGATION COMPLETED:
+---------------------------------
+1. ✅ Confirmed normalization map contains correct In-Transit → offlot mapping
+2. ✅ Verified VIN YV4062PF7T1449367 is marked "onlot" when should be "offlot"
+3. ✅ Confirmed this explains extra VINs in both Volvo and Kia CAO results
+4. ✅ Identified that normalized_vehicle_data is what CAO uses for filtering
+
+REQUIRED FIX STRATEGY:
+=====================
+
+1. LOCATE NORMALIZATION CODE:
+   - Find the scraper data normalization process
+   - Look for code that processes raw vehicle data into normalized_vehicle_data table
+   - Identify where lot status mapping should occur
+
+2. IMPLEMENT NORMALIZATION MAP:
+   - Load the CSV mapping file: "Scraper Data Normalization Map - Sheet1 (3).csv"
+   - Create lookup logic that applies Raw → Normalized mappings
+   - Ensure ALL lot status variations are properly mapped to onlot/offlot
+
+3. VERIFY MAPPING LOGIC:
+   - Test with VIN YV4062PF7T1449367 - should map to "offlot" if In-Transit
+   - Check that only genuine "on-lot" statuses map to "onlot"
+   - Ensure case-insensitive matching for status variations
+
+4. RE-NORMALIZE EXISTING DATA:
+   - After fixing the logic, re-run normalization on active import data
+   - Verify corrected on_lot_status values in normalized_vehicle_data
+   - Test CAO results return expected counts
+
+5. VALIDATION TESTS:
+   - Volvo Cars West County CAO should exclude In-Transit vehicles
+   - Kia of Columbia CAO should return closer to 8 vehicles (not 23)
+   - All dealerships should have proper onlot/offlot filtering
+
+FILES TO INVESTIGATE:
+--------------------
+- Normalization processing code (likely in scripts/ directory)
+- Database schema for normalized_vehicle_data table
+- Any import/processing workflows that populate normalized data
+- scraper_data_normalizer.py or similar normalization modules
+
+CRITICAL SUCCESS CRITERIA:
+--------------------------
+✅ In-Transit vehicles marked as "offlot" in normalized_vehicle_data
+✅ CAO returns expected vehicle counts (not inflated by unavailable inventory)
+✅ Only genuine on-lot vehicles appear in CAO processing results
+✅ Normalization map rules fully implemented and tested
+
+URGENCY: HIGH
+This issue affects ALL dealership CAO processing and causes incorrect graphics orders. Fix required before production CAO processing continues.
+
+NORMALIZATION MAP IS THE KEY - IT MUST BE PROPERLY IMPLEMENTED FOR ACCURATE CAO RESULTS.

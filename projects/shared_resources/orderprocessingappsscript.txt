@@ -1,0 +1,1902 @@
+function copySpreadsheetToFolder(targetSpreadsheetId, folderId) {
+    var targetSpreadsheet = SpreadsheetApp.openById(targetSpreadsheetId);
+    var folder = DriveApp.getFolderById(folderId);
+    var newSpreadsheet = targetSpreadsheet.copy('Copy of ' + targetSpreadsheet.getName());
+    var file = DriveApp.getFileById(newSpreadsheet.getId());
+    folder.addFile(file);
+    DriveApp.getRootFolder().removeFile(file); // optional
+    return SpreadsheetApp.openById(newSpreadsheet.getId());
+}
+
+function onEdit(e) {
+  const sheet = e.source.getSheetByName('SCRAPERDATA'); // your sheet name
+  const backupSheet = e.source.getSheetByName('HELPERS');
+  const range = sheet.getRange('E1:F1');
+  const values = range.getValues();
+
+  // If the entire timestamp range is blank, restore it
+  if (values.flat().every(cell => cell === "")) {
+    const backupValues = backupSheet.getRange('E1:F1').getValues();
+    range.setValues(backupValues);
+  }
+}
+
+function setPlainTextFormat(sheet, columns) {
+    columns.forEach(function(col) {
+        sheet.getRange(1, col, sheet.getMaxRows()).setNumberFormat('@');
+    });
+}
+
+function copyAndPasteData(sourceSheet, sourceRange, targetSheet, targetStartCell) {
+    var sourceData = sourceSheet.getRange(sourceRange).getValues();
+    
+    if (sourceData.length === 0) {
+        Logger.log("No data found in " + sourceSheet.getName() + " " + sourceRange);
+        return;
+    }
+    
+    var numRows = sourceData.length;
+    var numCols = sourceData[0].length;
+
+    // Calculate the target range dynamically based on the number of rows and columns in the source data
+    var targetRange = targetSheet.getRange(targetStartCell);
+    targetRange = targetSheet.getRange(targetRange.getRow(), targetRange.getColumn(), numRows, numCols);
+    
+    targetRange.setValues(sourceData);
+}
+
+
+function generateQRCodes(links, folder, sheetName) {
+    links.forEach(function(row, index) {
+        var link = row[0];
+        if (link) {
+            var qrCodeUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=388x388&data=' + encodeURIComponent(link) + '&color=32-32-32';
+            var response = UrlFetchApp.fetch(qrCodeUrl);
+            var blob = response.getBlob();
+            var fileName = sheetName + '_QR_Code_' + (index + 1) + '.png';
+            folder.createFile(blob.setName(fileName));
+            Logger.log('QR code created and saved as ' + fileName);
+        }
+    });
+}
+
+function handleError(e) {
+    Logger.log('Error: ' + e.message);
+    Logger.log(e.stack); // Logs the stack trace for more debugging details
+}
+
+
+function eraseFolderContents(folderIds) {
+    folderIds.forEach(function(folderId) {
+        try {
+            var folder = DriveApp.getFolderById(folderId);
+            Logger.log('Starting to erase contents of folder with ID: ' + folderId + ' and name: ' + folder.getName());
+
+            // Delete all files in the folder
+            var files = folder.getFiles();
+            while (files.hasNext()) {
+                var file = files.next();
+                Logger.log('Deleting file: ' + file.getName() + ' (ID: ' + file.getId() + ')');
+                file.setTrashed(true); // Move the file to the trash
+            }
+
+            // Delete all subfolders in the folder
+            var subfolders = folder.getFolders();
+            while (subfolders.hasNext()) {
+                var subfolder = subfolders.next();
+                Logger.log('Deleting subfolder: ' + subfolder.getName() + ' (ID: ' + subfolder.getId() + ')');
+                subfolder.setTrashed(true); // Move the subfolder to the trash
+            }
+
+            Logger.log('Finished erasing contents of folder with ID: ' + folderId + ' and name: ' + folder.getName());
+        } catch (e) {
+            Logger.log('Error erasing contents of folder with ID: ' + folderId + ' - ' + e.message);
+        }
+    });
+}
+
+function eraseqrFolders() {
+    var folderIds = [
+        '1FDyItxi9v93OPKTq9m_kysR9J1zKV7nY',
+        '1hWi5Lt19cp_Ao5cj6Ra28kY0fC8Fc-lW',
+        '10Jk9lrm8_TKCaib6BzSteMMayrsRzT7c',
+        '1CLuCCjYj9VCN8sS15zRPvtXFJw5Qhle_',
+        '1f1GddGptSdScXW_1avodKxgyvCVgxl6C',
+        '13FRdALLmGe-wCLFauibklhUlBG2RZq7O',
+        '1LzQfAueQKDekv_nDMd-v1Hh_-g8BIYLp',
+        '112J3xt2pAUzMneJ1M5Gr2C32IfzkxM2D',
+        '1Cqbmk7NQkqgU4zqGhvP2oZxgvgp1Jl06',
+        '1zolDEYMEnUID8nfiFC4pIdhgJKdEDeBB',
+        '1ZHb0XdF6Zygn8IjwpTDF53wisJsQWtY9',
+        '12ncJ324tJ_xAylHmNzMcnMtJkPqNWTZv',
+        '1hd7sxZhkwWqGGNuN9aWqSglI1H3AbH5S',
+        '1hGdPvtlZBCEDfWBvB3DFU3-hVDgDn-Ad',
+        '1z3P4c0ZbJiMZIP8N4jyP-d857Z3GSm3i',
+        '17kNyLFaV3hefxMCF92a8fhoqhRB5oxxb',
+        '1YgPT66AA8FbY4hrfiYe_1wzevyAIMzqI',
+        '1tM31Fi_39L1OfveZ66a0eX6frnBApl4T',
+        '1Jok_LJO6B2IFLvBg42iypJmiYlznxxdM',
+        '1D0zkGcUmyrPRHIHDQMDqJtutT-3QtQoB',
+        '1c_vM8m_x6-mgqdPZOJ7D8ZPBs7AeG-zx',
+        '12lWqsy0GROyYAgT8ljzt0mZmbsS5GvD9',
+        '1CqIX-qvYChorE239sJNaqmMW1gTGNc5B',
+        '1KIFeAZY1W3Kvfm1PVICByiBKPE_i5H5J',
+        '1CVSWlvumPLhAuFvcLFRXiDjjxed3Glbm',
+        '1oqHfwVryzhp8mjeXqLs7PQl7H2VAhvh7',
+        '1KNT22vn4_qDD6r-9OZ2brutCJwRuD3pI',
+        '.1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF',
+        '1IO2q2hDbJ1L9alzDneRNN0NYce8CsaKM',
+        '168d05y0_NAnX8ce1YaEHc7C5xb6c9vsl'
+
+    ];
+    
+    eraseFolderContents(folderIds);
+}
+
+
+function fillScraperDateTime() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('SCRAPERDATA');
+  const backupSheet = ss.getSheetByName('HELPERS'); // Make sure this sheet exists
+  
+  const currentDate = new Date();
+  const date = Utilities.formatDate(currentDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const time = Utilities.formatDate(currentDate, Session.getScriptTimeZone(), 'HH:mm:ss');
+
+  // Write to SCRAPERDATA sheet
+  sheet.getRange('E1').setValue(date);
+  sheet.getRange('F1').setValue(time);
+
+  // Sync to backup sheet
+  backupSheet.getRange('E1').setValue(date);
+  backupSheet.getRange('F1').setValue(time);
+}
+
+
+function runFunctionBasedOnSelection() {
+    var ui = SpreadsheetApp.getUi(); // Get the user interface for displaying alerts
+
+    try {
+        // Get the selection from 'Order Form'
+        var controlSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Order Form');
+        var selection = controlSheet.getRange('B1').getValue(); // Cell containing the dropdown
+
+        // Get 'Order Form' and 'ORDERS' sheets
+        var orderFormSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Order Form');
+        var ordersSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('ORDERS');
+
+        // Step 1: Copy data from B3:B in 'Order Form'
+        var orderDataRange = orderFormSheet.getRange('B3:B');
+        var orderData = orderDataRange.getValues().filter(function(row) {
+            return row[0] !== ''; // Exclude empty rows
+        });
+
+        // Check for data presence
+        if (orderData.length === 0) {
+            ui.alert("No data found in 'Order Form' B3:B.");
+            return;
+        }
+
+        // Step 2: Find the correct column in 'ORDERS'
+        var headerRange = ordersSheet.getRange(1, 1, 1, ordersSheet.getLastColumn());
+        var headers = headerRange.getValues()[0];
+        var columnIndex = headers.indexOf(selection) + 1; // Find matching column index (1-based)
+
+        // Ensure the header was found
+        if (columnIndex === 0) {
+            ui.alert("No matching header found for the selection in the 'ORDERS' sheet.");
+            return;
+        }
+
+        // Step 3: Paste data in the matched column starting from row 2
+        var pasteRange = ordersSheet.getRange(2, columnIndex, orderData.length, 1);
+        pasteRange.setValues(orderData);
+
+        // Force the changes to take effect immediately
+        SpreadsheetApp.flush();
+
+        Logger.log("Data pasted successfully in column: " + selection);
+
+        // Step 4: Run the function based on the selection
+        switch (selection) {
+            case 'Auffenberg Hyundai':
+                auffenbergHyundai();
+                break;
+            case 'Joe Machens Hyundai':
+                joemachenshyundai();
+                break;
+            case 'Joe Machens Nissan':
+                joemachensnissan();
+                break;
+            case 'Joe Machens CDJR':
+                joemachenscdjr();
+                break;
+            case 'Kia of Columbia':
+                kiacomo();
+                break;
+            case 'Honda of Frontenac':
+                hondaofFrontenac();
+                break;
+            case 'Porsche St. Louis':
+                porscheStl();
+                break;
+            case 'Pappas Toyota':
+                pappasToyota();
+                break;
+            case 'Twin City Toyota':
+                twinCityToyota();
+                break;
+            case 'Bommarito Cadillac':
+                bommaritoCadillac();
+                break;
+            case 'Serra Honda':
+                serraHonda();
+                break;
+            case 'SoCo DCJR':
+                socodcjr();
+                break;
+            case 'Glendale CDJR':
+                glendaleCDJR();
+                break;
+            case 'Dave Sinclair Lincoln':
+                daveSinclairLincoln();
+                break;
+            case 'Suntrup Kia':
+                suntrupKia();
+                break;
+            case 'Pundmann Ford':
+                pundmannFord();
+                break;
+            case 'Tom Stehouwer Auto Sales':
+                tomStehouwer();
+                break;
+            case 'Rusty Drewing Cadillac':
+                rustydCadillac();
+                break;
+            case 'Rusty Drewing Chevrolet Buick GMC':
+                rustydChevy();
+                break;
+            case 'Joe Machens Toyota':
+                jmToyota();
+                break;
+            case 'Land Rover Rancho Mirage':
+                landRoverRanchoMirage();
+                break;
+            case 'Audi Rancho Mirage':
+                audiRanchoMirage();
+                break;
+            case 'indiGO Auto Group':
+                indiGOAutoGroup();
+                break;
+            case 'Jaguar Rancho Mirage':
+                jaguarRanchoMirage();
+                break;
+            case 'Thoroughbred Ford':
+                thoroughbredFord();
+                break;
+            case 'Suntrup Buick GMC':
+                suntrupBGMC();
+                break;    
+            default:
+                ui.alert('No valid selection found or function not implemented for the selected value.');
+                return;
+        }
+
+        // Display a success message
+        ui.alert('Operation completed successfully for: ' + selection);
+
+    } catch (e) {
+        // Display an error message to the user
+        ui.alert('An error occurred: ' + e.message);
+        handleError(e); // Optionally log the error
+    }
+}
+
+
+
+
+
+
+// Example function using the refactored approach
+function auffenbergHyundai() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1NmD_ZAdwm30kKJi31enIpnpxGd1TyDZ2Jm5DoyX4Quk';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1pjizh_sm9lWInGKqza6nijE3vMeH610Xl1agnb2bTMU';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1FDyItxi9v93OPKTq9m_kysR9J1zKV7nY';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Auffenberg Hyundai');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'E2:E', newTargetOrdersSheet, 'A2:A');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [5, 11, 13]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [1, 2]);
+
+        linksSheet.getRange('F2:F').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'F2');
+        setPlainTextFormat(linksSheet, [6]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('F2:F').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function joemachenshyundai() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1mBbdbpsWCDSXUdVIls-w-IcMxsjqseMGp8VDzGYt2pw';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1stz9rRC2Lcm1oy_nGcc8GakBwIIxL3KVEtCFwBoUr3A';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1hWi5Lt19cp_Ao5cj6Ra28kY0fC8Fc-lW';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Joe Machens Hyundai');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'C2:C', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [5, 11, 13]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [1, 2]);
+
+        linksSheet.getRange('C2:C').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'C2');
+        setPlainTextFormat(linksSheet, [3]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('C2:C').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function joemachensnissan() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '167zJww2sLa1NgI1JwZeYhTGxo6gQkWXklSNwyLGJHhI';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1zEYKFbb252R3lr2vGjN0WgCjfkrOqyx6IngSnZ1-lhI';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '10Jk9lrm8_TKCaib6BzSteMMayrsRzT7c';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Joe Machens Nissan');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'A2:A', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [5, 11, 13]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [1, 2]);
+
+        linksSheet.getRange('A2:A').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'A2');
+        setPlainTextFormat(linksSheet, [1]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('A2:A').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function joemachenscdjr() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '13hfuHXRhvgK9ULLDgNQNRx15YnU07y_3wULka8WsFXs';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1Q7YA2XPMOmAogVViE-q_kF6oiufD5tMZaY4S4AUscbk';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1CLuCCjYj9VCN8sS15zRPvtXFJw5Qhle_';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Joe Machens Chrysler Dodge Jeep Ram');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'B2:B', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [5, 11, 13]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [1, 2]);
+
+        linksSheet.getRange('B2:B').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'B2');
+        setPlainTextFormat(linksSheet, [2]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('B2:B').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function kiacomo() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1F0vF0Ql8lGAEH_CqOkBasII_NbbfEx5oZhiL3mAlXJs';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1oZXG7fj1noSS7jdL0ZOVLPLbsiZscINSts7Fh_ePNzs';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1f1GddGptSdScXW_1avodKxgyvCVgxl6C';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Kia of Columbia');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        // Copy data dynamically to match the number of rows
+        copyAndPasteData(sourceOrdersSheet, 'D2:D', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [5, 11, 13]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [1, 2]);
+
+        linksSheet.getRange('D2:D').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'D2');
+        setPlainTextFormat(linksSheet, [4]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('D2:D').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+
+function hondaofFrontenac() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1-LmkzSHmltqmu9XgZvxc2qrO2O19ihkrcjxFFQIMAw8';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1Zoj-T5SOrVOajS1rmDFQ-ychXaUquwK0NNl0oPc5ZuI';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '13FRdALLmGe-wCLFauibklhUlBG2RZq7O';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Honda of Frontenac');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'F2:F', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [5, 11, 13]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [1, 2]);
+
+        linksSheet.getRange('G2:G').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'G2');
+        setPlainTextFormat(linksSheet, [7]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('G2:G').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function porscheStl() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1DzjRLQ028ON_O11dgWP_GHHrXtd6VjCX-GCV4xMcDcw';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1Z0VdQONSW3csAI4MZ5_2cERQkuKRKFUoYnq-cLz3HMs';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1LzQfAueQKDekv_nDMd-v1Hh_-g8BIYLp';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Porsche St. Louis');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'G2:G', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [5, 6]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [1, 2]);
+
+        linksSheet.getRange('E2:E').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'E2');
+        setPlainTextFormat(linksSheet, [1]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('E2:E').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function pappasToyota() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1PEbFdzPejS_a6b-lP9T3RSn0i3UgOVU3hEiZWfj3mHA';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1pIhpO7WQiHt-VPVVYeGu2mUDZuFEXU1TW1dKiF05bPg';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '112J3xt2pAUzMneJ1M5Gr2C32IfzkxM2D';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Pappas Toyota');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'H2:H', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [5, 6]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [1, 2]);
+
+        linksSheet.getRange('H2:H').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'H2');
+        setPlainTextFormat(linksSheet, [1]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('H2:H').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function twinCityToyota() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1LVqNdVssLul6dkbTanVYh1LgJFenPtZs0NUxdcV0HkM';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1Bx6iE45YXj62euHRVUERzUgE3kvmA4VzX8r6Mw7Otxw';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1Cqbmk7NQkqgU4zqGhvP2oZxgvgp1Jl06';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Twin City Toyota');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+        var newTargetOrdermatchSheet = newTargetSpreadsheet.getSheetByName('ORDERMATCH');
+
+        // Copying and pasting data between sheets
+        copyAndPasteData(sourceOrdersSheet, 'I2:I', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [5, 6]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [1, 2]);
+
+        // Clearing and copying link builder data
+        linksSheet.getRange('I2:I').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'I2');
+        setPlainTextFormat(linksSheet, [1]);
+
+        // Generating QR codes
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('I2:I').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+        // Append ORDERMATCH data to VINLOG (Column B)
+        Logger.log("Appending ORDERMATCH data to VINLOG...");
+
+        // Get data from ORDERMATCH (Column F)
+        var orderMatchData = newTargetOrdermatchSheet.getRange('F:F').getValues().filter(String); // Removing empty rows
+        
+        // Find the last row in Column B of the VINLOG sheet
+        var lastRowVinlog = vinlogSheet.getLastRow();
+        var nextRowVinlog = lastRowVinlog + 2; // Leave one blank row between existing data and new data
+
+        // Append the data with a blank row
+        vinlogSheet.getRange(nextRowVinlog, 2, orderMatchData.length, 1).setValues(orderMatchData);
+
+        Logger.log("Data from ORDERMATCH has been successfully appended to VINLOG.");
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function bommaritoCadillac() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '12UM_d1Oi3JGMhNi0U2KqObo70Zu6QR_xN25qvyhjPpY';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1l77_PQ5uuOhGBAAdpgIECeurcyZ9B2A87UzsaZ-PFy0';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1zolDEYMEnUID8nfiFC4pIdhgJKdEDeBB';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Bommarito Cadillac');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+        var newTargetOrdermatchSheet = newTargetSpreadsheet.getSheetByName('ORDERMATCH');
+
+        // Copying and pasting data between sheets
+        copyAndPasteData(sourceOrdersSheet, 'J2:J', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [5, 6]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [1, 2]);
+
+        // Clearing and copying link builder data
+        linksSheet.getRange('J2:J').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'J2');
+        setPlainTextFormat(linksSheet, [1]);
+
+        // Generating QR codes
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('J2:J').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+        // Append ORDERMATCH data to VINLOG (Column B)
+        Logger.log("Appending ORDERMATCH data to VINLOG...");
+
+        // Get data from ORDERMATCH (Column F)
+        var orderMatchData = newTargetOrdermatchSheet.getRange('F:F').getValues().filter(String); // Removing empty rows
+        
+        // Find the last row in Column B of the VINLOG sheet
+        var lastRowVinlog = vinlogSheet.getLastRow();
+        var nextRowVinlog = lastRowVinlog + 2; // Leave one blank row between existing data and new data
+
+        // Append the data with a blank row
+        vinlogSheet.getRange(nextRowVinlog, 2, orderMatchData.length, 1).setValues(orderMatchData);
+
+        Logger.log("Data from ORDERMATCH has been successfully appended to VINLOG.");
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function serraHonda() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1Qu4U8hcLIUGLMBGsPJOyRJFem3E8oRk2nPPzy5CH6QA';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1mU1roZRgYpQsHffJtGD7NHeGf61Tdet-AduAETTFOkc';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1ZHb0XdF6Zygn8IjwpTDF53wisJsQWtY9';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Serra Honda');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'k2:k', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [5, 11, 13]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [1, 2]);
+
+        linksSheet.getRange('k2:k').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'k2');
+        setPlainTextFormat(linksSheet, [3]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('k2:k').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function socodcjr() {
+    try {
+        var ui = SpreadsheetApp.getUi();
+        var steps = [];
+
+        steps.push("Starting the process...");
+        updateProgressDialog(steps);
+
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1SvQ7m8DlblsuFNyB7LNI9OjjxVhI2MKnffsNqmvoo7U';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1dmmT2pYt2FG1ekvtnUtwncBBPOFgoi-dDYCelCeWDZc';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '12ncJ324tJ_xAylHmNzMcnMtJkPqNWTZv';
+
+        steps.push("Copying target spreadsheet to folder...");
+        updateProgressDialog(steps);
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        steps.push("Fetching source and target sheets...");
+        updateProgressDialog(steps);
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('SoCo DCJR');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        steps.push("Copying and pasting data...");
+        updateProgressDialog(steps);
+        copyAndPasteData(sourceOrdersSheet, 'L2:L', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [5, 11, 13]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [1, 2]);
+
+        steps.push("Updating links...");
+        updateProgressDialog(steps);
+        linksSheet.getRange('L2:L').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'L2');
+        setPlainTextFormat(linksSheet, [7]);
+
+        steps.push("Generating QR codes...");
+        updateProgressDialog(steps);
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('L2:L').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+        steps.push("Process completed successfully.");
+        updateProgressDialog(steps, true);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function updateProgressDialog(steps, isComplete) {
+    var html = '<html><body>';
+    html += '<ul>';
+    for (var i = 0; i < steps.length; i++) {
+        html += '<li>' + steps[i] + '</li>';
+    }
+    html += '</ul>';
+    if (isComplete) {
+        html += '<p><b>Process completed. You may close this window.</b></p>';
+    }
+    html += '</body></html>';
+
+    var ui = SpreadsheetApp.getUi();
+    var dialog = HtmlService.createHtmlOutput(html).setWidth(300).setHeight(200);
+    ui.showModalDialog(dialog, "Progress Tracker");
+}
+
+
+function glendaleCDJR() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '19WlYVk28sQuy95O--OQH50dFCzk0aCABNNq4eglk2ho';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1YOpMB-Csb6iI9xE1rrfwN15fY32m1zzjVSWJfYe5mZk';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1hd7sxZhkwWqGGNuN9aWqSglI1H3AbH5S';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Glendale CDJR');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        // Copy and paste data
+        copyAndPasteData(sourceOrdersSheet, 'M2:M', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10 ,11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [1, 2]);
+
+        // Fetch last row and get values from columns C and D
+        var lastRow = newTargetScraperDataSheet.getLastRow();
+        var columnCValues = newTargetScraperDataSheet.getRange('C1:C' + lastRow).getValues();
+        var columnDValues = newTargetScraperDataSheet.getRange('D1:D' + lastRow).getValues();
+
+        // Loop through the values
+        for (var i = 0; i < columnCValues.length; i++) {
+            var columnCValue = columnCValues[i][0];
+            var columnDValue = columnDValues[i][0];
+            
+            // 1. If column C is "Wrangler Unlimited", change to "Wrangler" and add "Unlimited " to column D
+            if (columnCValue === "Wrangler Unlimited") {
+                columnCValues[i][0] = "Wrangler"; // Change column C to "Wrangler"
+                columnDValues[i][0] = "Unlimited " + (columnDValue || ""); // Prepend "Unlimited " to column D
+            }
+
+            // 2. If column D contains "5'7 BOX" or "6'4 BOX", remove it
+            if (columnDValue.includes("5'7 BOX") || columnDValue.includes("6'4 BOX")) {
+                columnDValues[i][0] = columnDValue.replace("5'7 BOX", "").replace("6'4 BOX", "").trim();
+            }
+
+            // 3. If column C contains "Grand Cherokee", "Grand Wagoneer", or "Wagoneer", and column D starts with "L ", update accordingly
+            if ((columnCValue.includes("Grand Cherokee") || columnCValue.includes("Grand Wagoneer") || columnCValue.includes("Wagoneer")) && columnDValue.startsWith("L ")) {
+                columnDValues[i][0] = columnDValue.replace(/^L\s*/, ""); // Remove "L " from column D
+                columnCValues[i][0] = columnCValue + " L"; // Add " L" to the end of column C
+            }
+        }
+
+        // Set the updated values back to the sheet
+        newTargetScraperDataSheet.getRange('C1:C' + lastRow).setValues(columnCValues);
+        newTargetScraperDataSheet.getRange('D1:D' + lastRow).setValues(columnDValues);
+
+        // Continue with the rest of your script
+        linksSheet.getRange('M2:M').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'M2');
+        setPlainTextFormat(linksSheet, [13]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('M2:M').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+
+
+function daveSinclairLincoln() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1WkT2r79FasAqi-8_eG-RdM2w9gey-8qV4eM_L5MuUMM';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1g4R-NTVqCXmPIUxylDIp5GOUskQ60r_3l8NlLdatJE4';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1xuC3Y7qUeSapbLTps4oANA9o1xl41xq1';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Dave Sinclair Lincoln');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'N2:N', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10 ,11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [1, 2]);
+
+        linksSheet.getRange('N2:N').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'N2');
+        setPlainTextFormat(linksSheet, [14]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('N2:N').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function suntrupKia
+
+() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1PBLPLB9GLwu4oChgZVhEO2R_4tqqrCGSlbalDYSMdDo';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1bLdTt2-vuDdr0riaWGMNJXeNuRYeAqVDy9Zs4yrRGhg';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1hGdPvtlZBCEDfWBvB3DFU3-hVDgDn-Ad';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Suntrup Kia South');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'O2:O', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1,2]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [2]);
+
+        linksSheet.getRange('O2:O').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'O2');
+        setPlainTextFormat(linksSheet, [15]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('O2:O').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function pundmannFord() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1RtCtOHqFGuTwB8-uF0TsWPkyoWDBfxaAUAvaI8QNhoc';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1kBmsxnTwFdZIKiavfa9d98vyKLpRE34Uah36cVA1vKs';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1z3P4c0ZbJiMZIP8N4jyP-d857Z3GSm3i'
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Pundmann Ford');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'Q2:Q', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [5]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [1,2]);
+
+        linksSheet.getRange('Q2:Q').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'Q2');
+        setPlainTextFormat(linksSheet, [17]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('Q2:Q').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function comoBMW() {
+    try {
+        Logger.log("Starting script execution...");
+
+        // Input parameters
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1q5Abfosv0oDuD3eetzg9ys8y7BMpgnGc6NlkGhsiYUg';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1ECd5sEhXe1bRZld4uijaPPg0NebRitPVd6ovfX8127k';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1lt1s0xFgTFobj8ULs_SLBGn17mvd5glR';
+
+        Logger.log("Copying target spreadsheet to folder...");
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        Logger.log("Opening source spreadsheet: " + sourceSpreadsheetId);
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('BMW of Columbia');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+
+        Logger.log("Opening target sheets...");
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        Logger.log("Copying data from source to target sheets...");
+        copyAndPasteData(sourceOrdersSheet, 'R2:R', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1, 2]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [2]);
+
+        Logger.log("Clearing and updating LINKS sheet...");
+        linksSheet.getRange('R2:R').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'C:C', linksSheet, 'R2');
+        setPlainTextFormat(linksSheet, [18]);
+
+        Logger.log("Preparing for QR code generation...");
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('R2:R').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+
+        Logger.log("Generating QR codes...");
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+        Logger.log("Script execution completed successfully.");
+
+    } catch (e) {
+        Logger.log("An error occurred: " + e.message + " | Stack: " + e.stack);
+        SpreadsheetApp.getUi().alert("An error occurred: " + e.message + "\nCheck Logs for more details.");
+    }
+}
+
+function tomStehouwer() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1PFefpxAPiuwl6jfMLWb9ZlX2oQsSJKwlo_-3u-T5JdE';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1EXwOS6mZ3iNbT_mgZ6KWmgIrR1b5fRP2w52eOwnuWyA';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '17kNyLFaV3hefxMCF92a8fhoqhRB5oxxb';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Tom Stehouwer Auto Sales');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'S2:S', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1,2]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [2]);
+
+        linksSheet.getRange('S2:S').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'S2');
+        setPlainTextFormat(linksSheet, [19]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('S2:S').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function rustydCadillac
+
+() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1vgVrIUXzTRbm7yAb2ZM1m8gKc8o6rAXvYEccThTKzm8';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1m2bM1Rz9ESLhG456u06xtnWAmu_Q0alwnBUH4W_P_aE';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1YgPT66AA8FbY4hrfiYe_1wzevyAIMzqI';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Rusty Drewing Cadillac');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'T2:T', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1,2]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [2]);
+
+        linksSheet.getRange('T2:T').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'T2');
+        setPlainTextFormat(linksSheet, [20]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('T2:T').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function rustydChevy() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '129bz1AMoj2ZwJ45wllOxc6tPSS2ItxNcpY43FUpOJDs';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1vFvqAuVxh8X3vmrZw1fYWVzTLa2SuzqTSENF2QH8RkM';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1tM31Fi_39L1OfveZ66a0eX6frnBApl4T';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Rusty Drewing Chevrolet Buick GMC');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'P2:P', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1,2]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [2]);
+
+        linksSheet.getRange('P2:P').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'P2');
+        setPlainTextFormat(linksSheet, [16]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('P2:P').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function jmToyota() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1popiFJYUFTD_6R7LV91FyqPzfiiFW7WjvGmr7Y827qw';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1dFXOuPi3AAzZtz-grz-eUy5JknxkBLpb5GjeQnhhDV0';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1Jok_LJO6B2IFLvBg42iypJmiYlznxxdM';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Joe Machens Toyota');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'U2:U', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1,2]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [2]);
+
+        linksSheet.getRange('U2:U').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'U2');
+        setPlainTextFormat(linksSheet, [21]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('U2:U').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function landRoverRanchoMirage
+
+() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1xM3L5Wg8Pghhz2UPBdW61cPhzpCtRY-dFwk9kYzNXy4';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1vLztmYS5whVdQ6JF6c0Y8trpG43SvPNNW39SdkcdYoE';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1D0zkGcUmyrPRHIHDQMDqJtutT-3QtQoB';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Land Rover Rancho Mirage');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'V2:V', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1,2]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [2]);
+
+        linksSheet.getRange('V2:V').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'V2');
+        setPlainTextFormat(linksSheet, [22]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('V2:V').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function audiRanchoMirage
+
+() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1AkKkuNJ8vfMOYgFZr6i_2-LekCVm3BsR4FinslJSgN8';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1-QzNqzpVgKN-hzM9WjaTLq9mnpORnk6ysUPUtMWXEA4';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1c_vM8m_x6-mgqdPZOJ7D8ZPBs7AeG-zx';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Audi Rancho Mirage');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'W2:W', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1,2]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [2]);
+
+        linksSheet.getRange('W2:W').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'W2');
+        setPlainTextFormat(linksSheet, [23]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('W2:W').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function indiGOAutoGroup
+
+() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1lv6mMhE0YzWpZjNG_aDa1kZgDEf4eQYsTHz8U0wbSL8';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1-YdxzNlSTOSD_7tI-AOYs3DKQM2iwhuO8OxEUeFTF68';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '12lWqsy0GROyYAgT8ljzt0mZmbsS5GvD9';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('indiGO Auto Group');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'X2:X', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1,2]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [2]);
+
+        linksSheet.getRange('X2:X').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'X2');
+        setPlainTextFormat(linksSheet, [24]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('X2:X').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function jaguarRanchoMirage
+
+() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '19Qv81P2dsHin1wQqua-1H5BlXWwMYFWwHpyTPJg5orA';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '14y3TqWOOPg_2Dyu1ykPEMN_2krh_Zc5HfAp14tPlTM4';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1CqIX-qvYChorE239sJNaqmMW1gTGNc5B';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Jaguar Rancho Mirage');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'Y2:Y', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1,2]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [2]);
+
+        linksSheet.getRange('Y2:Y').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'Y2');
+        setPlainTextFormat(linksSheet, [25]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('Y2:Y').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function suntrupHyundai
+
+() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1xeslw_SMnP9YnESx_b8bNuYWUWssySVTW0_ZkFkq3i4';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '14MEIbVOd_iOjSYEaCDwM_FuvNPjgotpCctH7t8LNaRY';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1KIFeAZY1W3Kvfm1PVICByiBKPE_i5H5J';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Suntrup Hyundai South');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'Z2:Z', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1,2]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [2]);
+
+        linksSheet.getRange('Z2:Z').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'Z2');
+        setPlainTextFormat(linksSheet, [26]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('Z2:Z').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function vcwc
+
+() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1tKK82T4syDAUS587p_veRD8YJZXVxVGqJbtcYKBgWOM';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1gQVhUQS_ACxFQMZ5jqqP_CXyxj6-DPK3iorYi_aCGQU';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1_nvm0oXLJNX1gW0KWKl7SkKYN7CuwysC';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Volvo Cars West County');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'AA2:AA', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1,2]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [2]);
+
+        linksSheet.getRange('AA2:AA').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'AA2');
+        setPlainTextFormat(linksSheet, [27]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('AA2:AA').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function thoroughbredFord
+
+() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1kVVHujhUV2vIbeWAgusURlRC8BjFEfc5rfvaWmpp4Vc';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1eqJt4KfHZv4bwkYet5E3Nx_STJ1gDnvWsJtPTHQQUG4';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1CVSWlvumPLhAuFvcLFRXiDjjxed3Glbm';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Thoroughbred Ford');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'AB2:AB', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1,2]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [2]);
+
+        linksSheet.getRange('AB2:AB').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'AB2');
+        setPlainTextFormat(linksSheet, [28]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('AB2:AB').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function daveSinclairLincSTPETE
+
+() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1yaJnhf7mf-3OUT6ZP5kO1OJWxsdpZdg_-4GEv_T92jk';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1I_kBJyEMH5F74WW9r0eElYXVG-qJ-up1mpPOA62vuqU';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1Q12PUoxkeXqBu2oBFgC-PtXnQ7psFJXA';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Dave Sinclair Lincoln St. Peters');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'AC2:AC', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1,2]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [2]);
+
+        linksSheet.getRange('AC2:AC').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'AC2');
+        setPlainTextFormat(linksSheet, [29]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('AC2:AC').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function suntrupBGMC
+
+() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1IHzSAhdYfB4mS6HigUbE2C-xVUz4Czk5DZVw0mt9k-8';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1fqg6mdv6Gk3kBBwSDpbUp6NoqDyL3THv7Z9C_KxQK_Y';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1oqHfwVryzhp8mjeXqLs7PQl7H2VAhvh7';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Suntrup Buick GMC');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'AD2:AD', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1,2]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [2]);
+
+        linksSheet.getRange('AD2:AD').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'AD2');
+        setPlainTextFormat(linksSheet, [30]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('AD2:AD').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function comoHonda() {
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1VI0u0JBjLK1SMnfyzLh_Y9qhYSLDcfOGYoJ5FciW2Ac';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1LRSufnkt7jSn73l_M_d8jez2bfnJ8kH4wSXdJE04yTI';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1KNT22vn4_qDD6r-9OZ2brutCJwRuD3pI';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Columbia Honda');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'AF2:AF', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1,2]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [2]);
+
+        // FIXED: Clear the range first, then copy starting from AF2 (not AF:AF)
+        linksSheet.getRange('AF2:AF').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'AF2');
+        setPlainTextFormat(linksSheet, [32]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        
+        // FIXED: Get only the data range that actually has content (AF2:AF, not AF:AF)
+        // This ensures we start from actual data, not empty header rows
+        var links = linksSheet.getRange('AF2:AF').getValues().filter(function(row) {
+            return row[0] && row[0].toString().trim() !== ''; // Filter out empty rows
+        });
+        
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+    function suntrupFordWestport
+    
+    () {
+      try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1nKYiiLldc58zVZ8nfF8pnZtxQwX7mMOH8cyaK6CSwp8';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1hVIEskBNAgC8wxxj67cXRrpO2sfqFHEUl0NHen6HXYg';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1_d4MQFgrRQNhk8icRmzRknV4c8ySXFh7';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Suntrup Ford Westport');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'AG2:AG', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1,2]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [2]);
+
+        linksSheet.getRange('AG2:AG').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'AG2');
+        setPlainTextFormat(linksSheet, [33]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('AG2:AG').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+    
+    function suntrupFordWestport
+    
+    () {
+      try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1nKYiiLldc58zVZ8nfF8pnZtxQwX7mMOH8cyaK6CSwp8';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1hVIEskBNAgC8wxxj67cXRrpO2sfqFHEUl0NHen6HXYg';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1_d4MQFgrRQNhk8icRmzRknV4c8ySXFh7';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Suntrup Ford Westport');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'AG2:AG', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1,2]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [2]);
+
+        linksSheet.getRange('AG2:AG').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'AG2');
+        setPlainTextFormat(linksSheet, [33]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('AG2:AG').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+function bmwWSTL() {
+
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1EtxYq7I66ZqD-4nIJJJPIATnpqjn8sqAXM0Dwm-Z5Q8';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1ROiwdog70_g6msNFWQzZuOoQPrA6_D4fMH90FCV62yI';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '168d05y0_NAnX8ce1YaEHc7C5xb6c9vsl';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('BMW of West St Louis');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'AJ2:AJ', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1,2]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [2]);
+
+        linksSheet.getRange('AJ2:AJ').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'AJ2');
+        setPlainTextFormat(linksSheet, [36]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('AJ2:AJ').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function frankLetaHonda(){
+
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1FfOGRw4putj4dMnjla_Pa6xhK6aaMlafBpiQektp2C4';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1sIUhzbjnfWgvC3DnnCSA_64tsx5TcKyFYO_Lo5mAEpE';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1IO2q2hDbJ1L9alzDneRNN0NYce8CsaKM';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('Frank Leta Honda');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'AI2:AI', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1,2,5]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [2]);
+
+        linksSheet.getRange('AI2:AI').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'AI2');
+        setPlainTextFormat(linksSheet, [35]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('AI2:AI').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) {
+        handleError(e);
+    }
+}
+
+function hwKia(){
+
+
+    try {
+        var sourceSpreadsheetId = '12K43Fd8LNHeor6VEGhk-QOQFNjWOFR-v3PORPstiwSQ';
+        var targetSpreadsheetId = '1FTsJ8NhaCb0rK_0TEbRExpqGpRUadJ0FJHEc2FtqeBE';
+        var folderId = '1HvX8V2u4GZBzdypjKxz2jlsRvK0PHnaF';
+        var vinlogSpreadsheetId = '1NwHjM6x60TTLsphLLPkDoPptts2b4LClDWUVwHNeO-4';
+        var linksSpreadsheetId = '1Ob04slQoLPOvFtDTmrp8Q_FJYZyfSR0pSmDEU_EYywE';
+        var downloadFolderId = '1xucUlnsYELxBlTcPFJiCs3ne-IOs9qBI';
+
+        var newTargetSpreadsheet = copySpreadsheetToFolder(targetSpreadsheetId, folderId);
+
+        var sourceOrdersSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('ORDERS');
+        var sourceScraperDataSheet = SpreadsheetApp.openById(sourceSpreadsheetId).getSheetByName('HW Kia of West County');
+        var vinlogSheet = SpreadsheetApp.openById(vinlogSpreadsheetId).getSheetByName('LOG');
+        var newTargetOrdersSheet = newTargetSpreadsheet.getSheetByName('ORDER');
+        var newTargetScraperDataSheet = newTargetSpreadsheet.getSheetByName('SCRAPERDATA');
+        var newTargetLogSheet = newTargetSpreadsheet.getSheetByName('LOG');
+        var linkBuilderSheet = newTargetSpreadsheet.getSheetByName('LINKBUILDER');
+        var linksSheet = SpreadsheetApp.openById(linksSpreadsheetId).getSheetByName('LINKS');
+
+        copyAndPasteData(sourceOrdersSheet, 'AH2:AH', newTargetOrdersSheet, 'A2');
+        copyAndPasteData(sourceScraperDataSheet, 'A:U', newTargetScraperDataSheet, 'A1');
+        setPlainTextFormat(newTargetScraperDataSheet, [1,2]);
+        copyAndPasteData(vinlogSheet, 'A:B', newTargetLogSheet, 'A1');
+        setPlainTextFormat(newTargetLogSheet, [2]);
+
+        linksSheet.getRange('AH2:AH').clearContent();
+        copyAndPasteData(linkBuilderSheet, 'B:B', linksSheet, 'AH2');
+        setPlainTextFormat(linksSheet, [34]);
+
+        var sheetNameForQR = sourceScraperDataSheet.getName().replace(/ /g, '_');
+        var links = linksSheet.getRange('AH2:AH').getValues();
+        var downloadFolder = DriveApp.getFolderById(downloadFolderId);
+        generateQRCodes(links, downloadFolder, sheetNameForQR);
+
+    } catch (e) { 
+        handleError(e);
+        }
+}

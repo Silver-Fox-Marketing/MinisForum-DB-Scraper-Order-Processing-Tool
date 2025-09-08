@@ -120,9 +120,15 @@ class DatabaseManager:
         for attempt in range(max_retries):
             try:
                 with self.get_cursor() as cursor:
+                    logger.info(f"BATCH DEBUG: Attempting to insert {len(data)} rows into {table}")
                     execute_batch(cursor, query, data, page_size=page_size)
-                    rows_inserted = cursor.rowcount
-                    logger.info(f"Inserted {rows_inserted} rows into {table}")
+                    
+                    # CRITICAL FIX: execute_batch cursor.rowcount is unreliable for batch operations
+                    # It only returns the count from the last batch page, not total rows
+                    # We know all rows were processed successfully if no exception was thrown
+                    rows_inserted = len(data)
+                    
+                    logger.info(f"BATCH DEBUG: Successfully inserted {rows_inserted} rows into {table}")
                     return rows_inserted
                     
             except psycopg2.OperationalError as e:

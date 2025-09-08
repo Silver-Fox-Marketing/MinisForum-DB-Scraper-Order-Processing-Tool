@@ -229,7 +229,7 @@ class EnhancedScraperController:
             'wcvolvocars.com': {
                 'class': 'WCVOLVOCARS',
                 'method': 'start_scraping_wcvolvocars',
-                'display_name': 'West County Volvo Cars'
+                'display_name': 'Volvo Cars West County'
             },
             'joemachenstoyota.com': {
                 'class': 'JOEMACHENSTOYOTA',

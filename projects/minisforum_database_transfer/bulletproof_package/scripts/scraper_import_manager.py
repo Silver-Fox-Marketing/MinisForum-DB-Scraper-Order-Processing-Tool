@@ -407,10 +407,12 @@ class ScraperImportManager:
                     vin,
                     processed_date,
                     order_number,
-                    template_type,
-                    created_at
+                    order_type,
+                    dealership,
+                    created_at,
+                    order_date
                 FROM {table_name}
-                ORDER BY created_at DESC
+                ORDER BY processed_date DESC, created_at DESC
                 LIMIT %s
             """, (limit,))
             

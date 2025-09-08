@@ -142,7 +142,7 @@ class Scraper18WebController:
             'Suntrup Kia South': 'suntrupkiasouth.com',
             'Thoroughbred Ford': 'thoroughbredford.com',
             'Weber Chevrolet': 'weberchev.com',
-            'West County Volvo Cars': 'wcvolvocars.com'
+            'Volvo Cars West County': 'wcvolvocars.com'
         }
         
         self.logger.info(f"Scraper18WebController initialized with {len(self.display_to_site_mapping)} dealerships")

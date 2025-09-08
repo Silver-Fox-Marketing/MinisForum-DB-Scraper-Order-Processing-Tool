@@ -1,0 +1,2610 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Silver Fox Marketing STL - Order Form Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Verdana, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f5f5;
+        }
+
+        /* Enhanced dropdown styling */
+.form-group select {
+    cursor: pointer;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px;
+    padding-right: 40px;
+}
+
+.form-group select:hover {
+    border-color: #4CAF50;
+    box-shadow: 0 2px 8px rgba(76, 175, 80, 0.2);
+    background-color: #f8fff8;
+    transition: all 0.3s ease;
+}
+
+/* Option hover effects (limited browser support) */
+.form-group select option:hover {
+    background-color: #4CAF50;
+    color: white;
+}
+
+/* Custom dropdown preview tooltip */
+.dropdown-preview {
+    position: absolute;
+    background: #333;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    z-index: 1000;
+    opacity: 0;
+    transform: translateY(-5px);
+    transition: all 0.3s ease;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.dropdown-preview.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.dropdown-preview::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border: 5px solid transparent;
+    border-top-color: #333;
+}
+
+        /* Enhanced focus animations */
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #4CAF50;
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1), 0 4px 12px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px) scale(1.002);
+    background: #ffffff;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Label animation on focus */
+.form-group input:focus + label,
+.form-group select:focus + label,
+.form-group textarea:focus + label {
+    color: #4CAF50;
+    transform: translateY(-2px);
+    transition: all 0.3s ease;
+}
+
+/* Pulse animation for required fields */
+.form-group input:invalid:focus,
+.form-group select:invalid:focus,
+.form-group textarea:invalid:focus {
+    animation: pulseRed 0.6s ease-in-out;
+}
+
+@keyframes pulseRed {
+    0% { box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(255, 68, 68, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 68, 68, 0); }
+}
+
+/* Field section hover effects */
+.field-section:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.15);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Button hover enhancements */
+.copy-button:hover {
+    background: linear-gradient(135deg, #E63A0A 0%, #D1340A 50%, #E63A0A 100%);
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 6px 16px rgba(253, 65, 13, 0.4);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+        .copy-button-container {
+    position: sticky;
+    bottom: 0;
+    background: linear-gradient(to top, white 70%, transparent);
+    padding: 10px 0 0 0;
+    margin-top: auto;
+}
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #000000 0%, #1a1a1a 50%, #333333 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.03), transparent);
+            animation: headerShimmer 6s infinite;
+        }
+
+        @keyframes headerShimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 5px;
+            font-weight: 600;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            position: relative;
+            z-index: 1;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+            position: relative;
+            z-index: 1;
+            font-weight: 300;
+        }
+
+        .main-content {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+        }
+
+        .form-section {
+            padding: 30px;
+            background-color: white;
+            border-right: 2px solid #333;
+        }
+
+        .output-section {
+            padding: 30px;
+            background-color: #f9f9f9;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .output-header {
+            margin-bottom: 20px;
+        }
+
+        .output-header h3 {
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .output-header p {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .output-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .output-text {
+            flex: 1;
+            width: 100%;
+            min-height: 400px;
+            padding: 15px;
+            border: 2px solid #333;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            background-color: white;
+            resize: none;
+            margin-bottom: 15px;
+        }
+
+        .copy-button {
+    background: linear-gradient(135deg, #FD410D 0%, #E63A0A 50%, #FD410D 100%);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: Verdana, Arial, sans-serif;
+    font-size: 14px;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+        .copy-button:hover {
+    background: linear-gradient(135deg, #E63A0A 0%, #D1340A 50%, #E63A0A 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(253, 65, 13, 0.4);
+}
+
+        .copy-button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .copy-button.success {
+            background: linear-gradient(135deg, #2e7d32 0%, #4CAF50 50%, #2e7d32 100%) !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+        }
+
+        .copy-button.success:hover {
+            background: linear-gradient(135deg, #2e7d32 0%, #4CAF50 50%, #2e7d32 100%) !important;
+        }
+
+        .copy-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            transition: left 0.5s;
+        }
+
+        .copy-button:hover::before {
+            left: 100%;
+        }
+
+        .field-section {
+            border: none;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .field-section:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        }
+
+        .field-section legend {
+            background: linear-gradient(135deg, #333 0%, #555 100%);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 25px;
+            font-weight: 600;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            border: none;
+        }
+
+        .conditional-section {
+            border: none;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            background: linear-gradient(145deg, #1a1a1a 0%, #2d2d2d 100%);
+            color: white;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .conditional-section.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .conditional-section legend {
+            background: linear-gradient(135deg, #444 0%, #666 100%);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 25px;
+            font-weight: 600;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+        }
+
+        .nested-conditional-fields {
+            border: none;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            background: linear-gradient(145deg, #333 0%, #444 100%);
+            color: white;
+            opacity: 0;
+            transform: translateY(-5px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .nested-conditional-fields.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+            position: relative;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: inherit;
+            font-size: 14px;
+            transition: color 0.3s ease;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 16px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-family: Verdana, Arial, sans-serif;
+            background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+            color: #333;
+            font-size: 14px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1), 0 4px 12px rgba(0, 0, 0, 0.08);
+            transform: translateY(-1px);
+            background: #ffffff;
+        }
+
+        .form-group input:hover,
+        .form-group select:hover,
+        .form-group textarea:hover {
+            border-color: #c1c7cd;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .conditional-section .form-group input,
+        .conditional-section .form-group select,
+        .conditional-section .form-group textarea,
+        .nested-conditional-fields .form-group input,
+        .nested-conditional-fields .form-group select,
+        .nested-conditional-fields .form-group textarea {
+            background: linear-gradient(145deg, #2a2a2a 0%, #1e1e1e 100%);
+            border: 2px solid #444;
+            color: white;
+        }
+
+        .conditional-section .form-group input:focus,
+        .conditional-section .form-group select:focus,
+        .conditional-section .form-group textarea:focus,
+        .nested-conditional-fields .form-group input:focus,
+        .nested-conditional-fields .form-group select:focus,
+        .nested-conditional-fields .form-group textarea:focus {
+            border-color: #66BB6A;
+            box-shadow: 0 0 0 3px rgba(102, 187, 106, 0.2), 0 4px 12px rgba(0, 0, 0, 0.3);
+            background: #333;
+        }
+
+        .form-group textarea {
+            min-height: 90px;
+            resize: vertical;
+            line-height: 1.5;
+        }
+
+        .required {
+            color: #ff4444;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 15px;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+        }
+
+        .footer {
+            background-color: #333;
+            color: white;
+            text-align: center;
+            padding: 15px;
+            margin-top: auto;
+        }
+
+        small {
+            color: #ffd700;
+            font-style: italic;
+            display: block;
+            margin-bottom: 8px;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .conditional-section small,
+        .nested-conditional-fields small {
+            color: #ffd700;
+            margin-bottom: 8px;
+        }
+
+        /* Radio button styling */
+        .radio-group {
+            margin-top: 5px;
+        }
+
+        .radio-option {
+            display: inline-flex;
+            align-items: center;
+            margin-right: 20px;
+            margin-bottom: 5px;
+            font-weight: normal;
+        }
+
+        .radio-option input[type="radio"] {
+            margin-right: 5px;
+            width: auto;
+        }
+
+        .radio-vertical .radio-option {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        /* Auto-save indicator styles */
+        .autosave-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 1000;
+            transition: all 0.3s ease;
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+
+        .autosave-indicator.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .autosave-indicator.saving {
+            background-color: #2196F3;
+            color: white;
+        }
+
+        .autosave-indicator.saved {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .autosave-indicator.error {
+            background-color: #f44336;
+            color: white;
+        }
+
+        /* Draft notification styles */
+        .draft-notification {
+            background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%);
+            border: 2px solid #FF9800;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 20px;
+            box-shadow: 0 2px 8px rgba(255, 152, 0, 0.2);
+            display: none;
+        }
+
+        .draft-notification h3 {
+            color: #E65100;
+            margin: 0 0 8px 0;
+            font-size: 16px;
+        }
+
+        .draft-notification p {
+            color: #BF360C;
+            margin: 0 0 12px 0;
+            font-size: 14px;
+        }
+
+        .draft-notification .button-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .draft-notification button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+
+        .draft-notification .restore-btn {
+            background-color: #FF9800;
+            color: white;
+        }
+
+        .draft-notification .restore-btn:hover {
+            background-color: #F57C00;
+        }
+
+        .draft-notification .dismiss-btn {
+            background-color: #757575;
+            color: white;
+        }
+
+        .draft-notification .dismiss-btn:hover {
+            background-color: #616161;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .form-section {
+                border-right: none;
+                border-bottom: 2px solid #333;
+            }
+            
+            .container {
+                margin: 15px;
+                padding: 15px;
+            }
+            
+            .header h1 {
+                font-size: 1.5em;
+            }
+            
+            .output-text {
+                min-height: 250px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 20px;">
+                <div style="text-align: center;">
+                    <h1>Silver Fox Marketing STL</h1>
+                    <p>Internal Order Processing Tool</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Auto-save indicator -->
+        <div id="autosaveIndicator" class="autosave-indicator">
+            <span id="autosaveText">💾 Saving...</span>
+        </div>
+
+        <!-- Draft notification -->
+        <div id="draftNotification" class="draft-notification">
+            <h3>📋 Draft Found</h3>
+            <p>We found a saved draft from <span id="draftTimestamp"></span>. Would you like to restore your previous work?</p>
+            <div class="button-group">
+                <button id="restoreDraftBtn" class="restore-btn">Restore Draft</button>
+                <button id="dismissDraftBtn" class="dismiss-btn">Start Fresh</button>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="form-section">
+                <form id="orderForm">
+                    <!-- Basic Order Information -->
+                    <fieldset class="field-section">
+                        <legend>Basic Order Information</legend>
+                        
+                        <div class="form-group">
+                            <label for="orderType">Order Type <span class="required">*</span></label>
+                            <select id="orderType" name="orderType" required>
+                                <option value="">Please Select:</option>
+                                <option value="Vehicle Merchandising">Vehicle Merchandising</option>
+                                <option value="Dealership Merchandising">Dealership Merchandising</option>
+                                <option value="Custom Special Products">Custom Special Products</option>
+                                <option value="New Template Request">New Template Request</option>
+                                <option value="Business Cards">Business Cards</option>
+                                <option value="Custom Banners">Custom Banners</option>
+                            </select>
+                        </div>
+                    </fieldset>
+
+                    <!-- Conditional Fields Container -->
+                    <div id="conditionalFieldsContainer"></div>
+                </form>
+            </div>
+
+            <div class="output-section">
+                <div class="output-header">
+                    <h3>Order Summary</h3>
+                    <p>Formatted for PipeDrive CRM - Dynamic Content Panel</p>
+                </div>
+                
+                <div class="output-container">
+                    <textarea id="outputText" class="output-text" readonly placeholder="Select an order type to begin generating your order summary..."></textarea>
+                    
+                    <div class="copy-button-container">
+    <button id="copyButton" class="copy-button">Copy to Clipboard</button>
+</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>&copy; 2025 Silver Fox Marketing STL - Internal Order Processing Tool</p>
+        </div>
+    </div>
+
+    <script>
+        class OrderFormEngine {
+            constructor() {
+                this.init();
+            }
+
+            init() {
+                // Initialize auto-save
+                setTimeout(() => {
+                    this.initializeAutoSave();
+                }, 100);
+
+                document.getElementById('orderType').addEventListener('change', (e) => {
+                    this.handleOrderTypeChange(e.target.value);
+                });
+
+                document.getElementById('copyButton').addEventListener('click', () => {
+                    this.copyToClipboard();
+                });
+
+                const form = document.getElementById('orderForm');
+                form.addEventListener('input', () => {
+                    this.generateOrderSummary();
+                });
+
+                form.addEventListener('change', () => {
+                    this.generateOrderSummary();
+                });
+
+                this.generateOrderSummary();
+            }
+
+            initializeAutoSave() {
+                const indicator = document.getElementById('autosaveIndicator');
+                const notification = document.getElementById('draftNotification');
+                
+                if (indicator && notification) {
+                    this.autoSave = new AutoSave('orderForm');
+                }
+            }
+
+            handleOrderTypeChange(orderType) {
+                const container = document.getElementById('conditionalFieldsContainer');
+                container.innerHTML = '';
+
+                if (!orderType) {
+                    this.generateOrderSummary();
+                    return;
+                }
+
+                this.createOrderTypeSection(container, orderType);
+                this.generateOrderSummary();
+            }
+
+            createOrderTypeSection(container, orderType) {
+                switch (orderType) {
+                    case 'Vehicle Merchandising':
+                        this.createVehicleMerchandisingSection(container);
+                        break;
+                    case 'Dealership Merchandising':
+                        this.createDealershipMerchandisingSection(container);
+                        break;
+                    case 'Custom Special Products':
+                        this.createCustomSpecialProductsSection(container);
+                        break;
+                    case 'New Template Request':
+                        this.createNewTemplateRequestSection(container);
+                        break;
+                    case 'Business Cards':
+                        this.createBusinessCardsSection(container);
+                        break;
+                    case 'Custom Banners':
+                        this.createCustomBannersSection(container);
+                        break;
+                }
+            }
+
+            createVehicleMerchandisingSection(container) {
+                const section = document.createElement('fieldset');
+                section.className = 'conditional-section';
+                section.innerHTML = `
+                    <legend>Vehicle Merchandising Details</legend>
+                    
+                    <div class="form-group">
+                        <label for="vm_productType">Product Type <span class="required">*</span></label>
+                        <select id="vm_productType" name="vm_productType" required>
+                            <option value="">Please Select:</option>
+                            <option value="Windshield Banners">Windshield Banners</option>
+                            <option value="Side Banners">Side Banners</option>
+                            <option value="Complement Graphics">Complement Graphics</option>
+                            <option value="Specially Sized Graphics">Specially Sized Graphics</option>
+                        </select>
+                    </div>
+
+                    <div id="vm_nestedFields"></div>
+                `;
+                
+                container.appendChild(section);
+                this.animateIn(section);
+
+                document.getElementById('vm_productType').addEventListener('change', (e) => {
+                    this.handleVehicleMerchandisingProductType(e.target.value);
+                });
+            }
+
+            handleVehicleMerchandisingProductType(productType) {
+                const container = document.getElementById('vm_nestedFields');
+                container.innerHTML = '';
+
+                if (!productType) return;
+
+                let nestedSection;
+
+                switch (productType) {
+                    case 'Windshield Banners':
+                        nestedSection = this.createWindshieldBannersFields();
+                        break;
+                    case 'Side Banners':
+                        nestedSection = this.createSideBannersFields();
+                        break;
+                    case 'Complement Graphics':
+                        nestedSection = this.createComplementGraphicsFields();
+                        break;
+                    case 'Specially Sized Graphics':
+                        nestedSection = this.createSpeciallySizedGraphicsFields();
+                        break;
+                }
+
+                if (nestedSection) {
+                    container.appendChild(nestedSection);
+                    this.animateNestedIn(nestedSection);
+                }
+            }
+
+            createWindshieldBannersFields() {
+                const section = document.createElement('div');
+                section.className = 'nested-conditional-fields';
+                section.innerHTML = `
+                    <div class="form-group">
+                        <label for="vm_wb_productSize">Product Size <span class="required">*</span></label>
+                        <select id="vm_wb_productSize" name="vm_wb_productSize" required>
+                            <option value="">Please Select:</option>
+                            <option value="Small">Small</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Large">Large</option>
+                            <option value="X-Large">X-Large</option>
+                            <option value="XXL">XXL</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="vm_wb_materialType">Material Type <span class="required">*</span></label>
+                        <select id="vm_wb_materialType" name="vm_wb_materialType" required>
+                            <option value="">Please Select:</option>
+                            <option value="Winter Vinyl">Winter Vinyl</option>
+                            <option value="Summer Vinyl">Summer Vinyl</option>
+                            <option value="Perforated Vinyl">Perforated Vinyl</option>
+                            <option value="Poly Vinyl">Poly Vinyl</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="vm_wb_text">Text <span class="required">*</span></label>
+                        <textarea id="vm_wb_text" name="vm_wb_text" required placeholder="Enter banner text..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="vm_wb_designDetails">Design/Layout Details</label>
+                        <textarea id="vm_wb_designDetails" name="vm_wb_designDetails" placeholder="Describe design requirements, layout preferences, colors, etc..."></textarea>
+                    </div>
+                `;
+                return section;
+            }
+
+            createSideBannersFields() {
+                const section = document.createElement('div');
+                section.className = 'nested-conditional-fields';
+                section.innerHTML = `
+                    <div class="form-group">
+                        <label for="vm_sb_productSize">Product Size <span class="required">*</span></label>
+                        <select id="vm_sb_productSize" name="vm_sb_productSize" required>
+                            <option value="">Please Select:</option>
+                            <option value="Small">Small</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Large">Large</option>
+                            <option value="X-Large">X-Large</option>
+                            <option value="XXL">XXL</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="vm_sb_materialType">Material Type <span class="required">*</span></label>
+                        <select id="vm_sb_materialType" name="vm_sb_materialType" required>
+                            <option value="">Please Select:</option>
+                            <option value="Winter Vinyl">Winter Vinyl</option>
+                            <option value="Summer Vinyl">Summer Vinyl</option>
+                            <option value="Perforated Vinyl">Perforated Vinyl</option>
+                            <option value="Poly Vinyl">Poly Vinyl</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="vm_sb_text">Text <span class="required">*</span></label>
+                        <textarea id="vm_sb_text" name="vm_sb_text" required placeholder="Enter banner text..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="vm_sb_designDetails">Design/Layout Details</label>
+                        <textarea id="vm_sb_designDetails" name="vm_sb_designDetails" placeholder="Describe design requirements, layout preferences, colors, etc..."></textarea>
+                    </div>
+                `;
+                return section;
+            }
+
+            createComplementGraphicsFields() {
+                const section = document.createElement('div');
+                section.className = 'nested-conditional-fields';
+                section.innerHTML = `
+                    <div class="form-group">
+                        <label for="vm_cg_productSize">Product Size <span class="required">*</span></label>
+                        <select id="vm_cg_productSize" name="vm_cg_productSize" required>
+                            <option value="">Please Select:</option>
+                            <option value="Small">Small</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Large">Large</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="vm_cg_materialType">Material Type <span class="required">*</span></label>
+                        <select id="vm_cg_materialType" name="vm_cg_materialType" required>
+                            <option value="">Select</option>
+                            <option value="Winter Vinyl">Winter Vinyl</option>
+                            <option value="Summer Vinyl">Summer Vinyl</option>
+                            <option value="Perforated Vinyl">Perforated Vinyl</option>
+                            <option value="Poly Vinyl">Poly Vinyl</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="vm_cg_text">Text</label>
+                        <textarea id="vm_cg_text" name="vm_cg_text" placeholder="Enter any text elements..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="vm_cg_designDetails">Design/Layout Details <span class="required">*</span></label>
+                        <textarea id="vm_cg_designDetails" name="vm_cg_designDetails" required placeholder="Describe graphic design requirements, layout, colors, style preferences..."></textarea>
+                    </div>
+                `;
+                return section;
+            }
+
+            createSpeciallySizedGraphicsFields() {
+                const section = document.createElement('div');
+                section.className = 'nested-conditional-fields';
+                section.innerHTML = `
+                    <div class="form-group">
+                        <label for="vm_ssg_sizeDetails">Size Details <span class="required">*</span></label>
+                        <textarea id="vm_ssg_sizeDetails" name="vm_ssg_sizeDetails" required placeholder="Provide exact dimensions, measurements, and size specifications..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="vm_ssg_materialType">Material Type <span class="required">*</span></label>
+                        <select id="vm_ssg_materialType" name="vm_ssg_materialType" required>
+                            <option value="">Select</option>
+                            <option value="Winter Vinyl">Winter Vinyl</option>
+                            <option value="Summer Vinyl">Summer Vinyl</option>
+                            <option value="Perforated Vinyl">Perforated Vinyl</option>
+                            <option value="Poly Vinyl">Poly Vinyl</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="vm_ssg_text">Text</label>
+                        <textarea id="vm_ssg_text" name="vm_ssg_text" placeholder="Enter any text elements..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="vm_ssg_designDetails">Design/Layout Details <span class="required">*</span></label>
+                        <textarea id="vm_ssg_designDetails" name="vm_ssg_designDetails" required placeholder="Describe design requirements, layout preferences, colors, application details..."></textarea>
+                    </div>
+                `;
+                return section;
+            }
+
+            createDealershipMerchandisingSection(container) {
+                const section = document.createElement('fieldset');
+                section.className = 'conditional-section';
+                section.innerHTML = `
+                    <legend>Dealership Merchandising Details</legend>
+                    
+                    <div class="form-group">
+                        <label for="dm_installLocation">Install Location</label>
+                        <input type="text" id="dm_installLocation" name="dm_installLocation" placeholder="EX: North Windows, Service Lane, etc. (Indoor/Outdoor - Permanent/Temporary)">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="dm_productType">Product Type</label>
+                        <select id="dm_productType" name="dm_productType">
+                            <option value="">Please Select:</option>
+                            <option value="Custom Designed Interior Showroom Graphics">Custom Designed Interior Showroom Graphics</option>
+                            <option value="Custom Designed Showroom Graphics">Custom Designed Showroom Graphics</option>
+                        </select>
+                    </div>
+
+                    <div id="dm_nestedFields"></div>
+                `;
+                
+                container.appendChild(section);
+                this.animateIn(section);
+
+                document.getElementById('dm_productType').addEventListener('change', (e) => {
+                    this.handleDealershipMerchandisingProductType(e.target.value);
+                });
+            }
+
+            handleDealershipMerchandisingProductType(productType) {
+                const container = document.getElementById('dm_nestedFields');
+                container.innerHTML = '';
+
+                if (!productType) return;
+
+                let nestedSection;
+
+                switch (productType) {
+                    case 'Custom Designed Interior Showroom Graphics':
+                        nestedSection = this.createInteriorShowroomGraphicsFields();
+                        break;
+                    case 'Custom Designed Showroom Graphics':
+                        nestedSection = this.createShowroomGraphicsFields();
+                        break;
+                }
+
+                if (nestedSection) {
+                    container.appendChild(nestedSection);
+                    this.animateNestedIn(nestedSection);
+                }
+            }
+
+            createInteriorShowroomGraphicsFields() {
+                const section = document.createElement('div');
+                section.className = 'nested-conditional-fields';
+                section.innerHTML = `
+                    <div class="form-group">
+                        <label for="dm_isg_surfaceType">Surface Type</label>
+                        <select id="dm_isg_surfaceType" name="dm_isg_surfaceType">
+                            <option value="">Please Select:</option>
+                            <option value="Painted">Painted</option>
+                            <option value="Concrete">Concrete</option>
+                            <option value="Glass">Glass</option>
+                            <option value="Wood">Wood</option>
+                            <option value="Metal">Metal</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="dm_isg_materialType">Material Type</label>
+                        <select id="dm_isg_materialType" name="dm_isg_materialType">
+                            <option value="">Please Select:</option>
+                            <option value="Premium Indoor Poly Film">Premium Indoor Poly Film</option>
+                            <option value="Premium Perforated Vinyl">Premium Perforated Vinyl</option>
+                            <option value="Premium Cast Wrap Vinyl">Premium Cast Wrap Vinyl</option>
+                            <option value="Premium Calendared Film">Premium Calendared Film</option>
+                            <option value="Premium Contour Cut Vinyl">Premium Contour Cut Vinyl</option>
+                            <option value="Premium Intermediate Contour Cut Vinyl">Premium Intermediate Contour Cut Vinyl</option>
+                            <option value="Concrete/Floor Vinyl">Concrete/Floor Vinyl</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="dm_isg_maxWidth">Max Width</label>
+                        <input type="text" id="dm_isg_maxWidth" name="dm_isg_maxWidth" placeholder="Full width of the space where graphics will be installed">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="dm_isg_maxHeight">Max Height</label>
+                        <input type="text" id="dm_isg_maxHeight" name="dm_isg_maxHeight" placeholder="Full height of the space where graphics will be installed">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="dm_isg_graphicWidth">Graphic Width</label>
+                        <input type="text" id="dm_isg_graphicWidth" name="dm_isg_graphicWidth" placeholder="Desired final width (Type 'TBD' if Production should specify)">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="dm_isg_graphicHeight">Graphic Height</label>
+                        <input type="text" id="dm_isg_graphicHeight" name="dm_isg_graphicHeight" placeholder="Desired final height (Type 'TBD' if Production should specify)">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="dm_isg_text">Text</label>
+                        <textarea id="dm_isg_text" name="dm_isg_text" placeholder="Enter any text elements..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="dm_isg_designDetails">Design/Layout Details</label>
+                        <textarea id="dm_isg_designDetails" name="dm_isg_designDetails" placeholder="Describe design requirements, layout preferences, colors, etc..."></textarea>
+                    </div>
+                `;
+                return section;
+            }
+
+            createShowroomGraphicsFields() {
+                const section = document.createElement('div');
+                section.className = 'nested-conditional-fields';
+                section.innerHTML = `
+                    <div class="form-group">
+                        <label for="dm_sg_materialType">Material Type</label>
+                        <select id="dm_sg_materialType" name="dm_sg_materialType">
+                            <option value="">Please Select:</option>
+                            <option value="Premium Solid Window Film">Premium Solid Window Film</option>
+                            <option value="Premium Perforated Window Film">Premium Perforated Window Film</option>
+                            <option value="Premium Perforated Window Mesh">Premium Perforated Window Mesh</option>
+                            <option value="Premium Contour Cut Graphic Film">Premium Contour Cut Graphic Film</option>
+                            <option value="Premium Frosted Window Film">Premium Frosted Window Film</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="dm_sg_addLamination">Add Lamination</label>
+                        <div class="radio-group">
+                            <label class="radio-option">
+                                <input type="radio" id="dm_sg_lamination_yes" name="dm_sg_addLamination" value="Yes">
+                                Yes
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" id="dm_sg_lamination_no" name="dm_sg_addLamination" value="No">
+                                No
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="dm_sg_windowType">Window Type</label>
+                        <select id="dm_sg_windowType" name="dm_sg_windowType">
+                            <option value="">Please Select:</option>
+                            <option value="Single Panel">Single Panel</option>
+                            <option value="Multi Panel">Multi Panel</option>
+                        </select>
+                    </div>
+
+                    <div id="dm_sg_multiPanelFields" style="display: none;">
+                        <div class="form-group">
+                            <label for="dm_sg_totalWindows">Total Number of Windows</label>
+                            <input type="text" id="dm_sg_totalWindows" name="dm_sg_totalWindows" placeholder="Enter total number of windows">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="dm_sg_mullions">Mullions</label>
+                            <small>Does your project have mullions?</small>
+                            <div class="radio-group">
+                                <label class="radio-option">
+                                    <input type="radio" id="dm_sg_mullions_yes" name="dm_sg_mullions" value="Yes">
+                                    Yes
+                                </label>
+                                <label class="radio-option">
+                                    <input type="radio" id="dm_sg_mullions_no" name="dm_sg_mullions" value="No">
+                                    No
+                                </label>
+                            </div>
+                        </div>
+
+                        <div id="dm_sg_mullionWidthField" style="display: none;">
+                            <div class="form-group">
+                                <label for="dm_sg_mullionWidth">Mullion Width</label>
+                                <input type="text" id="dm_sg_mullionWidth" name="dm_sg_mullionWidth" placeholder="Enter mullion width">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="dm_sg_sizeDetails">Size Details</label>
+                        <textarea id="dm_sg_sizeDetails" name="dm_sg_sizeDetails" placeholder="Enter Width and Height of each window (Ex. 1=24&quot; 2=25&quot; 3=24&quot; etc.)"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="dm_sg_text">Text</label>
+                        <textarea id="dm_sg_text" name="dm_sg_text" placeholder="Enter any text elements..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="dm_sg_designDetails">Design/Layout Details</label>
+                        <textarea id="dm_sg_designDetails" name="dm_sg_designDetails" placeholder="Describe design requirements, layout preferences, colors, etc..."></textarea>
+                    </div>
+                `;
+
+                // Add event listeners for conditional logic after the section is created
+                setTimeout(() => {
+                    const windowTypeSelect = document.getElementById('dm_sg_windowType');
+                    const mullionsRadios = document.querySelectorAll('input[name="dm_sg_mullions"]');
+                    
+                    if (windowTypeSelect) {
+                        windowTypeSelect.addEventListener('change', (e) => {
+                            const multiPanelFields = document.getElementById('dm_sg_multiPanelFields');
+                            if (e.target.value === 'Multi Panel') {
+                                multiPanelFields.style.display = 'block';
+                            } else {
+                                multiPanelFields.style.display = 'none';
+                                // Clear multi panel fields when hidden
+                                document.getElementById('dm_sg_totalWindows').value = '';
+                                mullionsRadios.forEach(radio => radio.checked = false);
+                                document.getElementById('dm_sg_mullionWidth').value = '';
+                                document.getElementById('dm_sg_mullionWidthField').style.display = 'none';
+                            }
+                        });
+                    }
+
+                    mullionsRadios.forEach(radio => {
+                        radio.addEventListener('change', (e) => {
+                            const mullionWidthField = document.getElementById('dm_sg_mullionWidthField');
+                            if (e.target.value === 'Yes') {
+                                mullionWidthField.style.display = 'block';
+                            } else {
+                                mullionWidthField.style.display = 'none';
+                                document.getElementById('dm_sg_mullionWidth').value = '';
+                            }
+                        });
+                    });
+                }, 100);
+
+                return section;
+            }
+
+            createCustomSpecialProductsSection(container) {
+                const section = document.createElement('fieldset');
+                section.className = 'conditional-section';
+                section.innerHTML = `
+                    <legend>Custom Special Products Details</legend>
+                    
+                    <div class="form-group">
+                        <label for="csp_installLocation">Install Location</label>
+                        <input type="text" id="csp_installLocation" name="csp_installLocation" placeholder="EX: North Windows, Service Lane, etc. (Indoor/Outdoor - Permanent/Temporary)">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="csp_productType">Product Type</label>
+                        <input type="text" id="csp_productType" name="csp_productType" placeholder="Enter product type...">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="csp_materialType">Material Type</label>
+                        <select id="csp_materialType" name="csp_materialType">
+                            <option value="">Please Select:</option>
+                            <option value="Winter Vinyl">Winter Vinyl</option>
+                            <option value="Summer Vinyl">Summer Vinyl</option>
+                            <option value="Economy Vinyl">Economy Vinyl</option>
+                            <option value="Perf Vinyl">Perf Vinyl</option>
+                            <option value="Poly-Vinyl">Poly-Vinyl</option>
+                            <option value="13oz. Banner">13oz. Banner</option>
+                            <option value="18oz. Banner">18oz. Banner</option>
+                            <option value="Mesh Banner">Mesh Banner</option>
+                            <option value="Poster Paper">Poster Paper</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+
+                    <div id="csp_otherMaterialField" style="display: none;">
+                        <div class="form-group">
+                            <label for="csp_otherMaterial">Other Material</label>
+                            <input type="text" id="csp_otherMaterial" name="csp_otherMaterial" placeholder="Please specify what material you are ordering">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="csp_sizeDetails">Size Details</label>
+                        <textarea id="csp_sizeDetails" name="csp_sizeDetails" placeholder="Enter size details..."></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="csp_text">Text</label>
+                        <textarea id="csp_text" name="csp_text" placeholder="Enter text content..."></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="csp_designNotes">Design Notes</label>
+                        <textarea id="csp_designNotes" name="csp_designNotes" placeholder="Enter design notes..."></textarea>
+                    </div>
+                `;
+                
+                container.appendChild(section);
+                this.animateIn(section);
+
+                // Add conditional logic for "Other" material type
+                document.getElementById('csp_materialType').addEventListener('change', (e) => {
+                    const otherField = document.getElementById('csp_otherMaterialField');
+                    if (e.target.value === 'Other') {
+                        otherField.style.display = 'block';
+                    } else {
+                        otherField.style.display = 'none';
+                        document.getElementById('csp_otherMaterial').value = '';
+                    }
+                });
+            }
+
+            createNewTemplateRequestSection(container) {
+                const section = document.createElement('fieldset');
+                section.className = 'conditional-section';
+                section.innerHTML = `
+                    <legend>New Template Request Details</legend>
+                    
+                    <div class="form-group">
+                        <label for="ntr_requestType">Request Type</label>
+                        <select id="ntr_requestType" name="ntr_requestType">
+                            <option value="">Please Select:</option>
+                            <option value="New Standard Graphic">New Standard Graphic</option>
+                            <option value="ShortCut Template">ShortCut Template</option>
+                            <option value="Flyout Template">Flyout Template</option>
+                        </select>
+                    </div>
+
+                    <div id="ntr_nestedFields"></div>
+                `;
+                
+                container.appendChild(section);
+                this.animateIn(section);
+
+                document.getElementById('ntr_requestType').addEventListener('change', (e) => {
+                    this.handleNewTemplateRequestType(e.target.value);
+                });
+            }
+
+            handleNewTemplateRequestType(requestType) {
+                const container = document.getElementById('ntr_nestedFields');
+                container.innerHTML = '';
+
+                if (!requestType) return;
+
+                let nestedSection;
+
+                switch (requestType) {
+                    case 'New Standard Graphic':
+                        nestedSection = this.createNewStandardGraphicFields();
+                        break;
+                    case 'ShortCut Template':
+                        nestedSection = this.createShortCutTemplateFields();
+                        break;
+                    case 'Flyout Template':
+                        nestedSection = this.createFlyoutTemplateFields();
+                        break;
+                }
+
+                if (nestedSection) {
+                    container.appendChild(nestedSection);
+                    this.animateNestedIn(nestedSection);
+                }
+            }
+
+            createNewStandardGraphicFields() {
+                const section = document.createElement('div');
+                section.className = 'nested-conditional-fields';
+                section.innerHTML = `
+                    <div class="form-group">
+                        <label for="ntr_nsg_templateName">New Template Name</label>
+                        <input type="text" id="ntr_nsg_templateName" name="ntr_nsg_templateName" placeholder="Enter template name...">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ntr_nsg_details">Details</label>
+                        <small>Color Schemes, References to Design Styles, Anything else we need to know</small>
+                        <textarea id="ntr_nsg_details" name="ntr_nsg_details" placeholder="Color Schemes, References to Design Styles, Anything else we need to know"></textarea>
+                    </div>
+                `;
+                return section;
+            }
+
+            createShortCutTemplateFields() {
+                const section = document.createElement('div');
+                section.className = 'nested-conditional-fields';
+                section.innerHTML = `
+                    <div class="form-group">
+                        <label for="ntr_sct_templateName">New Template Name</label>
+                        <input type="text" id="ntr_sct_templateName" name="ntr_sct_templateName" placeholder="Enter template name...">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ntr_sct_orderType">SCP Order Type</label>
+                        <div class="radio-group">
+                            <label class="radio-option">
+                                <input type="radio" id="ntr_sct_design_consult" name="ntr_sct_orderType" value="Design Consult (No Scraper)">
+                                Design Consult (No Scraper)
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" id="ntr_sct_program_approval" name="ntr_sct_orderType" value="Program Approval (Scraper & Creative)">
+                                Program Approval (Scraper & Creative)
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ntr_sct_newCarCoverage">New Car Coverage</label>
+                        <div class="radio-group radio-vertical">
+                            <label class="radio-option">
+                                <input type="radio" id="ntr_sct_new_shortcut_pack" name="ntr_sct_newCarCoverage" value="ShortCut Pack">
+                                ShortCut Pack
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" id="ntr_sct_new_shortcut_only" name="ntr_sct_newCarCoverage" value="ShortCut ONLY">
+                                ShortCut ONLY
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" id="ntr_sct_new_windshield_only" name="ntr_sct_newCarCoverage" value="Windshield ONLY">
+                                Windshield ONLY
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" id="ntr_sct_new_none" name="ntr_sct_newCarCoverage" value="NONE">
+                                NONE
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ntr_sct_usedCarCoverage">Used Car Coverage</label>
+                        <div class="radio-group radio-vertical">
+                            <label class="radio-option">
+                                <input type="radio" id="ntr_sct_used_shortcut_pack" name="ntr_sct_usedCarCoverage" value="ShortCut Pack">
+                                ShortCut Pack
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" id="ntr_sct_used_shortcut_only" name="ntr_sct_usedCarCoverage" value="ShortCut ONLY">
+                                ShortCut ONLY
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" id="ntr_sct_used_windshield_only" name="ntr_sct_usedCarCoverage" value="Windshield ONLY">
+                                Windshield ONLY
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" id="ntr_sct_used_none" name="ntr_sct_usedCarCoverage" value="NONE">
+                                NONE
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ntr_sct_orderEntryMethod">Order Entry Method</label>
+                        <div class="radio-group radio-vertical">
+                            <label class="radio-option">
+                                <input type="radio" id="ntr_sct_lot_walk" name="ntr_sct_orderEntryMethod" value="Lot Walk/Manual Entry">
+                                Lot Walk/Manual Entry
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" id="ntr_sct_automated" name="ntr_sct_orderEntryMethod" value="Automated- Every Vehicle – Difference">
+                                Automated- Every Vehicle – Difference
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" id="ntr_sct_cx_provided" name="ntr_sct_orderEntryMethod" value="CX Provided List">
+                                CX Provided List
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" id="ntr_sct_other_entry" name="ntr_sct_orderEntryMethod" value="Other">
+                                Other
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ntr_sct_startupOrder">Startup order</label>
+                        <div class="radio-group radio-vertical">
+                            <label class="radio-option">
+                                <input type="radio" id="ntr_sct_full_coverage" name="ntr_sct_startupOrder" value="Full Coverage">
+                                Full Coverage
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" id="ntr_sct_transitional" name="ntr_sct_startupOrder" value="Transitional">
+                                Transitional
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" id="ntr_sct_cx_provided_startup" name="ntr_sct_startupOrder" value="CX Provided List">
+                                CX Provided List
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" id="ntr_sct_other_startup" name="ntr_sct_startupOrder" value="Other">
+                                Other
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ntr_sct_desiredShape">Desired Shape</label>
+                        <div class="radio-group radio-vertical">
+                            <label class="radio-option">
+                                <input type="radio" id="ntr_sct_v1_rectangle" name="ntr_sct_desiredShape" value="V1 – Rectangle">
+                                V1 – Rectangle
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" id="ntr_sct_v2_tanto" name="ntr_sct_desiredShape" value="V2 – Tanto">
+                                V2 – Tanto
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" id="ntr_sct_v3_pennant" name="ntr_sct_desiredShape" value="V3 – Pennant">
+                                V3 – Pennant
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" id="ntr_sct_no_preference" name="ntr_sct_desiredShape" value="No Preference">
+                                No Preference
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ntr_sct_details">Details</label>
+                        <small>Color Schemes, References to Design Styles, Anything else we need to know</small>
+                        <textarea id="ntr_sct_details" name="ntr_sct_details" placeholder="Color Schemes, References to Design Styles, Anything else we need to know"></textarea>
+                    </div>
+                `;
+                return section;
+            }
+
+            createFlyoutTemplateFields() {
+                const section = document.createElement('div');
+                section.className = 'nested-conditional-fields';
+                section.innerHTML = `
+                    <div class="form-group">
+                        <label for="ntr_ft_templateName">New Template Name</label>
+                        <input type="text" id="ntr_ft_templateName" name="ntr_ft_templateName" placeholder="Enter template name...">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ntr_ft_details">Details</label>
+                        <small>Color Schemes, References to Design Styles, Anything else we need to know</small>
+                        <textarea id="ntr_ft_details" name="ntr_ft_details" placeholder="Color Schemes, References to Design Styles, Anything else we need to know"></textarea>
+                    </div>
+                `;
+                return section;
+            }
+
+            createBusinessCardsSection(container) {
+                const section = document.createElement('fieldset');
+                section.className = 'conditional-section';
+                section.innerHTML = `
+                    <legend>Business Cards Details</legend>
+                    
+                    <div class="form-group">
+                        <label for="bc_singleOrDouble">Single or Double Sided</label>
+                        <select id="bc_singleOrDouble" name="bc_singleOrDouble">
+                            <option value="">Select</option>
+                            <option value="Single Sided">Single Sided</option>
+                            <option value="Double Sided">Double Sided</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="bc_quantity">Quantity</label>
+                        <select id="bc_quantity" name="bc_quantity">
+                            <option value="">Select</option>
+                            <option value="250">250</option>
+                            <option value="500">500</option>
+                            <option value="1000">1000</option>
+                            <option value="2500">2500</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="bc_text">Text</label>
+                        <textarea id="bc_text" name="bc_text" placeholder="Email, Phone Number, Name, etc."></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="bc_description">Description</label>
+                        <textarea id="bc_description" name="bc_description" placeholder="Any other additional details like design style or color."></textarea>
+                    </div>
+                `;
+                
+                container.appendChild(section);
+                this.animateIn(section);
+            }
+
+            createCustomBannersSection(container) {
+    const section = document.createElement('fieldset');
+    section.className = 'conditional-section';
+    section.innerHTML = `
+        <legend>Custom Banners Details</legend>
+        
+        <div class="form-group">
+            <label for="cb_bannerType">*Banner Type</label>
+            <select id="cb_bannerType" name="cb_bannerType" required>
+                <option value="">Please Select</option>
+                <option value="Standard Banner">Standard Banner</option>
+                <option value="Pole Banner">Pole Banner</option>
+            </select>
+        </div>
+
+        <div id="cb_nestedFields"></div>
+    `;
+    
+    container.appendChild(section);
+    this.animateIn(section);
+
+    document.getElementById('cb_bannerType').addEventListener('change', (e) => {
+        this.handleCustomBannerType(e.target.value);
+    });
+}
+
+handleCustomBannerType(bannerType) {
+    const container = document.getElementById('cb_nestedFields');
+    container.innerHTML = '';
+
+    if (!bannerType) return;
+
+    let nestedSection;
+
+    switch (bannerType) {
+        case 'Standard Banner':
+            nestedSection = this.createStandardBannerFields();
+            break;
+        case 'Pole Banner':
+            nestedSection = this.createPoleBannerFields();
+            break;
+        case 'Banner Stand/Display':
+            nestedSection = this.createBannerStandFields();
+            break;
+    }
+
+    if (nestedSection) {
+        container.appendChild(nestedSection);
+        this.animateNestedIn(nestedSection);
+    }
+}
+
+createStandardBannerFields() {
+    const section = document.createElement('div');
+    section.className = 'nested-conditional-fields';
+    section.innerHTML = `
+        <div class="form-group">
+            <label for="cb_sb_materialType">Material Type</label>
+            <select id="cb_sb_materialType" name="cb_sb_materialType">
+                <option value="">Please Select:</option>
+                <option value="13oz Banner">13oz Banner</option>
+                <option value="18oz Banner">18oz Banner</option>
+                <option value="Mesh Banner">Mesh Banner</option>
+                <option value="No-Curl/Grey Back Banner">No-Curl/Grey Back Banner</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="cb_sb_width">Width</label>
+            <input type="text" id="cb_sb_width" name="cb_sb_width" placeholder="Enter width...">
+        </div>
+
+        <div class="form-group">
+            <label for="cb_sb_height">Height</label>
+            <input type="text" id="cb_sb_height" name="cb_sb_height" placeholder="Enter height...">
+        </div>
+
+        <div class="form-group">
+            <label for="cb_sb_designNotes">Design Notes</label>
+            <textarea id="cb_sb_designNotes" name="cb_sb_designNotes" placeholder="Enter design notes..."></textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="cb_sb_finishing">*Finishing</label>
+            <select id="cb_sb_finishing" name="cb_sb_finishing" required>
+                <option value="">Please Select</option>
+                <option value="Standard 1&quot; Hems">Standard 1" Hems</option>
+                <option value="Double Stick Edges (No Hems)">Double Stick Edges (No Hems)</option>
+                <option value="Trimmed to Size (No Hems)">Trimmed to Size (No Hems)</option>
+                <option value="Sewn Hems with Webbing">Sewn Hems with Webbing</option>
+                <option value="Other/Custom">Other/Custom</option>
+            </select>
+            <div id="cb_sb_customFinishingField" style="display: none;">
+    <div class="form-group">
+        <label for="cb_sb_customFinishing">Custom Finishing Description</label>
+        <input type="text" id="cb_sb_customFinishing" name="cb_sb_customFinishing" placeholder="Describe custom finishing...">
+    </div>
+</div>
+
+        </div>
+
+        <div class="form-group">
+            <label for="cb_sb_grommets">Grommets</label>
+            <div class="radio-group">
+                <label class="radio-option">
+                    <input type="radio" id="cb_sb_grommets_yes" name="cb_sb_grommets" value="Yes">
+                    Yes
+                </label>
+                <label class="radio-option">
+                    <input type="radio" id="cb_sb_grommets_no" name="cb_sb_grommets" value="No">
+                    No
+                </label>
+            </div>
+        </div>
+
+        <div id="cb_sb_grommetFields" style="display: none;">
+            <div class="form-group">
+                <label for="cb_sb_grommetPattern">*Grommet Pattern</label>
+                <select id="cb_sb_grommetPattern" name="cb_sb_grommetPattern">
+                    <option value="">Please Select:</option>
+                    <option value="3 Pole Mounting (Corners & Middle)">3 Pole Mounting (Corners & Middle)</option>
+                    <option value="4 Pole Mounting (Corners & 2 Interior)">4 Pole Mounting (Corners & 2 Interior)</option>
+                    <option value="Corners Only">Corners Only</option>
+                    <option value='Every 12" (Approximate)'>Every 12" (Approximate)</option>
+                    <option value='Every 24" (Approximate)'>Every 24" (Approximate)</option>
+                    <option value="Custom">Custom</option>
+                </select>
+            </div>
+        </div>
+        <div id="cb_sb_customGrommetField" style="display: none;">
+    <div class="form-group">
+        <label for="cb_sb_customGrommet">Custom Grommet Pattern Description</label>
+        <input type="text" id="cb_sb_customGrommet" name="cb_sb_customGrommet" placeholder="Describe custom grommet pattern...">
+    </div>
+</div>
+    `;
+
+    // Add conditional logic for grommet fields
+    // Add conditional logic for grommet fields
+setTimeout(() => {
+    const grommetRadios = section.querySelectorAll('input[name="cb_sb_grommets"]');
+    const grommetPatternSelect = section.querySelector('#cb_sb_grommetPattern');
+    
+    grommetRadios.forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            const grommetFields = section.querySelector('#cb_sb_grommetFields');
+            const customGrommetField = section.querySelector('#cb_sb_customGrommetField');
+            
+            if (e.target.value === 'Yes') {
+                grommetFields.style.display = 'block';
+            } else {
+                grommetFields.style.display = 'none';
+                grommetPatternSelect.value = '';
+                customGrommetField.style.display = 'none';
+                section.querySelector('#cb_sb_customGrommet').value = '';
+            }
+        });
+    });
+
+    // Add event listener for custom grommet pattern
+    if (grommetPatternSelect) {
+        grommetPatternSelect.addEventListener('change', (e) => {
+            const customGrommetField = section.querySelector('#cb_sb_customGrommetField');
+            if (e.target.value === 'Custom') {
+                customGrommetField.style.display = 'block';
+            } else {
+                customGrommetField.style.display = 'none';
+                section.querySelector('#cb_sb_customGrommet').value = '';
+            }
+        });
+    }
+}, 100);
+
+    const finishingSelect = section.querySelector('#cb_sb_finishing');
+finishingSelect.addEventListener('change', (e) => {
+    const customField = section.querySelector('#cb_sb_customFinishingField');
+    if (e.target.value === 'Other/Custom') {
+        customField.style.display = 'block';
+    } else {
+        customField.style.display = 'none';
+        section.querySelector('#cb_sb_customFinishing').value = '';
+    }
+});
+
+
+    return section;
+}
+
+createPoleBannerFields() {
+    const section = document.createElement('div');
+    section.className = 'nested-conditional-fields';
+    section.innerHTML = `
+        <div class="form-group">
+            <label for="cb_pb_width">Width</label>
+            <input type="text" id="cb_pb_width" name="cb_pb_width" placeholder="Enter width...">
+        </div>
+
+        <div class="form-group">
+            <label for="cb_pb_height">Height</label>
+            <input type="text" id="cb_pb_height" name="cb_pb_height" placeholder="Enter height...">
+        </div>
+
+        <div class="form-group">
+            <label for="cb_pb_pocketSize">Pocket Size</label>
+            <textarea id="cb_pb_pocketSize" name="cb_pb_pocketSize" placeholder="Enter pocket size details..."></textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="cb_pb_needBracket">Do you need Pole Bracket Hardware?</label>
+            <div class="radio-group">
+                <label class="radio-option">
+                    <input type="radio" id="cb_pb_bracket_yes" name="cb_pb_needBracket" value="Yes">
+                    Yes
+                </label>
+                <label class="radio-option">
+                    <input type="radio" id="cb_pb_bracket_no" name="cb_pb_needBracket" value="No">
+                    No
+                </label>
+            </div>
+        </div>
+
+        <div id="cb_pb_bracketFields" style="display: none;">
+            <div class="form-group">
+                <label for="cb_pb_bracketType">Bracket Type</label>
+                <div class="radio-group">
+                    <label class="radio-option">
+                        <input type="radio" id="cb_pb_single_sided" name="cb_pb_bracketType" value="Single Sided Pole Bracket">
+                        Single Sided Pole Bracket
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" id="cb_pb_double_sided" name="cb_pb_bracketType" value="Double Sided Pole Bracket">
+                        Double Sided Pole Bracket
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="cb_pb_materialType">Material Type</label>
+            <select id="cb_pb_materialType" name="cb_pb_materialType">
+                <option value="">Please Select:</option>
+                <option value="13oz Banner">13oz Banner</option>
+                <option value="18oz Banner">18oz Banner</option>
+                <option value="Mesh Banner">Mesh Banner</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="cb_pb_side1Design">Side 1 Design/Layout Details</label>
+            <textarea id="cb_pb_side1Design" name="cb_pb_side1Design" placeholder="Enter side 1 design details..."></textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="cb_pb_side2Design">Side 2 Design/Layout Details</label>
+            <textarea id="cb_pb_side2Design" name="cb_pb_side2Design" placeholder="Enter side 2 design details..."></textarea>
+        </div>
+
+    `;
+
+    // Add conditional logic for bracket fields
+    setTimeout(() => {
+        const bracketRadios = section.querySelectorAll('input[name="cb_pb_needBracket"]');
+        bracketRadios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const bracketFields = section.querySelector('#cb_pb_bracketFields');
+                if (e.target.value === 'Yes') {
+                    bracketFields.style.display = 'block';
+                } else {
+                    bracketFields.style.display = 'none';
+                    const bracketTypeRadios = section.querySelectorAll('input[name="cb_pb_bracketType"]');
+                    bracketTypeRadios.forEach(radio => radio.checked = false);
+                }
+            });
+        });
+    }, 100);
+
+    
+
+    return section;
+}
+
+            animateIn(element) {
+                setTimeout(() => {
+                    element.classList.add('show');
+                }, 100);
+            }
+
+            animateNestedIn(element) {
+                setTimeout(() => {
+                    element.classList.add('show');
+                }, 100);
+            }
+
+            generateOrderSummary() {
+                const formData = new FormData(document.getElementById('orderForm'));
+                let summary = '';
+
+                // Basic Order Information
+                const orderType = formData.get('orderType');
+                if (orderType) {
+                    summary += `ORDER TYPE: ${orderType}\n\n`;
+
+                    // Order-specific details
+                    switch (orderType) {
+                        case 'Vehicle Merchandising':
+                            const vmProductType = formData.get('vm_productType');
+                            if (vmProductType) {
+                                summary += `PRODUCT TYPE: ${vmProductType}\n`;
+                                
+                                switch (vmProductType) {
+                                    case 'Windshield Banners':
+                                        const wbSize = formData.get('vm_wb_productSize');
+                                        const wbMaterial = formData.get('vm_wb_materialType');
+                                        const wbText = formData.get('vm_wb_text');
+                                        const wbDesign = formData.get('vm_wb_designDetails');
+                                        
+                                        if (wbSize) summary += `SIZE: ${wbSize}\n`;
+                                        if (wbMaterial) summary += `MATERIAL: ${wbMaterial}\n`;
+                                        if (wbText) summary += `TEXT: ${wbText}\n`;
+                                        if (wbDesign) summary += `DESIGN DETAILS: ${wbDesign}\n`;
+                                        break;
+                                        
+                                    case 'Side Banners':
+                                        const sbSize = formData.get('vm_sb_productSize');
+                                        const sbMaterial = formData.get('vm_sb_materialType');
+                                        const sbText = formData.get('vm_sb_text');
+                                        const sbDesign = formData.get('vm_sb_designDetails');
+                                        
+                                        if (sbSize) summary += `SIZE: ${sbSize}\n`;
+                                        if (sbMaterial) summary += `MATERIAL: ${sbMaterial}\n`;
+                                        if (sbText) summary += `TEXT: ${sbText}\n`;
+                                        if (sbDesign) summary += `DESIGN DETAILS: ${sbDesign}\n`;
+                                        break;
+                                        
+                                    case 'Complement Graphics':
+                                        const cgSize = formData.get('vm_cg_productSize');
+                                        const cgMaterial = formData.get('vm_cg_materialType');
+                                        const cgText = formData.get('vm_cg_text');
+                                        const cgDesign = formData.get('vm_cg_designDetails');
+                                        
+                                        if (cgSize) summary += `SIZE: ${cgSize}\n`;
+                                        if (cgMaterial) summary += `MATERIAL: ${cgMaterial}\n`;
+                                        if (cgText) summary += `TEXT: ${cgText}\n`;
+                                        if (cgDesign) summary += `DESIGN DETAILS: ${cgDesign}\n`;
+                                        break;
+                                        
+                                    case 'Specially Sized Graphics':
+                                        const ssgSize = formData.get('vm_ssg_sizeDetails');
+                                        const ssgMaterial = formData.get('vm_ssg_materialType');
+                                        const ssgText = formData.get('vm_ssg_text');
+                                        const ssgDesign = formData.get('vm_ssg_designDetails');
+                                        
+                                        if (ssgSize) summary += `SIZE DETAILS: ${ssgSize}\n`;
+                                        if (ssgMaterial) summary += `MATERIALS: ${ssgMaterial}\n`;
+                                        if (ssgText) summary += `TEXT: ${ssgText}\n`;
+                                        if (ssgDesign) summary += `DESIGN DETAILS: ${ssgDesign}\n`;
+                                        break;
+                                }
+                                summary += '\n';
+                            }
+                            break;
+
+                        case 'Dealership Merchandising':
+                            const dmInstallLocation = formData.get('dm_installLocation');
+                            const dmProductType = formData.get('dm_productType');
+                            
+                            if (dmInstallLocation) summary += `INSTALL LOCATION: ${dmInstallLocation}\n`;
+                            if (dmProductType) {
+                                summary += `PRODUCT TYPE: ${dmProductType}\n`;
+                                
+                                switch (dmProductType) {
+                                        
+                                    case 'Custom Designed Interior Showroom Graphics':
+                                        const isgSurface = formData.get('dm_isg_surfaceType');
+                                        const isgMaterial = formData.get('dm_isg_materialType');
+                                        const isgMaxWidth = formData.get('dm_isg_maxWidth');
+                                        const isgMaxHeight = formData.get('dm_isg_maxHeight');
+                                        const isgWidth = formData.get('dm_isg_graphicWidth');
+                                        const isgHeight = formData.get('dm_isg_graphicHeight');
+                                        const isgText = formData.get('dm_isg_text');
+                                        const isgDesign = formData.get('dm_isg_designDetails');
+                                        
+                                        if (isgSurface) summary += `SURFACE TYPE: ${isgSurface}\n`;
+                                        if (isgMaterial) summary += `MATERIAL: ${isgMaterial}\n`;
+                                        if (isgMaxWidth) summary += `MAX WIDTH: ${isgMaxWidth}\n`;
+                                        if (isgMaxHeight) summary += `MAX HEIGHT: ${isgMaxHeight}\n`;
+                                        if (isgWidth) summary += `GRAPHIC WIDTH: ${isgWidth}\n`;
+                                        if (isgHeight) summary += `GRAPHIC HEIGHT: ${isgHeight}\n`;
+                                        if (isgText) summary += `TEXT: ${isgText}\n`;
+                                        if (isgDesign) summary += `DESIGN DETAILS: ${isgDesign}\n`;
+                                        break;
+                                        
+                                    case 'Custom Designed Showroom Graphics':
+                                        const sgMaterial = formData.get('dm_sg_materialType');
+                                        const sgLamination = formData.get('dm_sg_addLamination');
+                                        const sgWindowType = formData.get('dm_sg_windowType');
+                                        const sgTotalWindows = formData.get('dm_sg_totalWindows');
+                                        const sgMullions = formData.get('dm_sg_mullions');
+                                        const sgMullionWidth = formData.get('dm_sg_mullionWidth');
+                                        const sgSize = formData.get('dm_sg_sizeDetails');
+                                        const sgText = formData.get('dm_sg_text');
+                                        const sgDesign = formData.get('dm_sg_designDetails');
+                                        
+                                        if (sgMaterial) summary += `MATERIAL: ${sgMaterial}\n`;
+                                        if (sgLamination) summary += `ADD LAMINATION: ${sgLamination}\n`;
+                                        if (sgWindowType) {
+                                            summary += `WINDOW TYPE: ${sgWindowType}\n`;
+                                            if (sgWindowType === 'Multi Panel') {
+                                                if (sgTotalWindows) summary += `TOTAL NUMBER OF WINDOWS: ${sgTotalWindows}\n`;
+                                                if (sgMullions) {
+                                                    summary += `MULLIONS: ${sgMullions}\n`;
+                                                    if (sgMullions === 'Yes' && sgMullionWidth) {
+                                                        summary += `MULLION WIDTH: ${sgMullionWidth}\n`;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        if (sgSize) summary += `SIZE DETAILS: ${sgSize}\n`;
+                                        if (sgText) summary += `TEXT: ${sgText}\n`;
+                                        if (sgDesign) summary += `DESIGN DETAILS: ${sgDesign}\n`;
+                                        break;
+                                }
+                                summary += '\n';
+                            }
+                            break;
+
+                        case 'Custom Special Products':
+                            const cspInstallLocation = formData.get('csp_installLocation');
+                            const cspProductType = formData.get('csp_productType');
+                            const cspMaterialType = formData.get('csp_materialType');
+                            const cspOtherMaterial = formData.get('csp_otherMaterial');
+                            const cspSizeDetails = formData.get('csp_sizeDetails');
+                            const cspText = formData.get('csp_text');
+                            const cspDesignNotes = formData.get('csp_designNotes');
+                            
+                            if (cspInstallLocation) summary += `INSTALL LOCATION: ${cspInstallLocation}\n`;
+                            if (cspProductType) summary += `PRODUCT TYPE: ${cspProductType}\n`;
+                            if (cspMaterialType) {
+                                summary += `MATERIAL TYPE: ${cspMaterialType}\n`;
+                                if (cspMaterialType === 'Other' && cspOtherMaterial) {
+                                    summary += `OTHER MATERIALS: ${cspOtherMaterial}\n`;
+                                }
+                            }
+                            if (cspSizeDetails) summary += `SIZE DETAILS: ${cspSizeDetails}\n`;
+                            if (cspText) summary += `TEXT: ${cspText}\n`;
+                            if (cspDesignNotes) summary += `DESIGN NOTES: ${cspDesignNotes}\n`;
+                            summary += '\n';
+                            break;
+
+                        case 'New Template Request':
+                            const ntrRequestType = formData.get('ntr_requestType');
+
+                            if (ntrRequestType) {
+                                summary += `REQUEST TYPE: ${ntrRequestType}\n`;
+                                
+                                switch (ntrRequestType) {
+                                    case 'New Standard Graphic':
+                                        const nsgTemplateName = formData.get('ntr_nsg_templateName');
+                                        const nsgDetails = formData.get('ntr_nsg_details');
+                                        
+                                        if (nsgTemplateName) summary += `TEMPLATE NAME: ${nsgTemplateName}\n`;
+                                        if (nsgDetails) summary += `DETAILS: ${nsgDetails}\n`;
+                                        
+                                    case 'ShortCut Template':
+                                        const sctTemplateName = formData.get('ntr_sct_templateName');
+                                        const sctOrderType = formData.get('ntr_sct_orderType');
+                                        const sctNewCarCoverage = formData.get('ntr_sct_newCarCoverage');
+                                        const sctUsedCarCoverage = formData.get('ntr_sct_usedCarCoverage');
+                                        const sctOrderEntryMethod = formData.get('ntr_sct_orderEntryMethod');
+                                        const sctStartupOrder = formData.get('ntr_sct_startupOrder');
+                                        const sctDesiredShape = formData.get('ntr_sct_desiredShape');
+                                        const sctDetails = formData.get('ntr_sct_details');
+                                        
+                                        if (sctTemplateName) summary += `TEMPLATE NAME: ${sctTemplateName}\n`;
+                                        if (sctOrderType) summary += `SCP ORDER TYPE: ${sctOrderType}\n`;
+                                        if (sctNewCarCoverage) summary += `NEW CAR COVERAGE: ${sctNewCarCoverage}\n`;
+                                        if (sctUsedCarCoverage) summary += `USED CAR COVERAGE: ${sctUsedCarCoverage}\n`;
+                                        if (sctOrderEntryMethod) summary += `ORDER ENTRY METHOD: ${sctOrderEntryMethod}\n`;
+                                        if (sctStartupOrder) summary += `STARTUP ORDER: ${sctStartupOrder}\n`;
+                                        if (sctDesiredShape) summary += `DESIRED SHAPE: ${sctDesiredShape}\n`;
+                                        if (sctDetails) summary += `DETAILS: ${sctDetails}\n`;
+                                        break;
+                                        
+                                    case 'Flyout Template':
+                                        const ftTemplateName = formData.get('ntr_ft_templateName');
+                                        const ftDetails = formData.get('ntr_ft_details');
+                                        
+                                        if (ftTemplateName) summary += `TEMPLATE NAME: ${ftTemplateName}\n`;
+                                        if (ftDetails) summary += `DETAILS: ${ftDetails}\n`;
+                                }
+                                summary += '\n';
+                            }
+                            break;
+
+                        case 'Business Cards':
+                            const bcSingleOrDouble = formData.get('bc_singleOrDouble');
+                            const bcQuantity = formData.get('bc_quantity');
+                            const bcText = formData.get('bc_text');
+                            const bcDescription = formData.get('bc_description');
+                            
+                            if (bcSingleOrDouble) summary += `SINGLE OR DOUBLE SIDED: ${bcSingleOrDouble}\n`;
+                            if (bcQuantity) summary += `QUANTITY: ${bcQuantity}\n`;
+                            if (bcText) summary += `TEXT: ${bcText}\n`;
+                            if (bcDescription) summary += `DESCRIPTION: ${bcDescription}\n`;
+                            summary += '\n';
+                            break;
+
+                        case 'Custom Banners':
+    const cbBannerType = formData.get('cb_bannerType');
+    if (cbBannerType) {
+        summary += `BANNER TYPE: ${cbBannerType}\n`;
+        
+        switch (cbBannerType) {
+            case 'Standard Banner':
+                const sbMaterial = formData.get('cb_sb_materialType');
+                const sbWidth = formData.get('cb_sb_width');
+                const sbHeight = formData.get('cb_sb_height');
+                const sbDesign = formData.get('cb_sb_designNotes');
+                const sbFinishing = formData.get('cb_sb_finishing');
+                const sbCustomFinishing = formData.get('cb_sb_customFinishing');
+                const sbGrommets = formData.get('cb_sb_grommets');
+                const sbGrommetPattern = formData.get('cb_sb_grommetPattern');
+                
+                if (sbMaterial) summary += `MATERIAL TYPE: ${sbMaterial}\n`;
+                if (sbWidth) summary += `WIDTH: ${sbWidth}\n`;
+                if (sbHeight) summary += `HEIGHT: ${sbHeight}\n`;
+                if (sbDesign) summary += `DESIGN NOTES: ${sbDesign}\n`;
+                if (sbFinishing) summary += `FINISHING: ${sbFinishing}\n`;
+                if (sbFinishing === 'Other/Custom' && sbCustomFinishing) {
+    summary += `CUSTOM FINISHING DETAILS: ${sbCustomFinishing}\n`;
+}
+                if (sbGrommets) {
+    summary += `GROMMETS: ${sbGrommets}\n`;
+    if (sbGrommets === 'Yes' && sbGrommetPattern) {
+        summary += `GROMMET PATTERN: ${sbGrommetPattern}\n`;
+        if (sbGrommetPattern === 'Custom') {
+            const sbCustomGrommet = formData.get('cb_sb_customGrommet');
+            if (sbCustomGrommet) {
+                summary += `CUSTOM GROMMET DETAILS: ${sbCustomGrommet}\n`;
+            }
+        }
+    }
+}
+                break;
+                
+            case 'Pole Banner':
+                const pbWidth = formData.get('cb_pb_width');
+                const pbHeight = formData.get('cb_pb_height');
+                const pbPocket = formData.get('cb_pb_pocketSize');
+                const pbNeedBracket = formData.get('cb_pb_needBracket');
+                const pbBracketType = formData.get('cb_pb_bracketType');
+                const pbMaterial = formData.get('cb_pb_materialType');
+                const pbSide1 = formData.get('cb_pb_side1Design');
+                const pbSide2 = formData.get('cb_pb_side2Design');
+                
+                if (pbWidth) summary += `WIDTH: ${pbWidth}\n`;
+                if (pbHeight) summary += `HEIGHT: ${pbHeight}\n`;
+                if (pbPocket) summary += `POCKET SIZE: ${pbPocket}\n`;
+                if (pbNeedBracket) {
+                    summary += `NEED POLE BRACKET HARDWARE: ${pbNeedBracket}\n`;
+                    if (pbNeedBracket === 'Yes' && pbBracketType) {
+                        summary += `BRACKET TYPE: ${pbBracketType}\n`;
+                    }
+                }
+                if (pbMaterial) summary += `MATERIAL TYPE: ${pbMaterial}\n`;
+                if (pbSide1) summary += `SIDE 1 DESIGN: ${pbSide1}\n`;
+                if (pbSide2) summary += `SIDE 2 DESIGN: ${pbSide2}\n`;
+                break;
+        }
+        summary += '\n';
+    }
+    break;
+                    }
+                }
+
+                document.getElementById('outputText').value = summary;
+            }
+
+            copyToClipboard() {
+                const outputText = document.getElementById('outputText');
+                const button = document.getElementById('copyButton');
+                const originalText = button.textContent;
+
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(outputText.value).then(() => {
+                        button.textContent = '✓ Copied!';
+                        button.classList.add('success');
+                        
+                        setTimeout(() => {
+                            button.textContent = originalText;
+                            button.classList.remove('success');
+                        }, 2000);
+                    });
+                } else {
+                    outputText.select();
+                    outputText.setSelectionRange(0, 99999);
+                    
+                    try {
+                        document.execCommand('copy');
+                        button.textContent = '✓ Copied!';
+                        button.classList.add('success');
+                        
+                        setTimeout(() => {
+                            button.textContent = originalText;
+                            button.classList.remove('success');
+                        }, 2000);
+                    } catch (err) {
+                        console.error('Failed to copy text: ', err);
+                    }
+                }
+            }
+              autoResizeTextarea(textarea) {
+        // Reset height to calculate new height
+        textarea.style.height = 'auto';
+        
+        // Calculate the scroll height
+        const scrollHeight = textarea.scrollHeight;
+        
+        // Apply min/max constraints
+        const minHeight = 200;
+        const maxHeight = 600;
+        const newHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight);
+        
+        // Set the new height
+        textarea.style.height = newHeight + 'px';
+        
+        // Handle overflow
+        if (scrollHeight > maxHeight) {
+            textarea.style.overflowY = 'auto';
+        } else {
+            textarea.style.overflowY = 'hidden';
+        }
+    }
+
+    setupDropdownPreviews() {
+        const selects = document.querySelectorAll('select');
+        
+        selects.forEach(select => {
+            select.addEventListener('mouseenter', (e) => {
+                if (e.target.value) {
+                    this.showDropdownPreview(e.target, e.target.options[e.target.selectedIndex].text);
+                }
+            });
+            
+            select.addEventListener('mouseleave', (e) => {
+                this.hideDropdownPreview();
+            });
+            
+            select.addEventListener('change', (e) => {
+                if (e.target.value) {
+                    this.showDropdownPreview(e.target, e.target.options[e.target.selectedIndex].text);
+                    setTimeout(() => this.hideDropdownPreview(), 2000);
+                }
+            });
+        });
+    }
+
+    showDropdownPreview(element, text) {
+        this.hideDropdownPreview(); // Remove any existing preview
+        
+        const preview = document.createElement('div');
+        preview.className = 'dropdown-preview';
+        preview.textContent = `Selected: ${text}`;
+        preview.id = 'dropdown-preview-tooltip';
+        
+        const rect = element.getBoundingClientRect();
+        preview.style.left = rect.left + (rect.width / 2) + 'px';
+        preview.style.top = (rect.top - 40) + 'px';
+        
+        document.body.appendChild(preview);
+        
+        setTimeout(() => {
+            preview.classList.add('show');
+        }, 10);
+    }
+
+    hideDropdownPreview() {
+        const existing = document.getElementById('dropdown-preview-tooltip');
+        if (existing) {
+            existing.classList.remove('show');
+            setTimeout(() => existing.remove(), 300);
+        }
+    }
+
+        }
+
+        // Auto-save functionality class
+        class AutoSave {
+            constructor(formId, saveInterval = 5000) {
+                this.formId = formId;
+                this.saveInterval = saveInterval;
+                this.storageKey = `${formId}_draft`;
+                this.lastSaveTime = 0;
+                this.saveTimeout = null;
+                this.indicator = document.getElementById('autosaveIndicator');
+                this.indicatorText = document.getElementById('autosaveText');
+                
+                this.init();
+            }
+
+            init() {
+                this.checkForDraft();
+                this.setupEventListeners();
+                this.setupDraftHandlers();
+            }
+
+            setupEventListeners() {
+                const form = document.getElementById(this.formId);
+                if (!form) return;
+
+                form.addEventListener('input', (e) => {
+                    this.debouncedSave();
+                });
+
+                form.addEventListener('change', (e) => {
+                    this.debouncedSave();
+                });
+
+                window.addEventListener('beforeunload', (e) => {
+                    this.saveDraft(true);
+                });
+
+                setInterval(() => {
+                    if (this.hasUnsavedChanges()) {
+                        this.saveDraft();
+                    }
+                }, this.saveInterval);
+            }
+
+            setupDraftHandlers() {
+                const restoreBtn = document.getElementById('restoreDraftBtn');
+                const dismissBtn = document.getElementById('dismissDraftBtn');
+
+                if (restoreBtn) {
+                    restoreBtn.addEventListener('click', () => {
+                        this.restoreDraft();
+                    });
+                }
+
+                if (dismissBtn) {
+                    dismissBtn.addEventListener('click', () => {
+                        this.dismissDraft();
+                    });
+                }
+            }
+
+            debouncedSave() {
+                if (this.saveTimeout) {
+                    clearTimeout(this.saveTimeout);
+                }
+
+                this.saveTimeout = setTimeout(() => {
+                    this.saveDraft();
+                }, 2000);
+            }
+
+            hasUnsavedChanges() {
+                const currentData = this.getFormData();
+                const savedData = this.getSavedDraft();
+                
+                if (!savedData) return Object.keys(currentData).length > 0;
+                
+                return JSON.stringify(currentData) !== JSON.stringify(savedData.data);
+            }
+
+            getFormData() {
+                const form = document.getElementById(this.formId);
+                if (!form) return {};
+
+                const data = {};
+
+                // Get all form inputs including text, select, textarea
+                const formData = new FormData(form);
+                for (let [key, value] of formData.entries()) {
+                    if (value && value.trim() !== '') {
+                        data[key] = value;
+                    }
+                }
+
+                // Specifically handle radio buttons (FormData might miss some)
+                const radioButtons = form.querySelectorAll('input[type="radio"]:checked');
+                radioButtons.forEach(radio => {
+                    data[radio.name] = radio.value;
+                });
+
+                // Handle checkboxes
+                const checkboxes = form.querySelectorAll('input[type="checkbox"]');
+                checkboxes.forEach(checkbox => {
+                    data[checkbox.name] = checkbox.checked;
+                });
+
+                // Also capture all text inputs, selects, and textareas individually to ensure nothing is missed
+                const allInputs = form.querySelectorAll('input[type="text"], input[type="url"], select, textarea');
+                allInputs.forEach(input => {
+                    if (input.value && input.value.trim() !== '') {
+                        data[input.name] = input.value;
+                    }
+                });
+
+                return data;
+            }
+
+            saveDraft(force = false) {
+                const data = this.getFormData();
+                
+                if (Object.keys(data).length === 0) return;
+                if (!force && Date.now() - this.lastSaveTime < 1000) return;
+
+                try {
+                    this.showSaveIndicator('saving');
+
+                    const draftData = {
+                        data: data,
+                        timestamp: Date.now(),
+                        version: '1.0'
+                    };
+
+                    localStorage.setItem(this.storageKey, JSON.stringify(draftData));
+                    this.lastSaveTime = Date.now();
+                    
+                    this.showSaveIndicator('saved');
+                } catch (error) {
+                    console.error('Failed to save draft:', error);
+                    this.showSaveIndicator('error');
+                }
+            }
+
+            getSavedDraft() {
+                try {
+                    const saved = localStorage.getItem(this.storageKey);
+                    return saved ? JSON.parse(saved) : null;
+                } catch (error) {
+                    console.error('Failed to retrieve draft:', error);
+                    return null;
+                }
+            }
+
+            checkForDraft() {
+                const draft = this.getSavedDraft();
+                
+                if (draft && this.isDraftValid(draft)) {
+                    this.showDraftNotification(draft);
+                }
+            }
+
+            isDraftValid(draft) {
+                const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
+                const age = Date.now() - draft.timestamp;
+                
+                return age < maxAge && Object.keys(draft.data).length > 0;
+            }
+
+            showDraftNotification(draft) {
+                const notification = document.getElementById('draftNotification');
+                const timestamp = document.getElementById('draftTimestamp');
+                
+                if (notification && timestamp) {
+                    const date = new Date(draft.timestamp);
+                    timestamp.textContent = date.toLocaleString();
+                    notification.style.display = 'block';
+                }
+            }
+
+            restoreDraft() {
+                const draft = this.getSavedDraft();
+                
+                if (draft && draft.data) {
+                    // First restore the basic form data
+                    this.populateForm(draft.data);
+                    this.hideDraftNotification();
+                    this.showSaveIndicator('saved');
+                    
+                    // Then rebuild all conditional sections based on saved data
+                    this.rebuildConditionalSections(draft.data);
+                }
+            }
+
+            rebuildConditionalSections(data) {
+                // Get reference to the main form engine
+                const formEngine = window.orderFormEngine;
+                if (!formEngine) return;
+
+                // Step 1: Rebuild order type section if needed
+                if (data.orderType) {
+                    const orderTypeSelect = document.getElementById('orderType');
+                    if (orderTypeSelect) {
+                        orderTypeSelect.value = data.orderType;
+                        formEngine.handleOrderTypeChange(data.orderType);
+                        
+                        // Wait for the section to be created, then populate nested fields
+                        setTimeout(() => {
+                            this.populateNestedFields(data);
+                        }, 200);
+                    }
+                }
+            }
+
+            populateNestedFields(data) {
+                // Handle Vehicle Merchandising nested fields
+                if (data.orderType === 'Vehicle Merchandising' && data.vm_productType) {
+                    const vmProductSelect = document.getElementById('vm_productType');
+                    if (vmProductSelect) {
+                        vmProductSelect.value = data.vm_productType;
+                        vmProductSelect.dispatchEvent(new Event('change'));
+                    }
+                }
+
+                // Handle Dealership Merchandising nested fields
+                if (data.orderType === 'Dealership Merchandising' && data.dm_productType) {
+                    const dmProductSelect = document.getElementById('dm_productType');
+                    if (dmProductSelect) {
+                        dmProductSelect.value = data.dm_productType;
+                        dmProductSelect.dispatchEvent(new Event('change'));
+                    }
+                }
+
+                // Handle Custom Special Products conditional field
+                if (data.orderType === 'Custom Special Products' && data.csp_materialType) {
+                    const cspMaterialSelect = document.getElementById('csp_materialType');
+                    if (cspMaterialSelect) {
+                        cspMaterialSelect.value = data.csp_materialType;
+                        cspMaterialSelect.dispatchEvent(new Event('change'));
+                    }
+                }
+
+                // Handle New Template Request nested fields
+                if (data.orderType === 'New Template Request' && data.ntr_requestType) {
+                    const ntrRequestSelect = document.getElementById('ntr_requestType');
+                    if (ntrRequestSelect) {
+                        ntrRequestSelect.value = data.ntr_requestType;
+                        ntrRequestSelect.dispatchEvent(new Event('change'));
+                    }
+                }
+
+                // Wait for all nested sections to load, then populate all fields
+                setTimeout(() => {
+                    this.populateAllFields(data);
+                }, 300);
+            }
+
+            populateAllFields(data) {
+                // Populate all form fields including those in conditional sections
+                Object.keys(data).forEach(key => {
+                    const field = document.querySelector(`[name="${key}"]`);
+                    if (field) {
+                        if (field.type === 'radio') {
+                            const radioOption = document.querySelector(`[name="${key}"][value="${data[key]}"]`);
+                            if (radioOption) {
+                                radioOption.checked = true;
+                            }
+                        } else if (field.type === 'checkbox') {
+                            field.checked = data[key] === 'true' || data[key] === true;
+                        } else {
+                            field.value = data[key];
+                        }
+                    }
+                });
+
+                // Trigger form update to refresh the order summary
+                const formEngine = window.orderFormEngine;
+                if (formEngine) {
+                    formEngine.generateOrderSummary();
+                }
+            }
+
+            populateForm(data) {
+                const form = document.getElementById(this.formId);
+                if (!form) return;
+
+                Object.keys(data).forEach(key => {
+                    const field = form.querySelector(`[name="${key}"]`);
+                    if (field) {
+                        if (field.type === 'radio') {
+                            const radioOption = form.querySelector(`[name="${key}"][value="${data[key]}"]`);
+                            if (radioOption) radioOption.checked = true;
+                        } else {
+                            field.value = data[key];
+                        }
+                    }
+                });
+            }
+
+            dismissDraft() {
+                this.clearDraft();
+                this.hideDraftNotification();
+            }
+
+            hideDraftNotification() {
+                const notification = document.getElementById('draftNotification');
+                if (notification) {
+                    notification.style.display = 'none';
+                }
+            }
+
+            clearDraft() {
+                try {
+                    localStorage.removeItem(this.storageKey);
+                } catch (error) {
+                    console.error('Failed to clear draft:', error);
+                }
+            }
+
+            showSaveIndicator(status) {
+                if (!this.indicator || !this.indicatorText) return;
+
+                if (this.indicatorTimeout) {
+                    clearTimeout(this.indicatorTimeout);
+                }
+
+                switch (status) {
+                    case 'saving':
+                        this.indicatorText.textContent = '💾 Saving...';
+                        this.indicator.className = 'autosave-indicator saving show';
+                        break;
+                    case 'saved':
+                        this.indicatorText.textContent = '✅ Saved';
+                        this.indicator.className = 'autosave-indicator saved show';
+                        break;
+                    case 'error':
+                        this.indicatorText.textContent = '❌ Save failed';
+                        this.indicator.className = 'autosave-indicator error show';
+                        break;
+                }
+
+                if (status !== 'error') {
+                    this.indicatorTimeout = setTimeout(() => {
+                        this.indicator.classList.remove('show');
+                    }, 2000);
+                } else {
+                    this.indicatorTimeout = setTimeout(() => {
+                        this.indicator.classList.remove('show');
+                    }, 5000);
+                }
+            }
+
+            onFormSubmitted() {
+                this.clearDraft();
+                this.showSaveIndicator('saved');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Make the OrderFormEngine globally accessible for draft restoration
+            window.orderFormEngine = new OrderFormEngine();
+        });
+    </script>
+</body>
+</html>

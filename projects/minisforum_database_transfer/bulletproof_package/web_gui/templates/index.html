@@ -886,6 +886,29 @@
                                 <input type="number" id="minYear" name="min_year" min="1900" max="2030" placeholder="Any year" class="modern-input">
                             </div>
                         </div>
+                        
+                        <!-- Special Filters Section -->
+                        <div class="form-section">
+                            <div class="section-header">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <h4>Special Requirements</h4>
+                            </div>
+                            <div class="modern-checkbox-grid">
+                                <div class="modern-checkbox-item">
+                                    <input type="checkbox" id="excludeMissingPrice" name="exclude_missing_price" value="true">
+                                    <label for="excludeMissingPrice" class="modern-checkbox-label">
+                                        <div class="checkbox-indicator">
+                                            <i class="fas fa-check"></i>
+                                        </div>
+                                        <div class="checkbox-content">
+                                            <i class="fas fa-dollar-sign"></i>
+                                            <span>Exclude Missing Prices</span>
+                                            <small>Required for graphics with printed prices</small>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     
                 </form>
