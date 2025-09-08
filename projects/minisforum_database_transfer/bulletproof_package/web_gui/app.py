@@ -35,6 +35,7 @@ try:
     from qr_code_generator import QRCodeGenerator
     from data_exporter import DataExporter
     from order_queue_manager import OrderQueueManager
+    from automated_normalization_manager import AutomatedNormalizationManager, normalize_active_import, validate_normalization_status
     print("OK Basic modules imported successfully")
     
     print("Attempting to import CorrectOrderProcessor...")
@@ -195,6 +196,24 @@ class ScraperController:
                     self.scrape_results['csv_vehicles'] = import_result.get('processed', 0)
                     self.scrape_results['missing_vins'] = import_result.get('missing_vins', 0)
                     logger.info(f"CSV import successful: {import_result['processed']} vehicles")
+                    
+                    # CRITICAL: Automatically run normalization after CSV import
+                    logger.info("🔄 AUTOMATION: Running automated normalization after CSV import...")
+                    try:
+                        normalization_result = normalize_active_import()
+                        if normalization_result.get('success'):
+                            normalized_count = normalization_result.get('normalized_records', 0)
+                            completion_rate = normalization_result.get('validation', {}).get('completion_rate', 0)
+                            logger.info(f"✅ AUTOMATION: Normalized {normalized_count} records ({completion_rate}% complete)")
+                            self.scrape_results['normalized_vehicles'] = normalized_count
+                            self.scrape_results['normalization_complete'] = completion_rate == 100
+                        else:
+                            error_msg = normalization_result.get('error', 'Unknown normalization error')
+                            logger.error(f"❌ AUTOMATION: Normalization failed: {error_msg}")
+                            self.scrape_results['normalization_error'] = error_msg
+                    except Exception as e:
+                        logger.error(f"❌ AUTOMATION: Normalization exception: {e}")
+                        self.scrape_results['normalization_error'] = str(e)
             
             # Step 2: Run REAL scrapers for selected dealerships only
             logger.info("🎯 Running REAL scrapers to fetch live data...")
@@ -717,6 +736,100 @@ def get_order_processing():
     except Exception as e:
         logger.error(f"Failed to get order processing data: {e}")
         return jsonify({'error': str(e)}), 500
+
+# AUTOMATED NORMALIZATION API ENDPOINTS
+@app.route('/api/normalization/run', methods=['POST'])
+def run_automated_normalization():
+    """API endpoint to run automated normalization on active import"""
+    try:
+        print("AUTOMATION: Starting automated normalization via API")
+        result = normalize_active_import()
+        
+        print(f"AUTOMATION: Normalization result: {result.get('success', False)}")
+        
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'message': f"Successfully normalized {result['normalized_records']} records",
+                'import_id': result['import_id'],
+                'normalized_records': result['normalized_records'],
+                'dealerships_processed': result['dealerships_processed'],
+                'validation': result.get('validation', {}),
+                'completion_rate': result.get('validation', {}).get('completion_rate', 0)
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.get('error', 'Unknown normalization error'),
+                'stats': result.get('stats', {})
+            }), 500
+            
+    except Exception as e:
+        print(f"AUTOMATION: API normalization failed: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/normalization/validate')
+def validate_normalization():
+    """API endpoint to validate normalization status"""
+    try:
+        result = validate_normalization_status()
+        
+        if 'error' in result:
+            return jsonify({
+                'success': False,
+                'error': result['error']
+            }), 500
+        
+        return jsonify({
+            'success': True,
+            'validation': result,
+            'is_complete': result.get('is_complete', False),
+            'raw_records': result.get('raw_records', 0),
+            'normalized_records': result.get('normalized_records', 0),
+            'completion_rate': result.get('completion_rate', 0)
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/normalization/status')
+def get_normalization_status():
+    """API endpoint to get current normalization status overview"""
+    try:
+        # Get active import info
+        active_import = db_manager.execute_query(
+            "SELECT import_id, import_date, total_vehicles FROM scraper_imports WHERE status = 'active' LIMIT 1"
+        )
+        
+        if not active_import:
+            return jsonify({
+                'success': False,
+                'error': 'No active import found'
+            })
+        
+        import_info = active_import[0]
+        
+        # Get normalization statistics
+        validation_result = validate_normalization_status()
+        
+        return jsonify({
+            'success': True,
+            'active_import': import_info,
+            'normalization': validation_result if 'error' not in validation_result else None,
+            'needs_normalization': not validation_result.get('is_complete', False) if 'error' not in validation_result else True
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @app.route('/order-form')
 def order_form():

@@ -16,6 +16,7 @@ from database_config import (
     REQUIRED_COLUMNS, NUMERIC_COLUMNS, DATE_COLUMNS
 )
 from scraper_data_normalizer import normalizer
+from scraper_import_manager import ScraperImportManager
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,45 @@ class CompleteCSVImporter:
         self.dealership_configs = {}
         self.load_dealership_configs()
     
+    def standardize_dealership_name(self, raw_name: str) -> str:
+        """Standardize dealership names during CSV import to ensure consistency
+        
+        This function handles known dealership name variations to prevent
+        data fragmentation and ensure CAO processing works correctly.
+        """
+        if not raw_name:
+            return raw_name
+            
+        # Define dealership name standardization mappings
+        # Maps CSV names to standard database names for consistency
+        name_mappings = {
+            'South County Dodge Chrysler Jeep RAM': 'South County DCJR',
+            'South County Dodge Chrysler Jeep Ram': 'South County DCJR', 
+            'South County Autos': 'South County DCJR',
+            'Dave Sinclair Lincoln of St Louis': 'Dave Sinclair Lincoln',
+            'Dave Sinclair Lincoln of South County': 'Dave Sinclair Lincoln South',
+            'Dave Sinclair Lincoln of St Peters': 'Dave Sinclair Lincoln St. Peters',
+            # 'HW Kia of West County': 'HW Kia',  # Let this import as-is, mapping handled in CAO processor
+            'BMW of West St Louis': 'BMW of West St. Louis',  # Handle period difference
+            'Glendale Chrysler Jeep Dodge Ram': 'Glendale CDJR',  # Map to shorter config name
+            # Most other names should match exactly between CSV and configs
+        }
+        
+        # Check for exact match first
+        if raw_name in name_mappings:
+            logger.info(f"DEALERSHIP NAME STANDARDIZATION: '{raw_name}' -> '{name_mappings[raw_name]}'")
+            return name_mappings[raw_name]
+        
+        # Check for partial matches (case-insensitive)
+        raw_name_lower = raw_name.lower()
+        for pattern, standard_name in name_mappings.items():
+            if pattern.lower() == raw_name_lower:
+                logger.info(f"DEALERSHIP NAME STANDARDIZATION (case): '{raw_name}' -> '{standard_name}'")
+                return standard_name
+        
+        # Return original name if no mapping found
+        return raw_name
+
     def load_dealership_configs(self):
         """Load dealership configurations from database"""
         try:
@@ -256,7 +296,7 @@ class CompleteCSVImporter:
                 pass
         
         # Try other common formats
-        date_formats = ['%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y']
+        date_formats = ['%Y/%m/%d', '%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y']
         
         for fmt in date_formats:
             try:
@@ -267,10 +307,26 @@ class CompleteCSVImporter:
         return None
     
     def import_complete_csv(self, file_path: str) -> Dict:
-        """Import the complete_data.csv file"""
+        """Import the complete_data.csv file using proper ScraperImportManager"""
         logger.info(f"Importing complete CSV file: {file_path}")
         
         try:
+            # Initialize ScraperImportManager first to get active import ID
+            import_manager = ScraperImportManager()
+            
+            # Get or create active import
+            active_import = self.db.execute_query(
+                "SELECT import_id FROM scraper_imports WHERE status = 'active' LIMIT 1"
+            )
+            
+            if not active_import:
+                # Create new import
+                import_id = import_manager.create_new_import()
+            else:
+                import_id = active_import[0]['import_id']
+            
+            logger.info(f"Using import ID: {import_id}")
+            
             # Read CSV with pandas
             df = pd.read_csv(file_path, dtype=str, keep_default_na=False)
             
@@ -287,9 +343,12 @@ class CompleteCSVImporter:
                 logger.warning(f"Missing columns in CSV: {missing_columns}")
             
             # Process data by dealership for better tracking
-            dealership_groups = df.groupby('dealer_name')
+            dealership_groups = df.groupby('Location')
             
-            for dealership_name, group_df in dealership_groups:
+            for raw_dealership_name, group_df in dealership_groups:
+                # CRITICAL FIX: Standardize dealership names during import
+                dealership_name = self.standardize_dealership_name(raw_dealership_name)
+                logger.info(f"ROBUST DEBUG: Starting import for {dealership_name} with {len(group_df)} vehicles")
                 self.import_stats['dealerships'][dealership_name] = {
                     'total': 0,
                     'imported': 0,
@@ -299,42 +358,70 @@ class CompleteCSVImporter:
                 raw_data = []
                 normalized_data = []
                 vin_history_data = []
+                today = date.today()  # Define today for VIN history
+                
+                # Track validation and filtering results
+                validation_passed = 0
+                validation_failed = 0
+                filter_passed = 0
+                filter_failed = 0
                 
                 for idx, row in group_df.iterrows():
                     self.import_stats['total_rows'] += 1
                     self.import_stats['dealerships'][dealership_name]['total'] += 1
                     
+                    # DEBUG: Show first 5 vehicles for each dealership
+                    if idx < 5:
+                        logger.info(f"ROBUST DEBUG: {dealership_name} Row {idx}: VIN={row.get('Vin', 'MISSING')}, Stock={row.get('Stock', 'MISSING')}, Type={row.get('Type', 'MISSING')}")
+                    
                     # Validate row
                     is_valid, error_msg = self.validate_row(row)
                     if not is_valid:
+                        validation_failed += 1
                         self.import_stats['skipped_rows'] += 1
                         self.import_stats['dealerships'][dealership_name]['skipped'] += 1
                         self.import_stats['errors'].append(
                             f"{dealership_name} Row {idx + 1}: {error_msg}"
                         )
+                        # DEBUG: Log first 3 validation failures per dealership
+                        if validation_failed <= 3:
+                            logger.warning(f"ROBUST DEBUG: {dealership_name} Row {idx} VALIDATION FAILED: {error_msg}")
                         continue
+                    else:
+                        validation_passed += 1
                     
                     # Check dealership-specific filtering rules
                     should_include, filter_msg = self.should_include_vehicle(row, dealership_name)
                     if not should_include:
+                        filter_failed += 1
                         self.import_stats['skipped_rows'] += 1
                         self.import_stats['dealerships'][dealership_name]['skipped'] += 1
                         self.import_stats['errors'].append(
                             f"{dealership_name} Row {idx + 1}: Filtered - {filter_msg}"
                         )
+                        # DEBUG: Log first 3 filter failures per dealership
+                        if filter_failed <= 3:
+                            logger.warning(f"ROBUST DEBUG: {dealership_name} Row {idx} FILTER FAILED: {filter_msg}")
                         continue
+                    else:
+                        filter_passed += 1
                     
                     # Prepare raw data tuple using flexible column mapping
-                    vin = self.get_column_value(row, ['vin', 'vehicle_vin', 'vehiclevin']).upper()
-                    stock = self.get_column_value(row, ['stock', 'stock_number', 'stocknumber', 'stock_no'])
-                    year_str = self.get_column_value(row, ['year'])
+                    vin = self.get_column_value(row, ['Vin', 'vin', 'vehicle_vin', 'vehiclevin']).upper()
+                    stock = self.get_column_value(row, ['Stock', 'stock', 'stock_number', 'stocknumber', 'stock_no'])
+                    year_str = self.get_column_value(row, ['Year', 'year'])
                     
-                    # Get the SAME data that's being stored successfully
-                    condition_data = self.get_column_value(row, ['condition', 'vehicle_condition', 'status'])
+                    # BREAKTHROUGH FIX: Get proper data for normalization
+                    condition_data = self.get_column_value(row, ['Type', 'type', 'condition', 'vehicle_condition'])  # Vehicle type
+                    status_data = self.get_column_value(row, ['Status', 'status'])  # Vehicle status for lot determination
                     
-                    # Apply normalization using the actual data being stored
+                    # Apply normalization using the correct fields
                     normalized_type = normalizer.normalize_vehicle_type(condition_data or '')
-                    lot_status = normalizer.normalize_lot_status(condition_data or '')
+                    lot_status = normalizer.normalize_lot_status(status_data or '')
+                    
+                    # CRITICAL: Override lot status if no stock number
+                    if not stock:
+                        lot_status = 'offlot'  # Force offlot for missing stock
                     
                     # Store normalized values for use in normalized_vehicle_data table
                     self.current_normalized_type = normalized_type
@@ -345,27 +432,37 @@ class CompleteCSVImporter:
                         stock,
                         condition_data or 'Vehicle',  # type (use condition data that actually exists)
                         int(year_str) if year_str and year_str.isdigit() else None,
-                        self.get_column_value(row, ['make']),
-                        self.get_column_value(row, ['model']),
-                        self.get_column_value(row, ['trim']),
-                        self.get_column_value(row, ['exterior_color', 'ext_color', 'color']),
-                        self.normalize_condition(self.get_column_value(row, ['condition', 'vehicle_condition', 'status'])),
-                        self.clean_numeric(self.get_column_value(row, ['price'])),
-                        '',  # body_style (not in complete_data.csv)
-                        self.get_column_value(row, ['fuel_type', 'fuel']),
-                        self.clean_numeric(self.get_column_value(row, ['msrp'])),
-                        None,  # date_in_stock (not in complete_data.csv)
-                        '',  # street_address
-                        '',  # locality
-                        '',  # postal_code
-                        '',  # region
-                        '',  # country
+                        self.get_column_value(row, ['Make', 'make']),
+                        self.get_column_value(row, ['Model', 'model']),
+                        self.get_column_value(row, ['Trim', 'trim']),
+                        self.get_column_value(row, ['Ext Color', 'exterior_color', 'ext_color', 'color']),
+                        self.normalize_condition(self.get_column_value(row, ['Status', 'condition', 'vehicle_condition', 'status'])),
+                        self.clean_numeric(self.get_column_value(row, ['Price', 'price'])),
+                        self.get_column_value(row, ['Body Style', 'body_style']),  # Available in CSV
+                        self.get_column_value(row, ['Fuel Type', 'fuel_type', 'fuel']),
+                        self.clean_numeric(self.get_column_value(row, ['MSRP', 'msrp'])),
+                        self.clean_date(self.get_column_value(row, ['Date In Stock', 'date_in_stock'])),  # Convert empty dates to None
+                        self.get_column_value(row, ['Street Address', 'street_address']),  # Available in CSV
+                        self.get_column_value(row, ['Locality', 'locality']),  # Available in CSV
+                        self.get_column_value(row, ['Postal Code', 'postal_code']),  # Available in CSV
+                        self.get_column_value(row, ['Region', 'region']),  # Available in CSV
+                        self.get_column_value(row, ['Country', 'country']),  # Available in CSV
                         dealership_name,  # location
-                        row.get('url', ''),
-                        normalized_type,  # normalized_type
-                        lot_status  # on_lot_status
+                        row.get('Vechile URL', row.get('url', '')),  # Note: CSV has typo "Vechile URL"
+                        import_id,  # import_id - CRITICAL for active dataset filtering
+                        datetime.now(),  # import_timestamp
+                        date.today()  # import_date
                     )
                     raw_data.append(raw_tuple)
+                
+                # ROBUST DEBUG: Log final processing results for this dealership
+                logger.info(f"ROBUST DEBUG: {dealership_name} FINAL RESULTS:")
+                logger.info(f"  - Total vehicles in CSV: {len(group_df)}")
+                logger.info(f"  - Validation passed: {validation_passed}")
+                logger.info(f"  - Validation failed: {validation_failed}")
+                logger.info(f"  - Filter passed: {filter_passed}")
+                logger.info(f"  - Filter failed: {filter_failed}")
+                logger.info(f"  - Raw data ready for import: {len(raw_data)}")
                 
                 # Bulk insert raw data for this dealership
                 if raw_data:
@@ -374,8 +471,11 @@ class CompleteCSVImporter:
                         'ext_color', 'status', 'price', 'body_style', 'fuel_type',
                         'msrp', 'date_in_stock', 'street_address', 'locality',
                         'postal_code', 'region', 'country', 'location', 'vehicle_url',
-                        'normalized_type', 'on_lot_status'
+                        'import_id', 'import_timestamp', 'import_date'
                     ]
+                    
+                    logger.info(f"ROBUST DEBUG: About to batch insert {len(raw_data)} rows for {dealership_name}")
+                    logger.info(f"ROBUST DEBUG: First few raw_data tuples: {raw_data[:2] if raw_data else 'NO DATA'}")
                     
                     rows_inserted = self.db.execute_batch_insert(
                         'raw_vehicle_data', 
@@ -383,40 +483,50 @@ class CompleteCSVImporter:
                         raw_data
                     )
                     
+                    logger.info(f"ROBUST DEBUG: Batch insert returned {rows_inserted} rows for {dealership_name}")
+                    
                     self.import_stats['imported_rows'] += rows_inserted
                     self.import_stats['dealerships'][dealership_name]['imported'] = rows_inserted
                     
-                    # Get inserted records for normalization
-                    today = date.today()
+                    # Get inserted records for normalization using import_id
                     raw_records = self.db.execute_query(
                         """
                         SELECT id, vin, stock, type, year, make, model, trim, 
                                status, price, msrp, date_in_stock, location, vehicle_url
                         FROM raw_vehicle_data
-                        WHERE location = %s AND import_date = %s
+                        WHERE location = %s AND import_id = %s
                         """,
-                        (dealership_name, today)
+                        (dealership_name, import_id)
                     )
                     
                     # Prepare normalized data
+                    logger.info(f"DEBUG: Preparing to normalize {len(raw_records)} records for {dealership_name}")
                     for record in raw_records:
-                        # Get the normalized values calculated during raw data processing
-                        condition_data = record.get('type', '')
-                        normalized_vehicle_type = normalizer.normalize_vehicle_type(condition_data)
-                        normalized_lot_status = normalizer.normalize_lot_status(condition_data)
+                        # BREAKTHROUGH FIX: Use proper fields for normalization
+                        condition_data = record.get('type', '')  # For vehicle type (new/used/cpo)
+                        status_data = record.get('status', '')   # For lot status (In Transit/Available/etc)
+                        stock_data = record.get('stock', '')     # For stock validation
                         
-                        # Convert normalizer output to database format
-                        if normalized_lot_status in ['onlot', 'on lot']:
-                            db_lot_status = 'on lot'
-                        elif normalized_lot_status in ['offlot', 'off lot']:
-                            db_lot_status = 'off lot'
-                        else:
-                            db_lot_status = record['status']  # fallback to original
+                        # Normalize vehicle type using condition/type field
+                        normalized_vehicle_type = normalizer.normalize_vehicle_type(condition_data)
+                        
+                        # Normalize lot status using STATUS field (handles "In Transit" etc)
+                        normalized_lot_status = normalizer.normalize_lot_status(status_data)
+                        
+                        # CRITICAL BREAKTHROUGH: Override lot status if no stock number OR in-transit
+                        if not stock_data or 'in-transit' in status_data.lower() or 'in transit' in status_data.lower():
+                            normalized_lot_status = 'offlot'  # Force offlot for missing stock OR in-transit
+                        
+                        # Use normalizer output directly - CAO system expects 'onlot'/'offlot' format
+                        db_lot_status = normalized_lot_status
+                        
+                        # CRITICAL FIX: Handle NULL stock values
+                        stock_value = record['stock'] if record['stock'] else 'AUTO'
                         
                         normalized_tuple = (
                             record['id'],  # raw_data_id
                             record['vin'],
-                            record['stock'],
+                            stock_value,  # Use 'AUTO' for NULL stock to satisfy NOT NULL constraint
                             normalized_vehicle_type,  # vehicle_condition (po, cpo, new)
                             record['year'],
                             record['make'],
@@ -428,7 +538,10 @@ class CompleteCSVImporter:
                             record['date_in_stock'],
                             record['location'],
                             record['vehicle_url'],
-                            db_lot_status  # on_lot_status column
+                            db_lot_status,  # on_lot_status column
+                            datetime.now(),  # created_at
+                            datetime.now(),  # updated_at
+                            date.today()  # last_seen_date
                         )
                         normalized_data.append(normalized_tuple)
                         
@@ -440,21 +553,28 @@ class CompleteCSVImporter:
                         ))
                     
                     # Upsert normalized data
+                    logger.info(f"DEBUG: About to upsert {len(normalized_data)} normalized records for {dealership_name}")
                     if normalized_data:
                         norm_columns = [
                             'raw_data_id', 'vin', 'stock', 'vehicle_condition',
                             'year', 'make', 'model', 'trim', 'status', 'price',
-                            'msrp', 'date_in_stock', 'location', 'vehicle_url', 'on_lot_status'
+                            'msrp', 'date_in_stock', 'location', 'vehicle_url', 'on_lot_status',
+                            'created_at', 'updated_at', 'last_seen_date'
                         ]
                         
-                        self.db.upsert_data(
-                            'normalized_vehicle_data',
-                            norm_columns,
-                            normalized_data,
-                            conflict_columns=['vin', 'location'],
-                            update_columns=['stock', 'vehicle_condition', 'price', 
-                                          'status', 'on_lot_status', 'last_seen_date', 'updated_at']
-                        )
+                        try:
+                            result = self.db.upsert_data(
+                                'normalized_vehicle_data',
+                                norm_columns,
+                                normalized_data,
+                                conflict_columns=['vin', 'location'],
+                                update_columns=['stock', 'vehicle_condition', 'price', 
+                                              'status', 'on_lot_status', 'last_seen_date', 'updated_at']
+                            )
+                            logger.info(f"DEBUG: Upsert result: {result} rows affected for {dealership_name}")
+                        except Exception as e:
+                            logger.error(f"CRITICAL: Normalization upsert failed for {dealership_name}: {e}")
+                            raise
                     
                     # Insert VIN history (handle duplicates gracefully)
                     if vin_history_data:
@@ -524,6 +644,35 @@ class CompleteCSVImporter:
                 print(f"  ... and {len(self.import_stats['errors']) - 10} more errors")
         
         print("="*60)
+    
+    def import_csv(self, file_path: str) -> Dict:
+        """
+        Web server compatibility method - wraps the main import logic
+        This method is called by the web server (app.py line 192)
+        """
+        logger.info(f"Web server calling import_csv with: {file_path}")
+        
+        try:
+            # Call the import logic that includes normalization
+            # The web server CSV format matches the "complete_data.csv" format
+            result = self.import_complete_csv(file_path)
+            
+            # Return result in format expected by web server
+            return {
+                'success': True,
+                'processed': result.get('imported_rows', 0),
+                'message': f"Successfully imported {result.get('imported_rows', 0)} vehicles",
+                'details': result
+            }
+            
+        except Exception as e:
+            logger.error(f"import_csv failed: {e}")
+            return {
+                'success': False,
+                'processed': 0,
+                'message': f"Import failed: {str(e)}",
+                'error': str(e)
+            }
 
 def main():
     """Main function for command-line usage"""

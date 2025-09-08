@@ -31,12 +31,14 @@ class CorrectOrderProcessor:
         self.output_base.mkdir(exist_ok=True)
         
         # Map dealership config names to actual data location names
+        # Map dealership config names to actual data location names (for CAO processing)
         self.dealership_name_mapping = {
             'Dave Sinclair Lincoln South': 'Dave Sinclair Lincoln',
-            'BMW of West St. Louis': 'BMW of West St. Louis', 
+            'BMW of West St. Louis': 'BMW of West St Louis',  # Config has period, CSV doesn't
             'Columbia Honda': 'Columbia Honda',
-            'South County DCJR': 'South County Dodge Chrysler Jeep RAM',  # Fix: Map config name TO database name
-            'South County Dodge Chrysler Jeep RAM': 'South County Dodge Chrysler Jeep RAM'
+            'South County DCJR': 'South County Dodge Chrysler Jeep RAM',  # Map config name TO CSV name
+            'Glendale CDJR': 'Glendale Chrysler Jeep Dodge Ram',  # Map config name to CSV name
+            'HW Kia': 'HW Kia of West County'  # Map config name to CSV name
         }
         
         # Reverse mapping for VIN history lookups
@@ -48,7 +50,9 @@ class CorrectOrderProcessor:
             'Bommarito West County': ['Bommarito West County'],
             'Bommarito Cadillac': ['Bommarito Cadillac'],
             'South County DCJR': ['South County DCJR', 'South County Dodge Chrysler Jeep RAM'],
-            'South County Dodge Chrysler Jeep RAM': ['South County DCJR', 'South County Dodge Chrysler Jeep RAM']
+            'South County Dodge Chrysler Jeep RAM': ['South County DCJR', 'South County Dodge Chrysler Jeep RAM'],
+            'Glendale CDJR': ['Glendale CDJR', 'Glendale Chrysler Jeep Dodge Ram'],
+            'Glendale Chrysler Jeep Dodge Ram': ['Glendale CDJR', 'Glendale Chrysler Jeep Dodge Ram']
         }
     
     def _get_dealership_vin_log_table(self, dealership_name: str) -> str:
