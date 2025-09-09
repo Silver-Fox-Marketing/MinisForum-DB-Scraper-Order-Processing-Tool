@@ -942,7 +942,11 @@ class MinisFornumApp {
                 this.closeModal('dealershipModal');
                 
                 // Update just this dealership's data
-                await this.loadDealerships(); // Refresh the grid
+                await this.loadDealerships(); // Refresh the dealership settings grid
+                
+                // Also refresh the order queue management dealership list
+                await this.loadDealershipDefaults(); // Reload defaults from updated data
+                this.renderDealershipList(this.dealerships); // Re-render order queue list
                 
                 // Update just this dealership's default in memory and queue
                 const dealership = this.dealerships.find(d => d.name === this.currentDealership);
@@ -2925,7 +2929,7 @@ class MinisFornumApp {
                 });
                 
                 return `
-                    <div class="modern-dealer-panel" data-dealership="${dealership.name}" draggable="true">
+                    <div class="modern-dealer-panel ${typeClass}" data-dealership="${dealership.name}" draggable="true">
                         <div class="panel-content">
                             <h3 class="dealer-title">${dealership.name}</h3>
                             <div class="panel-details">

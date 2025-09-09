@@ -777,6 +777,7 @@ body {
     position: relative;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 4px 0 20px var(--theme-shadow);
+    overflow-x: hidden;
 }
 
 .sidebar-navigation.collapsed {
@@ -891,6 +892,7 @@ body {
     flex: 1;
     padding: var(--spacing-lg) 0;
     overflow-y: auto;
+    overflow-x: hidden;
     scrollbar-width: thin;
     scrollbar-color: rgba(253, 65, 13, 0.3) transparent;
 }
@@ -924,6 +926,7 @@ body {
     position: relative;
     width: 100%;
     text-align: left;
+    box-sizing: border-box;
     margin-bottom: var(--spacing-xs);
     border-radius: 0 25px 25px 0;
     margin-right: var(--spacing-md);
@@ -1000,6 +1003,7 @@ body {
 
 .sidebar-section {
     margin-top: var(--spacing-lg);
+    box-sizing: border-box;
 }
 
 .sidebar-section-title {
@@ -3134,10 +3138,11 @@ body {
     flex: 2;
     display: flex;
     flex-direction: column;
-    min-height: 0;
+    height: auto;
+    min-height: fit-content;
     padding: 8px;
     margin: -8px;
-    overflow-y: auto;
+    overflow-y: visible;
 }
 
 /* Modern Professional Day Buttons */
@@ -3382,15 +3387,16 @@ body {
     box-shadow: 0 8px 20px rgba(107, 114, 128, 0.4);
 }
 
-/* Dealership Grid Layout */
+/* Dealership Grid Layout - Fluid Height */
 .dealership-list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 16px;
-    max-height: 600px;
-    overflow-y: auto;
     flex: 1;
     padding: 8px;
+    overflow-y: visible;
+    height: auto;
+    min-height: fit-content;
 }
 
 /* REMOVED OLD DEALERSHIP-ITEM STYLES - USING MODERN-DEALER-PANEL INSTEAD */
@@ -8104,16 +8110,33 @@ body[data-manual-mode="true"] #startVinLogImport {
 }
 
 .order-type-badge {
-    background: linear-gradient(135deg, var(--primary-red) 0%, #c41e3a 100%);
     color: var(--white);
-    padding: 2px 8px;
+    padding: 4px 12px;
     border-radius: 12px;
     font-size: 0.75rem;
     font-weight: 600;
     letter-spacing: 0.5px;
     margin-left: auto;
     border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 2px 4px rgba(196, 30, 58, 0.3);
+    text-transform: uppercase;
+}
+
+/* CAO Order Type Badge - Green */
+.order-type-badge.cao {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+}
+
+/* LIST Order Type Badge - Red */
+.order-type-badge.list {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+}
+
+/* MAINTENANCE Order Type Badge - Blue */
+.order-type-badge.maintenance {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
 }
 
 .order-type-badge i {
@@ -10894,6 +10917,202 @@ html[data-theme="dark"] #orderWizardModal .completion-message::before {
 /* Emergency fix for any remaining black text */
 [data-theme="dark"] #orderWizardModal .wizard-step * {
     color: #e2e8f0 !important;
+}
+
+/* =============================================================================
+   ORDER QUEUE MANAGEMENT - GLOWING BORDER EFFECTS FOR ORDER TYPES
+   ============================================================================= */
+
+/* Base modern dealer panel styling */
+.modern-dealer-panel {
+    background: var(--theme-surface);
+    border: 1px solid var(--theme-border);
+    border-radius: 12px;
+    padding: 16px;
+    margin: 8px 0;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+.modern-dealer-panel .panel-content {
+    position: relative;
+    z-index: 2;
+}
+
+.modern-dealer-panel .dealer-title {
+    margin: 0 0 12px 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--theme-text-primary);
+}
+
+.modern-dealer-panel .panel-details {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.modern-dealer-panel .detail-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.modern-dealer-panel .detail-label {
+    font-size: 0.75rem;
+    color: var(--theme-text-secondary);
+    font-weight: 500;
+}
+
+.modern-dealer-panel .detail-value {
+    font-size: 0.75rem;
+    color: var(--theme-text-primary);
+    font-weight: 600;
+}
+
+/* CAO Order Type - Bright Green Glowing Border */
+.modern-dealer-panel[data-dealership*=""][data-order-type="CAO"]::before,
+.modern-dealer-panel.cao::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(45deg, #10b981, #059669, #047857, #10b981);
+    background-size: 300% 300%;
+    border-radius: 14px;
+    z-index: -1;
+    animation: glowingBorderCAO 3s ease-in-out infinite;
+    opacity: 0.8;
+}
+
+.modern-dealer-panel.cao {
+    border: 2px solid #10b981;
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
+}
+
+/* LIST Order Type - Bright Red Glowing Border */
+.modern-dealer-panel.list::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(45deg, #ef4444, #dc2626, #b91c1c, #ef4444);
+    background-size: 300% 300%;
+    border-radius: 14px;
+    z-index: -1;
+    animation: glowingBorderLIST 3s ease-in-out infinite;
+    opacity: 0.8;
+}
+
+.modern-dealer-panel.list {
+    border: 2px solid #ef4444;
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.2);
+}
+
+/* MAINTENANCE Order Type - Bright Blue Glowing Border */
+.modern-dealer-panel.maintenance::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(45deg, #3b82f6, #2563eb, #1d4ed8, #3b82f6);
+    background-size: 300% 300%;
+    border-radius: 14px;
+    z-index: -1;
+    animation: glowingBorderMAINTENANCE 3s ease-in-out infinite;
+    opacity: 0.8;
+}
+
+.modern-dealer-panel.maintenance {
+    border: 2px solid #3b82f6;
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
+}
+
+/* Hover effects - subtle border shimmer only, no background fill */
+.modern-dealer-panel:hover {
+    transform: none !important;
+}
+
+.modern-dealer-panel.cao:hover {
+    border-color: #059669;
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.4), inset 0 0 0 1px rgba(16, 185, 129, 0.1);
+}
+
+.modern-dealer-panel.list:hover {
+    border-color: #dc2626;
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.4), inset 0 0 0 1px rgba(239, 68, 68, 0.1);
+}
+
+.modern-dealer-panel.maintenance:hover {
+    border-color: #2563eb;
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.4), inset 0 0 0 1px rgba(59, 130, 246, 0.1);
+}
+
+/* Glowing border animations */
+@keyframes glowingBorderCAO {
+    0%, 100% {
+        background-position: 0% 50%;
+        opacity: 0.8;
+    }
+    50% {
+        background-position: 100% 50%;
+        opacity: 1;
+    }
+}
+
+@keyframes glowingBorderLIST {
+    0%, 100% {
+        background-position: 0% 50%;
+        opacity: 0.8;
+    }
+    50% {
+        background-position: 100% 50%;
+        opacity: 1;
+    }
+}
+
+@keyframes glowingBorderMAINTENANCE {
+    0%, 100% {
+        background-position: 0% 50%;
+        opacity: 0.8;
+    }
+    50% {
+        background-position: 100% 50%;
+        opacity: 1;
+    }
+}
+
+/* Dark theme adjustments */
+[data-theme="dark"] .modern-dealer-panel.cao {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+}
+
+[data-theme="dark"] .modern-dealer-panel.list {
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+}
+
+[data-theme="dark"] .modern-dealer-panel.maintenance {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+}
+
+[data-theme="dark"] .modern-dealer-panel.cao:hover {
+    box-shadow: 0 0 35px rgba(16, 185, 129, 0.6);
+}
+
+[data-theme="dark"] .modern-dealer-panel.list:hover {
+    box-shadow: 0 0 35px rgba(239, 68, 68, 0.6);
+}
+
+[data-theme="dark"] .modern-dealer-panel.maintenance:hover {
+    box-shadow: 0 0 35px rgba(59, 130, 246, 0.6);
 }
 
 [data-theme="dark"] #orderWizardModal .wizard-step h2,

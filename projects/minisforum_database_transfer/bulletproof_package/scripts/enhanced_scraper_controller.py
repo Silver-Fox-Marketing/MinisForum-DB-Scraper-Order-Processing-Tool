@@ -119,7 +119,7 @@ class EnhancedScraperController:
             'joemachenscdjr.com': {
                 'class': 'JOEMACHENSCDJR', 
                 'method': 'start_scraping_joemachenscdjr',
-                'display_name': 'Joe Machens CDJR'
+                'display_name': 'CDJR of Columbia'
             },
             'joemachenshyundai.com': {
                 'class': 'JOEMACHENSHYUNDAI',
@@ -219,7 +219,7 @@ class EnhancedScraperController:
             'bommaritowestcounty.com': {
                 'class': 'BOMMARITOWESTCOUNTY',
                 'method': 'start_scraping_bommaritowestcounty',
-                'display_name': 'Bommarito West County'
+                'display_name': 'Bommarito West County PO'
             },
             'hwkia.com': {
                 'class': 'HWKIA',
