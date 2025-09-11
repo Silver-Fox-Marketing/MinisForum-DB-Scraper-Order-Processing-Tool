@@ -66,9 +66,10 @@ class CorrectOrderProcessor:
             The PostgreSQL table name for this dealership's VIN log
         """
         # CRITICAL FIX: Handle special cases where table names don't follow the standard pattern
+        # After standardization, we should use the standard pattern for all dealerships
         vin_log_table_overrides = {
-            'HW Kia': 'handw_kia_vin_log',  # Standard pattern would be 'hw_kia_vin_log' but table is 'handw_kia_vin_log'
-            'H&W Kia': 'handw_kia_vin_log', # Legacy name mapping
+            # Removed HW Kia override - now uses standard hw_kia_vin_log
+            # All dealerships now follow standard pattern: dealership_name_vin_log
         }
         
         # Check for override first
@@ -83,6 +84,7 @@ class CorrectOrderProcessor:
         slug = slug.replace('&', 'and')
         slug = slug.replace('.', '')
         slug = slug.replace(',', '')
+        slug = slug.replace("'", '')  # Remove apostrophes (O'Fallon -> OFallon)
         slug = slug.replace('-', '_')
         slug = slug.replace('/', '_')
         slug = slug.replace('__', '_')

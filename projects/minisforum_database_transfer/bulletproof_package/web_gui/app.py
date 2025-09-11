@@ -156,6 +156,74 @@ class ScraperController:
             logger.error(f"Failed to get dealership configs: {e}")
             return []
     
+    def get_dealership_last_order_dates(self):
+        """Get last order date for each dealership from their VIN log tables"""
+        try:
+            # First get list of active dealership names
+            dealerships = db_manager.execute_query("""
+                SELECT name FROM dealership_configs 
+                WHERE is_active = true
+                ORDER BY name
+            """)
+            
+            last_order_dates = {}
+            
+            for dealership in dealerships:
+                dealership_name = dealership['name']
+                # Convert dealership name to table name format: DEALERSHIP_NAME_VIN_LOG
+                clean_name = dealership_name.lower().replace(' ', '_').replace('-', '_').replace('.', '').replace("'", '')
+                table_name = f"{clean_name}_vin_log"
+                
+                try:
+                    # Check which date column exists in this table
+                    columns = db_manager.execute_query(f"""
+                        SELECT column_name FROM information_schema.columns 
+                        WHERE table_name = '{table_name}' AND column_name IN ('order_date', 'processed_date')
+                    """)
+                    
+                    if not columns:
+                        last_order_dates[dealership_name] = 'No orders yet'
+                        continue
+                    
+                    # Use the appropriate date column
+                    date_column = columns[0]['column_name']
+                    result = db_manager.execute_query(f"""
+                        SELECT MAX({date_column}) as last_order_date
+                        FROM {table_name}
+                    """)
+                    
+                    if result and result[0]['last_order_date']:
+                        last_order_value = result[0]['last_order_date']
+                        
+                        # Handle different date formats
+                        if hasattr(last_order_value, 'strftime'):
+                            # It's already a date/datetime object
+                            last_order_dates[dealership_name] = last_order_value.strftime('%b %d, %Y')
+                        elif isinstance(last_order_value, str):
+                            # It's a string, try to parse it
+                            try:
+                                from datetime import datetime
+                                parsed_date = datetime.strptime(last_order_value, '%Y-%m-%d').date()
+                                last_order_dates[dealership_name] = parsed_date.strftime('%b %d, %Y')
+                            except ValueError:
+                                # If parsing fails, just use the string as-is
+                                last_order_dates[dealership_name] = last_order_value
+                        else:
+                            # Unknown format, convert to string
+                            last_order_dates[dealership_name] = str(last_order_value)
+                    else:
+                        last_order_dates[dealership_name] = 'No orders yet'
+                        
+                except Exception as table_e:
+                    # If table doesn't exist or query fails, set default
+                    logger.warning(f"Could not get last order date for {dealership_name}: {table_e}")
+                    last_order_dates[dealership_name] = 'No orders yet'
+            
+            return last_order_dates
+        except Exception as e:
+            logger.error(f"Failed to get last order dates: {e}")
+            return {}
+    
     def update_dealership_config(self, dealership_name, filtering_rules, is_active=True):
         """Update dealership configuration"""
         try:
@@ -540,6 +608,23 @@ def get_dealerships():
     else:
         configs = scraper_controller.get_dealership_configs()
         return jsonify(configs)
+
+@app.route('/api/dealerships/last-orders')
+def get_dealership_last_orders():
+    """API endpoint to get last order dates for all dealerships"""
+    if DEMO_MODE:
+        # Return demo data when database is not available
+        demo_last_orders = {
+            'Bommarito Cadillac West County': 'Aug 15, 2025',
+            'Spirit Lexus of St. Louis': 'Sep 3, 2025',
+            'BMW of West St. Louis': 'Aug 28, 2025',
+            'Mercedes-Benz of St. Louis': 'Sep 1, 2025',
+            'Audi West County': 'No orders yet'
+        }
+        return jsonify(demo_last_orders)
+    else:
+        last_order_dates = scraper_controller.get_dealership_last_order_dates()
+        return jsonify(last_order_dates)
 
 @app.route('/api/dealerships/<dealership_name>', methods=['POST'])
 def update_dealership(dealership_name):
@@ -2827,18 +2912,15 @@ def download_export_file(filename):
 def get_dealership_settings():
     """Get all dealership settings"""
     try:
+        # First get all dealership configs
         query = """
             SELECT 
                 dc.id,
                 dc.name,
                 dc.filtering_rules,
                 dc.output_rules,
-                dc.is_active,
-                COUNT(DISTINCT rd.vin) as vehicle_count,
-                MAX(rd.import_date) as last_import
+                dc.is_active
             FROM dealership_configs dc
-            LEFT JOIN raw_vehicle_data rd ON dc.name = rd.location
-            GROUP BY dc.id, dc.name, dc.filtering_rules, dc.output_rules, dc.is_active
             ORDER BY dc.name
         """
         
@@ -2847,6 +2929,7 @@ def get_dealership_settings():
         # Process filtering rules for each dealership
         settings = []
         for dealership in dealerships:
+            dealership_name = dealership['name']
             filtering_rules = dealership.get('filtering_rules', {})
             if isinstance(filtering_rules, str):
                 try:
@@ -2857,12 +2940,36 @@ def get_dealership_settings():
             # Extract vehicle types
             vehicle_types = filtering_rules.get('vehicle_types', ['new', 'used', 'certified'])
             
+            # Get vehicle count from VIN log table instead of raw_vehicle_data
+            vin_log_table = dealership_name.lower().replace(' ', '_').replace('.', '').replace("'", '') + '_vin_log'
+            vehicle_count = 0
+            last_import = None
+            
+            try:
+                # Check if VIN log table exists and get count
+                count_result = db_manager.execute_query(f"""
+                    SELECT COUNT(*) as count FROM {vin_log_table}
+                """)
+                if count_result:
+                    vehicle_count = count_result[0]['count']
+                
+                # Get last order date from VIN log
+                date_result = db_manager.execute_query(f"""
+                    SELECT MAX(order_date) as last_date FROM {vin_log_table}
+                """)
+                if date_result and date_result[0]['last_date']:
+                    last_import = date_result[0]['last_date']
+                    
+            except Exception as e:
+                # If VIN log table doesn't exist, count stays at 0
+                logger.debug(f"Could not get VIN log count for {dealership_name}: {e}")
+            
             settings.append({
                 'id': dealership['id'],
-                'name': dealership['name'],
+                'name': dealership_name,
                 'active': dealership.get('is_active', True),
-                'vehicle_count': dealership.get('vehicle_count', 0),
-                'last_import': dealership.get('last_import'),
+                'vehicle_count': vehicle_count,
+                'last_import': last_import,
                 'vehicle_types': vehicle_types,
                 'filtering_rules': filtering_rules,
                 'output_rules': dealership.get('output_rules', {})
