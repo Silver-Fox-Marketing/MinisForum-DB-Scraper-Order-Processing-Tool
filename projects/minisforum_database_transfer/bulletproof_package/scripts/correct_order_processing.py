@@ -47,7 +47,7 @@ class CorrectOrderProcessor:
             'Dave Sinclair Lincoln': ['Dave Sinclair Lincoln South', 'Dave Sinclair Lincoln'],
             'BMW of West St. Louis': ['BMW of West St. Louis'],
             'Columbia Honda': ['Columbia Honda'],
-            'Bommarito West County': ['Bommarito West County'],
+            'Bommarito West County PO': ['Bommarito West County PO'],
             'Bommarito Cadillac': ['Bommarito Cadillac'],
             'South County DCJR': ['South County DCJR', 'South County Dodge Chrysler Jeep RAM'],
             'South County Dodge Chrysler Jeep RAM': ['South County DCJR', 'South County Dodge Chrysler Jeep RAM'],
@@ -479,13 +479,16 @@ class CorrectOrderProcessor:
             # Try a simplified query without filtering if the main query fails
             # CRITICAL: Still only process vehicles from ACTIVE import that are on the lot
             # Use normalized_vehicle_data for consistent data structure
-            simplified_query = """
+            # IMPORTANT: Include VIN log comparison even in simplified query
+            vin_log_table = self._get_dealership_vin_log_table(dealership_name)
+            simplified_query = f"""
                 SELECT nvd.*, rvd.status as raw_status FROM normalized_vehicle_data nvd
                 JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
                 JOIN scraper_imports si ON rvd.import_id = si.import_id
                 WHERE nvd.location = %s 
                 AND nvd.on_lot_status IN ('onlot', 'on lot')
                 AND si.status = 'active'
+                AND nvd.vin NOT IN (SELECT vin FROM {vin_log_table} WHERE vin IS NOT NULL)
                 ORDER BY nvd.updated_at DESC
             """
             try:
