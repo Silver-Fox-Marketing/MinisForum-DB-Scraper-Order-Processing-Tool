@@ -196,9 +196,11 @@ class CorrectOrderProcessor:
         logger.info(f"[LIST] Processing {dealership_name} with {len(vin_list)} VINs")
         
         try:
-            # Get vehicles by specific VIN list
+            # LIST orders: Create vehicle records from user-provided VINs
+            # No inventory lookup or filtering needed - process whatever VINs user provides
             vehicles = []
             for vin in vin_list:
+                # Try to get vehicle data from inventory first
                 vehicle_data = db_manager.execute_query("""
                     SELECT * FROM raw_vehicle_data
                     WHERE vin = %s AND location = %s
@@ -207,18 +209,36 @@ class CorrectOrderProcessor:
                 """, (vin, dealership_name))
                 
                 if vehicle_data:
+                    # Use existing vehicle data if found
                     vehicles.append(vehicle_data[0])
+                else:
+                    # Create placeholder vehicle record for user-provided VIN
+                    placeholder_vehicle = {
+                        'vin': vin,
+                        'year': 'Unknown',
+                        'make': 'Unknown', 
+                        'model': 'Unknown',
+                        'trim': 'Unknown',
+                        'stock_number': f'LIST_{vin[-6:]}',  # Use last 6 chars of VIN
+                        'type': 'Used',  # Default to Used for LIST orders
+                        'mileage': 0,
+                        'price': 0,
+                        'dealership': dealership_name,
+                        'location': dealership_name
+                    }
+                    vehicles.append(placeholder_vehicle)
+                    logger.info(f"Created placeholder record for LIST VIN: {vin}")
             
-            logger.info(f"Found {len(vehicles)} vehicles from VIN list")
+            logger.info(f"Created {len(vehicles)} vehicle records for LIST processing")
             
-            # Apply dealership filtering to LIST orders as well
-            filtered_vehicles = self._apply_dealership_filters(vehicles, dealership_name)
-            logger.info(f"After filtering: {len(filtered_vehicles)} vehicles match dealership criteria")
+            # LIST orders: Skip dealership filtering - process all provided VINs
+            filtered_vehicles = vehicles  # No filtering for LIST orders
+            logger.info(f"LIST processing: Using all {len(filtered_vehicles)} provided VINs")
             
             if not filtered_vehicles:
                 return {
                     'success': False, 
-                    'error': f'No vehicles match dealership filtering criteria. Found {len(vehicles)} vehicles but none match the configured filters (new/used/certified).'
+                    'error': f'No VINs provided for LIST processing.'
                 }
             
             # Create output folders

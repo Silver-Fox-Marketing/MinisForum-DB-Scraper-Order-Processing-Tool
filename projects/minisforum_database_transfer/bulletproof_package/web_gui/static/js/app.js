@@ -304,7 +304,7 @@ class MinisFornumApp {
             await this.loadDealershipDefaults();
             
             // Re-render dealership list with correct types
-            this.renderDealershipList(this.dealerships);
+            await this.renderDealershipList(this.dealerships);
             
             // Set up search functionality after dealerships are loaded
             this.setupDealershipSearchListeners();
@@ -946,7 +946,7 @@ class MinisFornumApp {
                 
                 // Also refresh the order queue management dealership list
                 await this.loadDealershipDefaults(); // Reload defaults from updated data
-                this.renderDealershipList(this.dealerships); // Re-render order queue list
+                await this.renderDealershipList(this.dealerships); // Re-render order queue list
                 
                 // Update just this dealership's default in memory and queue
                 const dealership = this.dealerships.find(d => d.name === this.currentDealership);
@@ -2420,7 +2420,7 @@ class MinisFornumApp {
                 this.addTerminalMessage(`${dealershipName} ${isActive ? 'activated' : 'deactivated'}`, 'success');
                 
                 // Refresh the order queue dealerships list to filter disabled ones
-                this.loadOrderQueueDealerships();
+                await this.loadOrderQueueDealerships();
             } else {
                 this.addTerminalMessage(`Failed to update ${dealershipName}: ${result.error}`, 'error');
                 // Reset button state
@@ -2491,7 +2491,7 @@ class MinisFornumApp {
             const dealerships = await response.json();
             
             this.dealerships = dealerships;
-            this.renderDealershipList(dealerships);
+            await this.renderDealershipList(dealerships);
             
             console.log(`♻️ Refreshed order queue dealerships list - ${dealerships.length} total dealerships loaded`);
             
@@ -2865,7 +2865,7 @@ class MinisFornumApp {
             const dealerships = await response.json();
             
             this.dealerships = dealerships;
-            this.renderDealershipList(dealerships);
+            await this.renderDealershipList(dealerships);
             
             this.addTerminalMessage(`Loaded ${dealerships.length} dealerships`, 'success');
             
@@ -2875,7 +2875,7 @@ class MinisFornumApp {
         }
     }
     
-    renderDealershipList(dealerships) {
+    async renderDealershipList(dealerships) {
         console.log('🏢 Rendering dealership list...', {
             dealerships: dealerships ? dealerships.length : 0,
             hasDefaults: this.dealershipDefaults ? this.dealershipDefaults.size : 0
@@ -2891,6 +2891,18 @@ class MinisFornumApp {
             console.log('⚠️ No dealerships to render');
             dealershipList.innerHTML = '<div class="loading">No dealerships available</div>';
             return;
+        }
+        
+        // Load last order dates if not already loaded
+        if (!this.lastOrderDates) {
+            try {
+                const response = await fetch('/api/dealerships/last-orders');
+                this.lastOrderDates = await response.json();
+                console.log('✅ Loaded last order dates:', this.lastOrderDates);
+            } catch (error) {
+                console.error('❌ Failed to load last order dates:', error);
+                this.lastOrderDates = {}; // Fallback to empty object
+            }
         }
         
         try {
@@ -2921,12 +2933,8 @@ class MinisFornumApp {
                     .join('')
                     .toUpperCase();
                 
-                // Get last order date (mock for now, replace with real data)
-                const lastOrderDate = new Date().toLocaleDateString('en-US', { 
-                    month: 'short', 
-                    day: 'numeric', 
-                    year: 'numeric' 
-                });
+                // Get last order date from API data
+                const lastOrderDate = this.lastOrderDates[dealership.name] || 'No orders yet';
                 
                 return `
                     <div class="modern-dealer-panel ${typeClass}" data-dealership="${dealership.name}" draggable="true">
@@ -8468,7 +8476,7 @@ Example:
         }
     }
     
-    processListVins() {
+    async processListVins() {
         const vinInput = document.getElementById('modalVinInput');
         if (!vinInput || !vinInput.value.trim()) {
             alert('Please enter VINs for this dealership');
@@ -8491,9 +8499,63 @@ Example:
             return;
         }
         
-        // Process the VINs (simulate)
-        this.processingResults.listProcessed++;
-        this.processingResults.totalVehicles += vins.length;
+        // Get current dealership
+        const currentOrder = this.listOrders[this.currentListIndex];
+        if (!currentOrder) {
+            alert('No current dealership found');
+            return;
+        }
+        
+        try {
+            // Actually process the VINs via API call
+            console.log(`Processing LIST order for ${currentOrder.name} with ${vins.length} VINs`);
+            
+            const skipVinLogging = document.getElementById('skipVinLogging')?.checked || false;
+            
+            const response = await fetch('/api/orders/process-list', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    dealership: currentOrder.name,
+                    vins: vins,
+                    skip_vin_logging: skipVinLogging
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Failed to process list order: ${response.statusText}`);
+            }
+            
+            const result = await response.json();
+            console.log(`LIST processing result:`, result);
+            console.log(`DEBUG - Result keys:`, Object.keys(result));
+            console.log(`DEBUG - Looking for CSV path in:`, {
+                download_csv: result.download_csv,
+                csv_path: result.csv_path,
+                csv_file: result.csv_file,
+                output_path: result.output_path,
+                file_path: result.file_path
+            });
+            
+            // Store the actual result data
+            this.processedOrders.push({
+                dealership: currentOrder.name,
+                type: 'list',
+                vins: vins,
+                result: result
+            });
+            
+            this.processingResults.listProcessed++;
+            this.processingResults.totalVehicles += result.vehicle_count || result.vehicles_processed || vins.length;
+            this.processingResults.filesGenerated += result.files_generated || 0;
+            
+        } catch (error) {
+            console.error('Error processing LIST order:', error);
+            alert(`Error processing VINs: ${error.message}`);
+            this.processingResults.errors.push(`${currentOrder.name}: ${error.message}`);
+        }
         
         // Move to next dealership or complete
         this.currentListIndex++;
