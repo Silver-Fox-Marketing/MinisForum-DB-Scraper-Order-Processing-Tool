@@ -4614,11 +4614,15 @@ def get_dealership_vin_history(dealership_name):
         
         # Calculate stats with null checking
         unique_orders = list(set([h.get('order_number', '') for h in history if h.get('order_number')]))
+        
+        # Get dates, filtering out None values
+        valid_dates = [h['processed_date'] for h in history if h.get('processed_date') is not None]
+        
         stats = {
             'total_vins': len(history),
             'unique_orders': len(unique_orders),
-            'first_date': min([h['processed_date'] for h in history]) if history else None,
-            'last_date': max([h['processed_date'] for h in history]) if history else None,
+            'first_date': min(valid_dates) if valid_dates else None,
+            'last_date': max(valid_dates) if valid_dates else None,
             'cao_count': len([h for h in history if h.get('order_number') and (h.get('order_number', '').startswith('CAO') or h.get('order_number', '').find('_CAO_') > 0)]),
             'list_count': len([h for h in history if h.get('order_number') and (h.get('order_number', '').startswith('LIST') or h.get('order_number', '').find('_LIST_') > 0)])
         }

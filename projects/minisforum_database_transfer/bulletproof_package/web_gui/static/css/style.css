@@ -5358,19 +5358,13 @@ body {
 /* Modern Professional Sub-Tab Navigation */
 .sub-tab-navigation {
     display: flex;
-    gap: var(--spacing-lg);
-    margin: var(--spacing-xl) 0;
-    padding: var(--spacing-lg);
-    background: linear-gradient(135deg, var(--theme-surface) 0%, var(--theme-bg-tertiary) 100%);
+    gap: var(--spacing-md);
+    margin: var(--spacing-lg) 0;
+    padding: var(--spacing-md);
+    background: var(--theme-surface);
     border: 1px solid var(--theme-border);
-    border-radius: 20px;
-    backdrop-filter: blur(10px);
-    box-shadow: 
-        0 8px 16px -4px rgba(0, 0, 0, 0.1),
-        0 4px 8px -2px rgba(0, 0, 0, 0.06),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-lg);
     position: relative;
-    overflow: hidden;
 }
 
 .sub-tab-navigation:before {
@@ -5385,27 +5379,23 @@ body {
 }
 
 .sub-tab-button {
-    background: linear-gradient(135deg, var(--theme-surface-elevated) 0%, var(--theme-surface) 100%);
-    border: 1px solid var(--theme-border);
+    background: var(--theme-bg-primary);
+    border: 1px solid rgba(253, 65, 13, 0.3);
     color: var(--primary-red);
-    text-shadow: 0 0 8px rgba(253, 65, 13, 0.3), 0 0 15px rgba(253, 65, 13, 0.2);
-    padding: var(--spacing-lg) var(--spacing-xl);
-    border-radius: 16px;
+    text-shadow: 0 0 8px rgba(253, 65, 13, 0.15);
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border-radius: var(--radius-md);
     cursor: pointer;
-    font-size: 1rem;
-    font-weight: 650;
+    font-size: 0.95rem;
+    font-weight: 500;
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
-    transition: all 0.4s cubic-bezier(0.23, 1, 0.320, 1);
+    transition: all 0.2s ease;
     position: relative;
     overflow: hidden;
-    min-height: 56px;
-    backdrop-filter: blur(8px);
-    box-shadow: 
-        0 4px 6px -1px rgba(0, 0, 0, 0.1),
-        0 2px 4px -1px rgba(0, 0, 0, 0.06),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    min-height: 40px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     z-index: 1;
 }
 
@@ -5439,30 +5429,22 @@ body {
 }
 
 .sub-tab-button:hover {
-    background: linear-gradient(135deg, var(--theme-surface) 0%, var(--theme-surface-elevated) 100%);
-    border-color: rgba(253, 65, 13, 0.4);
-    transform: translateY(-4px) scale(1.02);
-    text-shadow: 0 0 12px rgba(253, 65, 13, 0.6), 0 0 25px rgba(253, 65, 13, 0.4), 0 0 35px rgba(253, 65, 13, 0.2);
-    box-shadow: 
-        0 16px 20px -4px rgba(253, 65, 13, 0.15),
-        0 8px 12px -2px rgba(253, 65, 13, 0.1),
-        0 0 0 1px rgba(253, 65, 13, 0.2),
-        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    background: var(--theme-surface-elevated);
+    border-color: var(--primary-red);
+    color: var(--primary-red);
+    transform: translateY(-1px);
+    text-shadow: 0 0 12px rgba(253, 65, 13, 0.4), 0 0 20px rgba(253, 65, 13, 0.2);
+    box-shadow: 0 2px 4px rgba(253, 65, 13, 0.1);
 }
 
 .sub-tab-button.active {
-    background: linear-gradient(135deg, var(--primary-red) 0%, #e73c4c 50%, #fd410d 100%);
+    background: var(--primary-red);
     color: var(--white);
     border-color: var(--primary-red);
-    text-shadow: 0 0 15px rgba(255, 255, 255, 0.8), 0 0 25px rgba(253, 65, 13, 0.6), 0 0 35px rgba(253, 65, 13, 0.4);
-    transform: translateY(-3px) scale(1.02);
-    font-weight: 700;
-    box-shadow: 
-        0 16px 20px -4px rgba(253, 65, 13, 0.4),
-        0 8px 12px -2px rgba(253, 65, 13, 0.2),
-        0 0 0 1px rgba(253, 65, 13, 0.5),
-        inset 0 1px 0 rgba(255, 255, 255, 0.3),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.1);
+    text-shadow: 0 0 15px rgba(255, 255, 255, 0.5), 0 0 25px rgba(253, 65, 13, 0.3);
+    transform: none;
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(253, 65, 13, 0.2);
 }
 
 .sub-tab-button.active:before {
@@ -5471,31 +5453,28 @@ body {
 }
 
 .sub-tab-button.active:hover {
-    transform: translateY(-6px) scale(1.04);
-    text-shadow: 0 0 20px rgba(255, 255, 255, 1), 0 0 30px rgba(253, 65, 13, 0.8), 0 0 45px rgba(253, 65, 13, 0.6);
-    box-shadow: 
-        0 20px 25px -4px rgba(253, 65, 13, 0.5),
-        0 12px 16px -2px rgba(253, 65, 13, 0.25),
-        0 0 0 1px rgba(253, 65, 13, 0.6),
-        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    transform: translateY(-1px);
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.7), 0 0 30px rgba(253, 65, 13, 0.4);
+    box-shadow: 0 4px 6px rgba(253, 65, 13, 0.25);
 }
 
 .sub-tab-button.active i {
     color: var(--white);
-    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 20px rgba(253, 65, 13, 0.6)) drop-shadow(0 0 30px rgba(253, 65, 13, 0.4));
-    transform: scale(1.1);
+    filter: none;
+    transform: none;
 }
 
 .sub-tab-button i {
-    font-size: 1.1rem;
+    font-size: 1rem;
     color: var(--primary-red);
-    filter: drop-shadow(0 0 6px rgba(253, 65, 13, 0.4)) drop-shadow(0 0 12px rgba(253, 65, 13, 0.2));
-    transition: all 0.3s ease;
+    filter: none;
+    transition: color 0.2s ease;
 }
 
 .sub-tab-button:hover i {
-    transform: scale(1.08);
-    filter: drop-shadow(0 0 10px rgba(253, 65, 13, 0.7)) drop-shadow(0 0 20px rgba(253, 65, 13, 0.4)) drop-shadow(0 0 30px rgba(253, 65, 13, 0.2));
+    transform: none;
+    filter: none;
+    color: var(--primary-red);
 }
 
 /* Sub-tab panels */
@@ -10481,16 +10460,19 @@ body[data-manual-mode="true"] #startVinLogImport {
 }
 
 #orderWizardModal .step-header {
-    margin-bottom: 24px;
+    margin-bottom: 32px;
     text-align: center;
+    padding: 0 20px;
 }
 
 #orderWizardModal .step-title {
     color: #f9fafb;
     font-size: 24px;
     font-weight: 600;
-    margin: 0 0 8px 0;
+    margin: 0 0 16px 0;
     letter-spacing: -0.025em;
+    line-height: 1.3;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 #orderWizardModal .step-description {
@@ -10498,6 +10480,11 @@ body[data-manual-mode="true"] #startVinLogImport {
     font-size: 16px;
     margin: 0;
     opacity: 0.9;
+    line-height: 1.5;
+    font-weight: 400;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 /* Modern queue summary cards */
@@ -10901,10 +10888,21 @@ html[data-theme="dark"] #orderWizardModal .completion-message::before {
 
 [data-theme="dark"] #orderWizardModal .step-title {
     color: #f9fafb !important;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
 }
 
 [data-theme="dark"] #orderWizardModal .step-description {
     color: #d1d5db !important;
+    opacity: 0.95 !important;
+}
+
+/* Leave the list-dealerships panel visible for now */
+#orderWizardModal .list-dealerships {
+    background: linear-gradient(135deg, var(--theme-bg-primary) 0%, var(--theme-surface) 100%);
+    border-radius: 16px;
+    padding: 24px;
+    margin: 16px 0;
+    border: 2px solid rgba(253, 65, 13, 0.08);
 }
 
 /* Force override any hardcoded black text in processing areas */
@@ -11401,3 +11399,90 @@ html[data-theme="dark"] .selection-panel * {
     transform: translateY(0) !important;
     box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3) !important;
 }
+
+/* =================================================================
+   SIDEBAR VISIBILITY FIX - Dealership Settings Page
+   ================================================================= */
+
+/* CRITICAL FIX: Ensure sidebar remains visible on dealership settings page */
+.sidebar-navigation {
+    display: flex !important;
+    position: relative !important;
+    z-index: 1000 !important;
+    width: 280px !important;
+    min-width: 280px !important;
+    height: 100% !important;
+    visibility: visible !important;
+    flex-shrink: 0 !important;
+}
+
+/* Force sidebar visibility when dealership settings panel is active */
+body:has(#dealership-settings-panel.active) .sidebar-navigation,
+.main-content:has(#dealership-settings-panel.active) .sidebar-navigation {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: relative !important;
+}
+
+/* Ensure main content layout doesn't break sidebar */
+.main-content {
+    display: flex !important;
+    position: relative !important;
+    width: 100% !important;
+}
+
+/* Content area should flex properly without affecting sidebar */
+.content-area {
+    flex: 1 !important;
+    min-width: 0 !important;
+    overflow: auto !important;
+    position: relative !important;
+}
+
+/* Dealership settings panel should not affect sidebar layout */
+#dealership-settings-panel {
+    position: relative !important;
+    z-index: 1 !important;
+    width: 100% !important;
+    max-width: none !important;
+}
+
+#dealership-settings-panel.active {
+    display: block !important;
+}
+
+/* Emergency expand button - always visible if sidebar hidden */
+.sidebar-expand {
+    display: block !important;
+    position: fixed !important;
+    top: 100px !important;
+    left: 10px !important;
+    z-index: 9999 !important;
+    background: var(--primary-red) !important;
+    color: white !important;
+    border: none !important;
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 50% !important;
+    cursor: pointer !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+    transition: all 0.3s ease !important;
+}
+
+.sidebar-expand:hover {
+    background: var(--dark-red) !important;
+    transform: scale(1.1) !important;
+}
+
+/* Ensure sidebar controls work properly */
+.sidebar-toggle, .sidebar-expand {
+    z-index: 9999 !important;
+}
+
+/* Force visibility for all sidebar components */
+.sidebar-navigation * {
+    visibility: visible !important;
+}
+
+/* END SIDEBAR VISIBILITY FIX */

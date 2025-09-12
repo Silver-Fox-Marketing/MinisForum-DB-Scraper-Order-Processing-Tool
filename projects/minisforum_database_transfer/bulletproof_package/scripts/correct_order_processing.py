@@ -151,8 +151,14 @@ class CorrectOrderProcessor:
             # Step 4: Generate QR codes for vehicle URLs
             qr_paths = self._generate_qr_codes(new_vehicles, dealership_name, qr_folder)
             
-            # Step 5: Generate Adobe CSV in EXACT format we need
-            csv_path = self._generate_adobe_csv(new_vehicles, dealership_name, template_type, order_folder, qr_paths)
+            # Step 5: Special handling for CDJR of Columbia - dual CSV output
+            csv_files = {}
+            if dealership_name.upper() in ['CDJR OF COLUMBIA', 'CDJR COLUMBIA']:
+                csv_files = self._process_cdjr_columbia_dual_output(new_vehicles, dealership_name, template_type, order_folder, qr_paths)
+                csv_path = csv_files.get('used_csv') or csv_files.get('new_csv')  # Primary file for legacy compatibility
+            else:
+                # Step 5: Generate Adobe CSV in EXACT format we need (normal processing)
+                csv_path = self._generate_adobe_csv(new_vehicles, dealership_name, template_type, order_folder, qr_paths)
             
             # Step 5.5: Generate billing sheet CSV automatically after QR codes
             billing_csv_path = self._generate_billing_sheet_csv(new_vehicles, dealership_name, order_folder, timestamp)
@@ -164,7 +170,8 @@ class CorrectOrderProcessor:
             else:
                 vin_logging_result = self._log_processed_vins_to_history(new_vehicles, dealership_name, 'CAO_ORDER')
             
-            return {
+            # Build return result
+            result = {
                 'success': True,
                 'dealership': dealership_name,
                 'template_type': template_type,
@@ -183,6 +190,19 @@ class CorrectOrderProcessor:
                 'duplicate_vins_skipped': vin_logging_result['duplicates_skipped'],
                 'vin_logging_success': vin_logging_result['success']
             }
+            
+            # Add CDJR Columbia dual CSV information
+            if csv_files:
+                result['cdjr_dual_output'] = True
+                result['csv_files'] = csv_files
+                if 'used_csv' in csv_files:
+                    result['used_csv_file'] = csv_files['used_csv']
+                    result['download_used_csv'] = f"/download_csv/{Path(csv_files['used_csv']).name}"
+                if 'new_csv' in csv_files:
+                    result['new_csv_file'] = csv_files['new_csv']
+                    result['download_new_csv'] = f"/download_csv/{Path(csv_files['new_csv']).name}"
+                    
+            return result
             
         except Exception as e:
             logger.error(f"Error processing CAO order: {e}")
@@ -252,8 +272,14 @@ class CorrectOrderProcessor:
             # Generate QR codes - use filtered vehicles
             qr_paths = self._generate_qr_codes(filtered_vehicles, dealership_name, qr_folder)
             
-            # Generate Adobe CSV - use filtered vehicles
-            csv_path = self._generate_adobe_csv(filtered_vehicles, dealership_name, template_type, order_folder, qr_paths)
+            # Special handling for CDJR of Columbia - dual CSV output
+            csv_files = {}
+            if dealership_name.upper() in ['CDJR OF COLUMBIA', 'CDJR COLUMBIA']:
+                csv_files = self._process_cdjr_columbia_dual_output(filtered_vehicles, dealership_name, template_type, order_folder, qr_paths)
+                csv_path = csv_files.get('used_csv') or csv_files.get('new_csv')  # Primary file for legacy compatibility
+            else:
+                # Generate Adobe CSV - use filtered vehicles (normal processing)
+                csv_path = self._generate_adobe_csv(filtered_vehicles, dealership_name, template_type, order_folder, qr_paths)
             
             # Generate billing sheet CSV automatically after QR codes
             billing_csv_path = self._generate_billing_sheet_csv(filtered_vehicles, dealership_name, order_folder, timestamp)
@@ -265,7 +291,8 @@ class CorrectOrderProcessor:
             else:
                 vin_logging_result = self._log_processed_vins_to_history(filtered_vehicles, dealership_name, 'LIST_ORDER')
             
-            return {
+            # Build return result
+            result = {
                 'success': True,
                 'dealership': dealership_name,
                 'template_type': template_type,
@@ -285,6 +312,19 @@ class CorrectOrderProcessor:
                 'duplicate_vins_skipped': vin_logging_result['duplicates_skipped'],
                 'vin_logging_success': vin_logging_result['success']
             }
+            
+            # Add CDJR Columbia dual CSV information
+            if csv_files:
+                result['cdjr_dual_output'] = True
+                result['csv_files'] = csv_files
+                if 'used_csv' in csv_files:
+                    result['used_csv_file'] = csv_files['used_csv']
+                    result['download_used_csv'] = f"/download_csv/{Path(csv_files['used_csv']).name}"
+                if 'new_csv' in csv_files:
+                    result['new_csv_file'] = csv_files['new_csv']
+                    result['download_new_csv'] = f"/download_csv/{Path(csv_files['new_csv']).name}"
+                    
+            return result
             
         except Exception as e:
             logger.error(f"Error processing list order: {e}")
@@ -601,6 +641,42 @@ class CorrectOrderProcessor:
                 if max_price and vehicle_price > max_price:
                     continue
                 
+                # Seasoning filter (minimum days on lot)
+                seasoning_days = filtering_rules.get('seasoning_days', 0)
+                if seasoning_days > 0:
+                    date_in_stock = vehicle.get('date_in_stock')
+                    if date_in_stock:
+                        # Convert date_in_stock to datetime if it's a string
+                        if isinstance(date_in_stock, str):
+                            try:
+                                from datetime import datetime
+                                stock_date = datetime.strptime(date_in_stock, '%Y-%m-%d')
+                                days_on_lot = (datetime.now() - stock_date).days
+                                
+                                # Skip vehicles that haven't been on the lot long enough
+                                if days_on_lot < seasoning_days:
+                                    logger.info(f"[SEASONING] Skipping VIN {vehicle.get('vin')} - only {days_on_lot} days on lot (requires {seasoning_days})")
+                                    continue
+                            except ValueError:
+                                # If date parsing fails, log and continue (don't filter out)
+                                logger.warning(f"[SEASONING] Could not parse date_in_stock for VIN {vehicle.get('vin')}: {date_in_stock}")
+                        elif hasattr(date_in_stock, 'days'):  # datetime object
+                            days_on_lot = (datetime.now() - date_in_stock).days
+                            if days_on_lot < seasoning_days:
+                                logger.info(f"[SEASONING] Skipping VIN {vehicle.get('vin')} - only {days_on_lot} days on lot (requires {seasoning_days})")
+                                continue
+                
+                # Brand filter (e.g., Pappas Toyota only wants Toyota vehicles)
+                required_brands = filtering_rules.get('required_brands', [])
+                if required_brands:
+                    vehicle_make = vehicle.get('make', '').lower()
+                    # Check if vehicle make matches any required brands
+                    brand_matches = any(brand.lower() in vehicle_make or vehicle_make in brand.lower() 
+                                      for brand in required_brands)
+                    if not brand_matches:
+                        logger.info(f"[BRAND FILTER] Skipping VIN {vehicle.get('vin')} - make '{vehicle.get('make')}' not in required brands {required_brands}")
+                        continue
+                
                 # If all filters pass, include the vehicle
                 filtered_vehicles.append(vehicle)
         
@@ -894,6 +970,126 @@ class CorrectOrderProcessor:
             return 'CERTIFIED'
         else:
             return 'USED'
+    
+    def _process_cdjr_columbia_dual_output(self, vehicles: List[Dict], dealership_name: str, 
+                                          template_type: str, order_folder: Path, qr_paths: List[str]) -> Dict[str, str]:
+        """
+        Special processing for CDJR of Columbia - generates two separate CSV files:
+        1. Used vehicles -> shortcut pack format (normal behavior)
+        2. New vehicles -> shortcut format with custom headers (QRYEARMODEL, QRSTOCK, @QR2)
+        """
+        logger.info(f"[CDJR COLUMBIA] Special dual CSV output processing for {len(vehicles)} vehicles")
+        
+        # Separate vehicles by condition - handle missing data by defaulting to used
+        new_vehicles = []
+        used_vehicles = []
+        
+        for vehicle in vehicles:
+            condition = vehicle.get('vehicle_condition', '').lower()
+            
+            if condition == 'new':
+                new_vehicles.append(vehicle)
+            elif condition in ['po', 'cpo', 'certified', 'pre-owned', 'used']:
+                used_vehicles.append(vehicle)
+            else:
+                # Handle vehicles with missing/unknown condition data
+                # Default to used category and fill missing fields with "NO DATA FOUND"
+                vehicle_copy = vehicle.copy()
+                if not vehicle_copy.get('year') or vehicle_copy.get('year') == 'Unknown':
+                    vehicle_copy['year'] = 'NO DATA FOUND'
+                if not vehicle_copy.get('make') or vehicle_copy.get('make') == 'Unknown':
+                    vehicle_copy['make'] = 'NO DATA FOUND'
+                if not vehicle_copy.get('model') or vehicle_copy.get('model') == 'Unknown':
+                    vehicle_copy['model'] = 'NO DATA FOUND'
+                if not vehicle_copy.get('stock'):
+                    vehicle_copy['stock'] = 'NO DATA FOUND'
+                if not vehicle_copy.get('trim'):
+                    vehicle_copy['trim'] = 'NO DATA FOUND'
+                
+                used_vehicles.append(vehicle_copy)
+                logger.info(f"[CDJR COLUMBIA] Vehicle {vehicle.get('vin', 'unknown')} missing data, defaulted to used with NO DATA FOUND fields")
+        
+        logger.info(f"[CDJR COLUMBIA] Split: {len(new_vehicles)} new vehicles, {len(used_vehicles)} used vehicles")
+        
+        csv_files = {}
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        # Generate used vehicles CSV (shortcut pack format - normal behavior)
+        if used_vehicles:
+            used_qr_paths = qr_paths[:len(used_vehicles)]  # First N QR codes for used vehicles
+            used_csv_path = self._generate_cdjr_used_csv(used_vehicles, dealership_name, order_folder, used_qr_paths, timestamp)
+            csv_files['used_csv'] = str(used_csv_path)
+            logger.info(f"[CDJR COLUMBIA] Generated used vehicles CSV: {used_csv_path.name}")
+        
+        # Generate new vehicles CSV (shortcut format with custom headers)
+        if new_vehicles:
+            new_qr_paths = qr_paths[len(used_vehicles):]  # Remaining QR codes for new vehicles
+            new_csv_path = self._generate_cdjr_new_csv(new_vehicles, dealership_name, order_folder, new_qr_paths, timestamp)
+            csv_files['new_csv'] = str(new_csv_path)
+            logger.info(f"[CDJR COLUMBIA] Generated new vehicles CSV: {new_csv_path.name}")
+        
+        return csv_files
+    
+    def _generate_cdjr_used_csv(self, vehicles: List[Dict], dealership_name: str, 
+                               order_folder: Path, qr_paths: List[str], timestamp: str) -> Path:
+        """Generate shortcut pack CSV for CDJR Columbia used vehicles"""
+        clean_name = dealership_name.replace(' ', '_')
+        filename = f"{clean_name}_Used_ShortcutPack_{timestamp}.csv"
+        csv_path = order_folder / filename
+        
+        with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(['YEARMAKE', 'MODEL', 'TRIM', 'STOCK', 'VIN', '@QR', 'QRYEARMODEL', 'QRSTOCK', '@QR2', 'MISC'])
+            
+            for idx, vehicle in enumerate(vehicles):
+                year = vehicle.get('year', '')
+                make = vehicle.get('make', '')
+                model = vehicle.get('model', '')
+                trim = vehicle.get('trim', '')
+                stock = vehicle.get('stock', '')
+                vin = vehicle.get('vin', '')
+                raw_status = vehicle.get('raw_status', 'N/A')
+                type_prefix = self._get_type_prefix(vehicle.get('vehicle_condition', ''))
+                
+                qr_path = qr_paths[idx] if idx < len(qr_paths) else ''
+                
+                # Standard shortcut pack format for used vehicles
+                yearmake = f"{year} {make}"
+                qryearmodel = f"{year} {make} {model} - {stock}"
+                qrstock = f"{type_prefix} - {vin}"
+                
+                writer.writerow([yearmake, model, trim, stock, vin, qr_path, qryearmodel, qrstock, qr_path, raw_status])
+        
+        return csv_path
+    
+    def _generate_cdjr_new_csv(self, vehicles: List[Dict], dealership_name: str, 
+                              order_folder: Path, qr_paths: List[str], timestamp: str) -> Path:
+        """Generate shortcut CSV for CDJR Columbia new vehicles with custom headers"""
+        clean_name = dealership_name.replace(' ', '_')
+        filename = f"{clean_name}_New_Shortcut_{timestamp}.csv"
+        csv_path = order_folder / filename
+        
+        with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.writer(csvfile)
+            # Custom headers for CDJR Columbia new vehicles
+            writer.writerow(['QRYEARMODEL', 'QRSTOCK', '@QR2'])
+            
+            for idx, vehicle in enumerate(vehicles):
+                year = vehicle.get('year', '')
+                make = vehicle.get('make', '')
+                model = vehicle.get('model', '')
+                stock = vehicle.get('stock', '')
+                
+                qr_path = qr_paths[idx] if idx < len(qr_paths) else ''
+                
+                # Custom format for CDJR Columbia new vehicles
+                qryearmodel = f"{year} {make} {model}"  # Year and Model only (as requested)
+                qrstock = stock  # Stock number only (as requested)
+                qr2 = qr_path  # Same QR data as @QR2 in shortcut pack
+                
+                writer.writerow([qryearmodel, qrstock, qr2])
+        
+        return csv_path
     
     def _generate_billing_sheet_csv(self, vehicles: List[Dict], dealership_name: str, output_folder: Path, timestamp: str) -> Path:
         """Generate billing sheet CSV automatically after QR codes - matches exact format from examples"""
