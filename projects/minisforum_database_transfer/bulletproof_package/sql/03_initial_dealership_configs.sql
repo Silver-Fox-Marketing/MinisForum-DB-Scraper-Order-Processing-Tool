@@ -149,8 +149,8 @@ INSERT INTO dealership_configs (name, filtering_rules, output_rules, qr_output_p
     '{"include_qr": true, "format": "standard", "sort_by": ["make", "model"]}',
     'C:\\qr_codes\\rusty_drewing_cbg\\'),
     
-('Weber Chevrolet', 
-    '{"exclude_conditions": ["offlot"], "require_stock": true, "min_price": 0}',
+('Weber Chevrolet',
+    '{"notes": "Standardized configuration based on Porsche St. Louis template", "order_type": "cao", "days_on_lot": {"max": 999, "min": 0}, "price_range": {"max": 999999, "min": 0}, "require_stock": true, "vehicle_types": ["new", "used"], "exclude_status": ["In-Transit", "Sold", "Allocated"], "exclude_in_transit": true, "allowed_vehicle_types": ["new", "cpo", "po", "certified", "pre-owned"], "exclude_missing_stock_number": true}',
     '{"include_qr": true, "format": "standard", "sort_by": ["model", "year"]}',
     'C:\\qr_codes\\weber_chevrolet\\'),
     

@@ -231,6 +231,9 @@ class MinisFornumApp {
         
         // Initialize the application
         this.init();
+
+        // Load saved dealership schedule on startup
+        this.loadSavedScheduleOnStartup();
     }
     
     initSocketIO() {
@@ -449,7 +452,32 @@ class MinisFornumApp {
         document.getElementById('saveSchedule').addEventListener('click', () => {
             this.saveScheduleSettings();
         });
-        
+
+        // Dealership Schedule Configuration Modal
+        document.getElementById('schedule-settings-btn').addEventListener('click', () => {
+            this.showDealershipScheduleModal();
+        });
+
+        document.getElementById('closeDealershipScheduleModal').addEventListener('click', () => {
+            this.closeModal('dealershipScheduleModal');
+        });
+
+        document.getElementById('cancelScheduleConfig').addEventListener('click', () => {
+            this.closeModal('dealershipScheduleModal');
+        });
+
+        document.getElementById('saveScheduleConfig').addEventListener('click', () => {
+            this.saveDealershipScheduleConfig();
+        });
+
+        document.getElementById('selectAllDays').addEventListener('click', () => {
+            this.assignAllDealershipsToAllDays();
+        });
+
+        document.getElementById('clearAllDays').addEventListener('click', () => {
+            this.clearAllDealershipAssignments();
+        });
+
         // Terminal controls - check if element exists first
         const clearTerminalBtn = document.getElementById('clearTerminal');
         if (clearTerminalBtn) {
@@ -1553,13 +1581,242 @@ class MinisFornumApp {
             modal.classList.remove('show');
             modal.style.display = 'none';
         }
-        
+
         // Special cleanup for dealership settings modal
         if (modalId === 'dealershipModal') {
             this.currentEditingDealership = null;
         }
+
+        // Special cleanup for dealership schedule modal
+        if (modalId === 'dealershipScheduleModal') {
+            // Reset any modal-specific state if needed
+            console.log('Dealership schedule modal closed');
+        }
     }
-    
+
+    showDealershipScheduleModal() {
+        this.loadDealershipScheduleData();
+        this.showModal('dealershipScheduleModal');
+    }
+
+    async loadDealershipScheduleData() {
+        try {
+            // Get all dealerships
+            const response = await fetch('/api/dealerships');
+            const dealerships = await response.json();
+
+            if (Array.isArray(dealerships) && dealerships.length > 0) {
+                this.dealerships = dealerships;
+                this.renderDealershipScheduleInterface();
+                this.loadCurrentScheduleSettings();
+            } else {
+                console.error('No dealerships found or invalid response structure');
+                this.addTerminalMessage('No dealerships found', 'error');
+            }
+        } catch (error) {
+            console.error('Error loading dealership data:', error);
+            this.addTerminalMessage('Error loading dealership data', 'error');
+        }
+    }
+
+    renderDealershipScheduleInterface() {
+        const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+
+        days.forEach(day => {
+            // Target specifically the modal's day containers
+            const gridContainer = document.querySelector(`#dealershipScheduleModal [data-day="${day}"]`);
+            if (gridContainer) {
+                gridContainer.innerHTML = '';
+
+                // Create dealership items for this day
+                this.dealerships.forEach(dealership => {
+                    const dealershipItem = document.createElement('div');
+                    dealershipItem.className = 'dealership-item';
+                    dealershipItem.dataset.dealership = dealership.name;
+                    dealershipItem.textContent = dealership.name;
+
+                    // Add click handler to toggle assignment
+                    dealershipItem.addEventListener('click', () => {
+                        this.toggleDealershipAssignment(day, dealership.name, dealershipItem);
+                    });
+
+                    gridContainer.appendChild(dealershipItem);
+                });
+            }
+        });
+    }
+
+    async loadCurrentScheduleSettings() {
+        try {
+            const response = await fetch('/api/dealership-schedule');
+            const data = await response.json();
+
+            if (data.success && data.schedule) {
+                this.currentScheduleSettings = data.schedule;
+                this.applyCurrentScheduleToInterface();
+            } else {
+                // Initialize empty schedule if none exists
+                this.currentScheduleSettings = {
+                    monday: [],
+                    tuesday: [],
+                    wednesday: [],
+                    thursday: [],
+                    friday: []
+                };
+            }
+        } catch (error) {
+            console.error('Error loading schedule settings:', error);
+            // Initialize empty schedule on error
+            this.currentScheduleSettings = {
+                monday: [],
+                tuesday: [],
+                wednesday: [],
+                thursday: [],
+                friday: []
+            };
+        }
+    }
+
+    applyCurrentScheduleToInterface() {
+        const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+
+        days.forEach(day => {
+            const assignedDealerships = this.currentScheduleSettings[day] || [];
+            assignedDealerships.forEach(dealershipName => {
+                const dealershipItem = document.querySelector(`#dealershipScheduleModal [data-day="${day}"] [data-dealership="${dealershipName}"]`);
+                if (dealershipItem) {
+                    dealershipItem.classList.add('selected');
+                }
+            });
+        });
+    }
+
+    toggleDealershipAssignment(day, dealershipName, element) {
+        if (!this.currentScheduleSettings[day]) {
+            this.currentScheduleSettings[day] = [];
+        }
+
+        const isCurrentlyAssigned = this.currentScheduleSettings[day].includes(dealershipName);
+
+        if (isCurrentlyAssigned) {
+            // Remove from assignment
+            this.currentScheduleSettings[day] = this.currentScheduleSettings[day].filter(name => name !== dealershipName);
+            element.classList.remove('selected');
+        } else {
+            // Add to assignment
+            this.currentScheduleSettings[day].push(dealershipName);
+            element.classList.add('selected');
+        }
+    }
+
+    assignAllDealershipsToAllDays() {
+        const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+        const allDealershipNames = this.dealerships.map(d => d.name);
+
+        days.forEach(day => {
+            this.currentScheduleSettings[day] = [...allDealershipNames];
+
+            // Update UI in modal
+            const gridContainer = document.querySelector(`#dealershipScheduleModal [data-day="${day}"]`);
+            if (gridContainer) {
+                const dealershipItems = gridContainer.querySelectorAll('.dealership-item');
+                dealershipItems.forEach(item => item.classList.add('selected'));
+            }
+        });
+    }
+
+    clearAllDealershipAssignments() {
+        const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+
+        days.forEach(day => {
+            this.currentScheduleSettings[day] = [];
+
+            // Update UI in modal
+            const gridContainer = document.querySelector(`#dealershipScheduleModal [data-day="${day}"]`);
+            if (gridContainer) {
+                const dealershipItems = gridContainer.querySelectorAll('.dealership-item');
+                dealershipItems.forEach(item => item.classList.remove('selected'));
+            }
+        });
+    }
+
+    async saveDealershipScheduleConfig() {
+        try {
+            const response = await fetch('/api/dealership-schedule', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    schedule: this.currentScheduleSettings
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.addTerminalMessage('Dealership schedule saved successfully', 'success');
+
+                // Apply the saved schedule to the main day buttons
+                this.applyScheduleToMainInterface();
+
+                this.closeModal('dealershipScheduleModal');
+            } else {
+                this.addTerminalMessage(`Failed to save schedule: ${data.message}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error saving dealership schedule:', error);
+            this.addTerminalMessage('Error saving dealership schedule', 'error');
+        }
+    }
+
+    applyScheduleToMainInterface() {
+        // Apply the saved schedule to the main day buttons and dealership list
+        const dayButtons = document.querySelectorAll('.day-btn');
+
+        dayButtons.forEach(button => {
+            const day = button.dataset.day;
+            const assignedDealerships = this.currentScheduleSettings[day] || [];
+
+            // Update button state based on whether it has assigned dealerships
+            if (assignedDealerships.length > 0) {
+                button.classList.add('has-assignments');
+                button.title = `${assignedDealerships.length} dealerships assigned`;
+            } else {
+                button.classList.remove('has-assignments');
+                button.title = 'No dealerships assigned';
+            }
+        });
+
+        // Store the schedule globally so other parts of the app can access it
+        window.dealershipSchedule = this.currentScheduleSettings;
+
+        console.log('Applied schedule to main interface:', this.currentScheduleSettings);
+    }
+
+    async loadSavedScheduleOnStartup() {
+        try {
+            const response = await fetch('/api/dealership-schedule');
+            const data = await response.json();
+
+            if (data.success && data.schedule) {
+                this.currentScheduleSettings = data.schedule;
+                this.applyScheduleToMainInterface();
+                console.log('Loaded saved schedule on startup:', data.schedule);
+            }
+        } catch (error) {
+            console.log('No saved schedule found or error loading:', error);
+            // Initialize empty schedule
+            this.currentScheduleSettings = {
+                monday: [],
+                tuesday: [],
+                wednesday: [],
+                thursday: [],
+                friday: []
+            };
+        }
+    }
+
     addTerminalMessage(message, type = 'info') {
         const terminal = document.getElementById('terminalOutput');
         if (!terminal) return;
@@ -3285,13 +3542,17 @@ class MinisFornumApp {
     }
     
     addDayToQueue(day) {
-        const dayDealerships = this.weeklySchedule[day.toLowerCase()] || [];
-        
+        // Use the new schedule system instead of hardcoded weeklySchedule
+        const dayDealerships = this.currentScheduleSettings?.[day.toLowerCase()] ||
+                              window.dealershipSchedule?.[day.toLowerCase()] || [];
+
+        console.log(`🔍 Day ${day} - Found ${dayDealerships.length} dealerships:`, dayDealerships);
+
         if (dayDealerships.length === 0) {
             this.addTerminalMessage(`No dealerships scheduled for ${day}`, 'warning');
             return;
         }
-        
+
         let addedCount = 0;
         dayDealerships.forEach(dealershipName => {
             if (!this.processingQueue.has(dealershipName)) {
@@ -3302,12 +3563,15 @@ class MinisFornumApp {
                     addedBy: `${day} schedule`
                 });
                 addedCount++;
+                console.log(`✅ Added ${dealershipName} to queue with type ${defaultType}`);
+            } else {
+                console.log(`⚠️ ${dealershipName} already in queue, skipping`);
             }
         });
-        
+
         this.renderQueue();
         this.addTerminalMessage(`Added ${addedCount} dealerships from ${day} schedule`, 'success');
-        
+
         // Highlight the day button temporarily
         const dayBtn = document.querySelector(`[data-day="${day.toLowerCase()}"]`);
         if (dayBtn) {
@@ -6113,6 +6377,7 @@ class MinisFornumApp {
                         <th>Dealerships</th>
                         <th>Status</th>
                         <th>File</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -6139,6 +6404,15 @@ class MinisFornumApp {
                                 </span>
                             </td>
                             <td>${import_.file_name || '-'}</td>
+                            <td>
+                                <button class="btn-delete-import" 
+                                        onclick="event.stopPropagation(); app.deleteScraperImport(${import_.import_id}, '${import_.status}')"
+                                        title="${import_.status === 'active' ? 'Cannot delete active import' : 'Delete this import'}"
+                                        ${import_.status === 'active' ? 'disabled' : ''}
+                                        style="background: transparent; border: none; color: ${import_.status === 'active' ? 'var(--theme-text-secondary, #999)' : 'var(--danger-red, #ff4444)'}; cursor: ${import_.status === 'active' ? 'not-allowed' : 'pointer'}; padding: 5px; opacity: ${import_.status === 'active' ? '0.5' : '1'};">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -6208,6 +6482,83 @@ class MinisFornumApp {
         } catch (error) {
             console.error('Error toggling scraper status:', error);
             this.addTerminalMessage(`Error changing status: ${error.message}`, 'error');
+        }
+    }
+    
+    async deleteScraperImport(importId, status) {
+        // Prevent deletion of active imports
+        if (status === 'active') {
+            this.addTerminalMessage('Cannot delete the active import. Please run a new scraper import to archive this one first.', 'error');
+            return;
+        }
+        
+        // Show confirmation dialog with warning
+        const confirmed = confirm(
+            `WARNING: This will permanently delete Import #${importId} and all associated vehicle data.\n\n` +
+            `This action cannot be undone.\n\n` +
+            `Are you sure you want to delete this import?`
+        );
+        
+        if (!confirmed) {
+            return;
+        }
+        
+        // Double confirmation for safety
+        const doubleConfirmed = confirm(
+            `FINAL CONFIRMATION\n\n` +
+            `Delete Import #${importId}?\n\n` +
+            `Click OK to permanently delete this import.`
+        );
+        
+        if (!doubleConfirmed) {
+            return;
+        }
+        
+        try {
+            // Show loading state
+            this.addTerminalMessage(`Deleting Import #${importId}...`, 'info');
+            
+            const response = await fetch(`/api/scraper-imports/${importId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.addTerminalMessage(`SUCCESS: Import #${importId} and all associated data deleted successfully`, 'success');
+                
+                // Reload the scraper history to reflect the deletion
+                this.loadScraperHistory();
+                
+                // Also refresh the data management counts if they exist
+                this.refreshDataManagementCounts();
+                
+            } else {
+                this.addTerminalMessage(`FAILED to delete import: ${result.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error deleting scraper import:', error);
+            this.addTerminalMessage(`ERROR deleting import: ${error.message}`, 'error');
+        }
+    }
+    
+    refreshDataManagementCounts() {
+        // Refresh any count displays after deletion
+        try {
+            // Update scraper import count if it exists
+            const importCountElement = document.querySelector('.import-count, #scraperImportCount');
+            if (importCountElement) {
+                // Re-fetch the actual count from the current table
+                const tableRows = document.querySelectorAll('#scraperTableContainer tbody tr');
+                if (tableRows) {
+                    importCountElement.textContent = tableRows.length;
+                }
+            }
+        } catch (error) {
+            console.log('Note: Could not refresh data management counts:', error.message);
         }
     }
     

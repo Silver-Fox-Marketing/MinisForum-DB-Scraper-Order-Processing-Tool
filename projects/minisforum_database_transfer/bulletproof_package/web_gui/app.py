@@ -916,6 +916,83 @@ def get_normalization_status():
             'error': str(e)
         }), 500
 
+# DEALERSHIP SCHEDULE API ENDPOINTS
+@app.route('/api/dealership-schedule', methods=['GET'])
+def get_dealership_schedule():
+    """API endpoint to get current dealership schedule configuration"""
+    try:
+        # Try to load existing schedule from a configuration file or database
+        schedule_file = Path(__file__).parent / 'dealership_schedule.json'
+
+        if schedule_file.exists():
+            with open(schedule_file, 'r') as f:
+                schedule_data = json.load(f)
+            return jsonify({
+                'success': True,
+                'schedule': schedule_data
+            })
+        else:
+            # Return empty schedule if file doesn't exist
+            empty_schedule = {
+                'monday': [],
+                'tuesday': [],
+                'wednesday': [],
+                'thursday': [],
+                'friday': []
+            }
+            return jsonify({
+                'success': True,
+                'schedule': empty_schedule
+            })
+    except Exception as e:
+        logger.error(f"Failed to get dealership schedule: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/dealership-schedule', methods=['POST'])
+def save_dealership_schedule():
+    """API endpoint to save dealership schedule configuration"""
+    try:
+        data = request.get_json()
+        schedule_data = data.get('schedule', {})
+
+        # Validate schedule data structure
+        required_days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+        for day in required_days:
+            if day not in schedule_data:
+                return jsonify({
+                    'success': False,
+                    'error': f'Missing schedule data for {day}'
+                }), 400
+
+            if not isinstance(schedule_data[day], list):
+                return jsonify({
+                    'success': False,
+                    'error': f'Schedule data for {day} must be a list'
+                }), 400
+
+        # Save schedule to configuration file
+        schedule_file = Path(__file__).parent / 'dealership_schedule.json'
+
+        with open(schedule_file, 'w') as f:
+            json.dump(schedule_data, f, indent=2)
+
+        logger.info(f"Saved dealership schedule configuration: {len(schedule_data)} days configured")
+
+        return jsonify({
+            'success': True,
+            'message': 'Dealership schedule saved successfully'
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to save dealership schedule: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/order-form')
 def order_form():
     """Order processing form page"""
@@ -4768,6 +4845,54 @@ def toggle_scraper_status(import_id):
         
     except Exception as e:
         logger.error(f"Error toggling scraper status: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/scraper-imports/<int:import_id>', methods=['DELETE'])
+def delete_scraper_import(import_id):
+    """Delete a scraper import and all associated data"""
+    try:
+        # Check if the import exists
+        check_query = "SELECT * FROM scraper_imports WHERE import_id = %s"
+        result = db_manager.execute_query(check_query, (import_id,))
+        
+        if not result:
+            return jsonify({'error': f'Import #{import_id} not found'}), 404
+        
+        # Don't allow deleting the active import
+        if result[0].get('status') == 'active':
+            return jsonify({'error': 'Cannot delete the active import. Please archive it first.'}), 400
+        
+        # Start transaction - delete all related data
+        logger.info(f"Starting deletion of import #{import_id}")
+        
+        # Delete from normalized_vehicle_data first (due to foreign key constraint)
+        delete_normalized_query = """
+            DELETE FROM normalized_vehicle_data 
+            WHERE raw_data_id IN (
+                SELECT id FROM raw_vehicle_data WHERE import_id = %s
+            )
+        """
+        normalized_deleted = db_manager.execute_query(delete_normalized_query, (import_id,))
+        logger.info(f"Deleted normalized vehicle data for import #{import_id}")
+        
+        # Delete from raw_vehicle_data
+        delete_raw_query = "DELETE FROM raw_vehicle_data WHERE import_id = %s"
+        raw_deleted = db_manager.execute_query(delete_raw_query, (import_id,))
+        logger.info(f"Deleted raw vehicle data for import #{import_id}")
+        
+        # Finally delete the import record
+        delete_import_query = "DELETE FROM scraper_imports WHERE import_id = %s"
+        db_manager.execute_query(delete_import_query, (import_id,))
+        logger.info(f"Deleted import record #{import_id}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Import #{import_id} and all associated data have been deleted',
+            'import_id': import_id
+        })
+        
+    except Exception as e:
+        logger.error(f"Error deleting scraper import #{import_id}: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/vin-log/export', methods=['POST'])

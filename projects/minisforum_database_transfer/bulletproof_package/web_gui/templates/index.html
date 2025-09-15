@@ -603,7 +603,9 @@
                                     <div class="selection-panel">
                                 <!-- Day Buttons -->
                                 <div class="day-selection">
-                                    <h3>Scheduled Days</h3>
+                                    <h3>Scheduled Days
+                                        <i class="fas fa-cog settings-gear" id="schedule-settings-btn" title="Configure Schedule Settings"></i>
+                                    </h3>
                                     <div class="day-buttons">
                                         <button class="day-btn" data-day="monday">
                                             <i class="fas fa-calendar-day"></i>
@@ -1034,6 +1036,76 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="cancelDealershipSelection">Cancel</button>
                 <button class="btn btn-primary" id="saveDealershipSelection">Start Selected Scrapers</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dealership Schedule Configuration Modal -->
+    <div class="modal" id="dealershipScheduleModal">
+        <div class="modal-content dealership-schedule-modal">
+            <div class="modal-header">
+                <h3>Configure Dealership Schedule</h3>
+                <button class="modal-close" id="closeDealershipScheduleModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="schedule-instructions">
+                    <p>Select which dealerships should be processed on each day of the week:</p>
+                </div>
+
+                <div class="schedule-config-grid">
+                    <!-- Monday -->
+                    <div class="day-config-section">
+                        <h4><i class="fas fa-calendar-day"></i> Monday</h4>
+                        <div class="dealership-grid" data-day="monday">
+                            <!-- Dealerships will be populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Tuesday -->
+                    <div class="day-config-section">
+                        <h4><i class="fas fa-calendar-day"></i> Tuesday</h4>
+                        <div class="dealership-grid" data-day="tuesday">
+                            <!-- Dealerships will be populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Wednesday -->
+                    <div class="day-config-section">
+                        <h4><i class="fas fa-calendar-day"></i> Wednesday</h4>
+                        <div class="dealership-grid" data-day="wednesday">
+                            <!-- Dealerships will be populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Thursday -->
+                    <div class="day-config-section">
+                        <h4><i class="fas fa-calendar-day"></i> Thursday</h4>
+                        <div class="dealership-grid" data-day="thursday">
+                            <!-- Dealerships will be populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Friday -->
+                    <div class="day-config-section">
+                        <h4><i class="fas fa-calendar-day"></i> Friday</h4>
+                        <div class="dealership-grid" data-day="friday">
+                            <!-- Dealerships will be populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bulk-actions">
+                    <button class="btn btn-secondary btn-sm" id="selectAllDays">Assign All to Every Day</button>
+                    <button class="btn btn-secondary btn-sm" id="clearAllDays">Clear All Assignments</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelScheduleConfig">Cancel</button>
+                <button class="btn btn-primary" id="saveScheduleConfig">
+                    <i class="fas fa-save"></i> Save Schedule
+                </button>
             </div>
         </div>
     </div>
