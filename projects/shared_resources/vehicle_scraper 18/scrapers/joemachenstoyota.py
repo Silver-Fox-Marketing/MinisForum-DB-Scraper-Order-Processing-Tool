@@ -60,7 +60,11 @@ class JOEMACHENSTOYOTA():
 		else:
 			v_type = v_type[0].title()
 
-		body = json_data['vehicle_body_style'][0]
+		body_list = json_data.get('vehicle_body_style')
+		if body_list and isinstance(body_list, list):
+			body = body_list[0]
+		else:
+			body = 'Unknown'
 		fuel_type = json_data['vehicle_engine_fuel'][0]
 
 		date_in_stock = json_data['vehicle_date_instock'][0].split()[0]

@@ -423,9 +423,11 @@ class CorrectOrderProcessor:
         actual_location_name = self.dealership_name_mapping.get(dealership_name, dealership_name)
         logger.info(f"[CAO DEBUG] Mapping {dealership_name} -> {actual_location_name}")
         
-        # Get dealership config
+        # Get dealership config - CACHE BUSTING: Force fresh query with timestamp
         config = db_manager.execute_query("""
-            SELECT filtering_rules FROM dealership_configs WHERE name = %s
+            SELECT filtering_rules FROM dealership_configs 
+            WHERE name = %s AND is_active = true
+            ORDER BY updated_at DESC NULLS LAST
         """, (dealership_name,))
         
         filtering_rules = {}
@@ -433,6 +435,7 @@ class CorrectOrderProcessor:
             filtering_rules = config[0]['filtering_rules']
             if isinstance(filtering_rules, str):
                 filtering_rules = json.loads(filtering_rules)
+            logger.info(f"[CACHE DEBUG] Loaded fresh config for {dealership_name}: {json.dumps(filtering_rules, indent=2)}")
         
         # Log the filtering rules being applied
         logger.info(f"[CAO DEBUG] Applying filtering rules for {dealership_name}: {filtering_rules}")
@@ -568,9 +571,11 @@ class CorrectOrderProcessor:
         Apply dealership-specific filters to a list of vehicles.
         Used for LIST orders to ensure they follow same filtering rules as CAO orders.
         """
-        # Get dealership config
+        # Get dealership config - CACHE BUSTING: Force fresh query with timestamp
         config = db_manager.execute_query("""
-            SELECT filtering_rules FROM dealership_configs WHERE name = %s
+            SELECT filtering_rules FROM dealership_configs 
+            WHERE name = %s AND is_active = true
+            ORDER BY updated_at DESC NULLS LAST
         """, (dealership_name,))
         
         filtering_rules = {}
@@ -578,6 +583,7 @@ class CorrectOrderProcessor:
             filtering_rules = config[0]['filtering_rules']
             if isinstance(filtering_rules, str):
                 filtering_rules = json.loads(filtering_rules)
+            logger.info(f"[CACHE DEBUG] Loaded fresh config for {dealership_name}: {json.dumps(filtering_rules, indent=2)}")
         
         # Log the filtering rules being applied
         logger.info(f"Applying filtering rules for {dealership_name}: {filtering_rules}")
@@ -641,10 +647,11 @@ class CorrectOrderProcessor:
                 if max_price and vehicle_price > max_price:
                     continue
                 
-                # Seasoning filter (minimum days on lot)
+                # Seasoning filter (minimum days on lot) - ENHANCED DEBUG
                 seasoning_days = filtering_rules.get('seasoning_days', 0)
                 if seasoning_days > 0:
                     date_in_stock = vehicle.get('date_in_stock')
+                    logger.info(f"[SEASONING DEBUG] VIN {vehicle.get('vin')} - date_in_stock: {date_in_stock} (type: {type(date_in_stock)})")
                     if date_in_stock:
                         # Convert date_in_stock to datetime if it's a string
                         if isinstance(date_in_stock, str):

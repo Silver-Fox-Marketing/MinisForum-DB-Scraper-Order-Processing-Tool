@@ -110,7 +110,7 @@ class Scraper18WebController:
             'Auffenberg Hyundai': 'auffenberghyundai.com',
             'BMW of West St. Louis': 'bmwofweststlouis.com',
             'Bommarito Cadillac': 'bommaritocadillac.com',
-            'Bommarito West County': 'bommaritowestcounty.com',
+            'Bommarito West County PO': 'bommaritowestcounty.com',
             'Columbia BMW': 'columbiabmw.com',
             'Columbia Honda': 'columbiahonda.com',
             'Dave Sinclair Lincoln': 'davesinclairlincolnsouth.com',  # Using South location as primary
@@ -120,7 +120,7 @@ class Scraper18WebController:
             'Glendale Chrysler Jeep': 'glendalechryslerjeep.net',
             'HW Kia': 'hwkia.com',
             'Honda of Frontenac': 'hondafrontenac.com',
-            'Joe Machens CDJR': 'joemachenscdjr.com',
+            'CDJR of Columbia': 'joemachenscdjr.com',
             'Joe Machens Hyundai': 'joemachenshyundai.com',
             'Joe Machens Nissan': 'joemachensnissan.com',
             'Joe Machens Toyota': 'joemachenstoyota.com',

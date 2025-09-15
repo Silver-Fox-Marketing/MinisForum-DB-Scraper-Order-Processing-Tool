@@ -46,6 +46,9 @@ class ScraperDataNormalizer:
                         self.vehicle_type_mapping[raw_value.lower()] = normalized_value
                     elif normalized_value in ['onlot', 'offlot']:
                         self.lot_status_mapping[raw_value.lower()] = normalized_value
+                
+                # CRITICAL FIX: ALWAYS merge with fallback mappings to ensure code additions are included
+                self._merge_with_fallback_mappings()
                     
                 logger.info(f"Loaded {len(self.vehicle_type_mapping)} vehicle type mappings")
                 logger.info(f"Loaded {len(self.lot_status_mapping)} lot status mappings")
@@ -66,7 +69,9 @@ class ScraperDataNormalizer:
             'certified': 'cpo',
             'used': 'po',
             'pre-owned': 'po',
-            'new': 'new'
+            'new': 'new',
+            'carbravo': 'cpo',
+            'demo': 'new'
         }
         
         # Lot status mappings - CRITICAL: Use 'onlot'/'offlot' format for database compatibility
@@ -76,6 +81,10 @@ class ScraperDataNormalizer:
             'available': 'onlot',
             'on lot': 'onlot',
             'on-lot': 'onlot',
+            'on the lot': 'onlot',
+            'fctp_readyforsale': 'onlot',
+            'courtesy transportation unit': 'onlot',
+            'dealer retail stock - upfitted': 'onlot',
             'in-transit': 'offlot',
             'in transit': 'offlot',
             'allocated': 'offlot',
@@ -140,6 +149,47 @@ class ScraperDataNormalizer:
         
         # Conservative default - assume on lot if unsure
         return 'onlot'
+    
+    def _merge_with_fallback_mappings(self):
+        """Merge current mappings with fallback mappings to ensure code additions are included"""
+        
+        # CRITICAL: These mappings MUST be included regardless of CSV content
+        required_vehicle_mappings = {
+            'certified used': 'cpo',
+            'certified pre-owned': 'cpo', 
+            'certified': 'cpo',
+            'used': 'po',
+            'pre-owned': 'po',
+            'new': 'new',
+            'carbravo': 'cpo',  # REQUIRED: Missing from CSV
+            'demo': 'new'       # REQUIRED: Missing from CSV
+        }
+        
+        required_status_mappings = {
+            'instock': 'onlot',
+            'in stock': 'onlot',
+            'available': 'onlot',
+            'on lot': 'onlot',
+            'on-lot': 'onlot',
+            'on the lot': 'onlot',                    # REQUIRED: Missing from CSV
+            'fctp_readyforsale': 'onlot',             # REQUIRED: Missing from CSV
+            'courtesy transportation unit': 'onlot',  # REQUIRED: Missing from CSV
+            'dealer retail stock - upfitted': 'onlot', # REQUIRED: Missing from CSV
+            'in-transit': 'offlot',
+            'in transit': 'offlot',
+            'allocated': 'offlot',
+            'courtesy vehicle': 'offlot',
+            'in-service': 'offlot'
+        }
+        
+        # Merge required mappings (code additions override CSV if conflict)
+        for key, value in required_vehicle_mappings.items():
+            self.vehicle_type_mapping[key] = value
+            
+        for key, value in required_status_mappings.items():
+            self.lot_status_mapping[key] = value
+            
+        logger.info("Merged fallback mappings with CSV mappings to ensure code additions are included")
     
     def normalize_vehicle_data(self, vehicle_data: Dict) -> Tuple[str, str]:
         """

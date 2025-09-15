@@ -1,0 +1,56 @@
+/* Fix for dealership settings page sidebar visibility */
+
+/* Ensure sidebar is always visible and properly positioned */
+.sidebar-navigation {
+    display: flex !important;
+    position: relative !important;
+    z-index: 1000 !important;
+    width: 280px !important;
+    min-width: 280px !important;
+    height: 100% !important;
+    visibility: visible !important;
+}
+
+/* Ensure sidebar is visible when dealership settings panel is active */
+#dealership-settings-panel.active ~ .sidebar-navigation,
+body:has(#dealership-settings-panel.active) .sidebar-navigation {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Make sure main content doesn't overlap sidebar */
+.main-content {
+    display: flex !important;
+    position: relative !important;
+}
+
+/* Ensure content area doesn't push sidebar out */
+.content-area {
+    flex: 1 !important;
+    min-width: 0 !important;
+    overflow: auto !important;
+}
+
+/* Fix for dealership settings panel not affecting sidebar */
+#dealership-settings-panel.active {
+    position: relative !important;
+    z-index: 1 !important;
+}
+
+/* Emergency fallback - if sidebar disappears, show expand button */
+.sidebar-expand {
+    display: block !important;
+    position: fixed !important;
+    top: 100px !important;
+    left: 10px !important;
+    z-index: 9999 !important;
+    background: var(--primary-red) !important;
+    color: white !important;
+    border: none !important;
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 50% !important;
+    cursor: pointer !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}

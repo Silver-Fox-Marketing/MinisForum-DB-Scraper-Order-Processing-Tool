@@ -44,15 +44,15 @@ class GLENDALECHRYSLERJEEP():
 		body = json_data.get('bodyStyle', '')
 		fuel_type = json_data.get('fuelType', '')
 
-		msrp = json_data.get('msrp', '').split('.')[0]
+		msrp = (json_data.get('msrp') or '').split('.')[0] if (json_data.get('msrp') or '') else ''
 
 		if msrp:
 			msrp = int(msrp.replace('$', '').replace(',', ''))
 
-		price = json_data.get('salePrice', '').split('.')[0]
+		price = (json_data.get('salePrice') or '').split('.')[0] if (json_data.get('salePrice') or '') else ''
 
 		if not price:
-			price  = json_data.get('retailValue', '').split('.')[0]
+			price  = (json_data.get('retailValue') or '').split('.')[0] if (json_data.get('retailValue') or '') else ''
 
 		if price and price != 'PLEASE_CALL':
 			price = int(price.replace('$', '').replace(',', ''))

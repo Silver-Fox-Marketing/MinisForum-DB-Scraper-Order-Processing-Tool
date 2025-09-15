@@ -67,7 +67,7 @@ class BOMMARITOWESTCOUNTY():
 		postal_code = '63011'
 		region = 'MO'
 		country = 'US'
-		location = 'Bommarito West County'
+		location = 'Bommarito West County PO'
 		vehicle_url = json_data['VehicleDetailUrl']
 
 		self.helper.writing_output_file([

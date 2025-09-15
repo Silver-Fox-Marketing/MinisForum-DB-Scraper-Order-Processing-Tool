@@ -885,6 +885,22 @@
                                 </label>
                                 <input type="number" id="minYear" name="min_year" min="1900" max="2030" placeholder="Any year" class="modern-input">
                             </div>
+                            <div class="filter-item">
+                                <label for="seasoningDays" class="modern-input-label">
+                                    <i class="fas fa-hourglass-half"></i>
+                                    Seasoning Days
+                                </label>
+                                <input type="number" id="seasoningDays" name="seasoning_days" min="0" max="365" placeholder="0" class="modern-input">
+                                <small class="help-text">Minimum days vehicle must be on lot before including in CAO orders</small>
+                            </div>
+                            <div class="filter-item">
+                                <label for="requiredBrands" class="modern-input-label">
+                                    <i class="fas fa-tags"></i>
+                                    Required Brands
+                                </label>
+                                <input type="text" id="requiredBrands" name="required_brands" placeholder="e.g., Toyota, Honda" class="modern-input">
+                                <small class="help-text">Comma-separated list of brands. Leave blank to include all brands</small>
+                            </div>
                         </div>
                         
                         <!-- Special Filters Section -->

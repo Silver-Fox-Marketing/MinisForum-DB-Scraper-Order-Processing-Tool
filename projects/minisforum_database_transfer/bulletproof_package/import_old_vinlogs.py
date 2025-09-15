@@ -73,8 +73,8 @@ def parse_old_format_csv(csv_file_path):
             order_col = row[0].strip() if row[0] else ""
             vin_col = row[1].strip() if row[1] else ""
             
-            # Check if this row has an order number
-            if order_col and order_col.isdigit():
+            # Check if this row has an order number (including BASELINE)
+            if order_col and (order_col.isdigit() or order_col.upper() == 'BASELINE'):
                 current_order_number = order_col
                 
             # If we have a VIN and a current order number, add record

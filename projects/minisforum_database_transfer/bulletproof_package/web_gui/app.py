@@ -2200,7 +2200,7 @@ def search_vehicle_data():
                     SELECT 
                         r.vin, r.stock, r.location, r.year, r.make, r.model,
                         r.trim, r.ext_color as exterior_color, r.price, r.type as vehicle_type,
-                        r.normalized_type, r.on_lot_status,
+                        r.normalized_type, r.on_lot_status, r.date_in_stock,
                         r.import_timestamp, 'raw' as data_source,
                         COUNT(*) OVER (PARTITION BY r.vin) as scrape_count,
                         MIN(r.import_timestamp) OVER (PARTITION BY r.vin) as first_scraped,
@@ -2219,6 +2219,7 @@ def search_vehicle_data():
                     SELECT 
                         n.vin, n.stock, n.location, n.year, n.make, n.model,
                         n.trim, '' as exterior_color, n.price, n.vehicle_condition as vehicle_type,
+                        n.date_in_stock,
                         r.import_timestamp, 'normalized' as data_source,
                         COUNT(*) OVER (PARTITION BY n.vin) as scrape_count,
                         MIN(r.import_timestamp) OVER (PARTITION BY n.vin) as first_scraped,
@@ -2227,7 +2228,7 @@ def search_vehicle_data():
                     JOIN raw_vehicle_data r ON n.raw_data_id = r.id
                 )
                 SELECT vin, stock, location, year, make, model, trim, 
-                       exterior_color, price, vehicle_type, import_timestamp, data_source, scrape_count, first_scraped
+                       exterior_color, price, vehicle_type, date_in_stock, import_timestamp, data_source, scrape_count, first_scraped
                 FROM ranked_vehicles 
                 WHERE rn = 1
             """
@@ -2237,14 +2238,14 @@ def search_vehicle_data():
                     SELECT 
                         r.vin, r.stock, r.location, r.year, r.make, r.model,
                         r.trim, r.ext_color as exterior_color, r.price, r.type as vehicle_type,
-                        r.normalized_type, r.on_lot_status,
+                        r.date_in_stock, r.normalized_type, r.on_lot_status,
                         r.import_timestamp, 'raw' as data_source, r.id
                     FROM raw_vehicle_data r
                     UNION ALL
                     SELECT 
                         n.vin, n.stock, n.location, n.year, n.make, n.model,
                         n.trim, '' as exterior_color, n.price, n.vehicle_condition as vehicle_type,
-                        '' as normalized_type, '' as on_lot_status,
+                        n.date_in_stock, '' as normalized_type, '' as on_lot_status,
                         r.import_timestamp, 'normalized' as data_source, n.id
                     FROM normalized_vehicle_data n
                     JOIN raw_vehicle_data r ON n.raw_data_id = r.id
@@ -2252,7 +2253,7 @@ def search_vehicle_data():
                 ranked_vehicles AS (
                     SELECT 
                         vin, stock, location, year, make, model, trim, 
-                        exterior_color, price, vehicle_type, normalized_type, on_lot_status,
+                        exterior_color, price, vehicle_type, date_in_stock, normalized_type, on_lot_status,
                         import_timestamp, data_source,
                         COUNT(*) OVER (PARTITION BY vin) as scrape_count,
                         MIN(import_timestamp) OVER (PARTITION BY vin) as first_scraped,
@@ -2260,7 +2261,7 @@ def search_vehicle_data():
                     FROM all_vehicles
                 )
                 SELECT vin, stock, location, year, make, model, trim, 
-                       exterior_color, price, vehicle_type, normalized_type, on_lot_status,
+                       exterior_color, price, vehicle_type, date_in_stock, normalized_type, on_lot_status,
                        import_timestamp, data_source, scrape_count, first_scraped
                 FROM ranked_vehicles
                 WHERE rn = 1
@@ -4293,6 +4294,34 @@ def csv_import():
                 except:
                     msrp_val = None
                 
+                # Process Date In Stock - CRITICAL FIX with multiple format support
+                try:
+                    date_in_stock_val = None
+                    if 'Date In Stock' in row and row['Date In Stock']:
+                        from datetime import datetime
+                        date_str = str(row['Date In Stock']).strip()
+                        if date_str and date_str != '':
+                            # Try multiple date formats
+                            date_formats = [
+                                '%m/%d/%Y',  # MM/DD/YYYY (e.g., "10/17/2024") - Primary format in CSV
+                                '%Y/%m/%d',  # YYYY/MM/DD (e.g., "2025/04/22")
+                                '%Y-%m-%d',  # YYYY-MM-DD (e.g., "2025-04-22")
+                                '%m-%d-%Y'   # MM-DD-YYYY (e.g., "04-22-2025")
+                            ]
+                            
+                            for fmt in date_formats:
+                                try:
+                                    date_in_stock_val = datetime.strptime(date_str, fmt).date()
+                                    break  # Successfully parsed, exit loop
+                                except ValueError:
+                                    continue  # Try next format
+                            
+                            if date_in_stock_val is None:
+                                logger.warning(f"Could not parse Date In Stock '{date_str}' with any supported format")
+                except Exception as e:
+                    logger.warning(f"Could not parse Date In Stock '{row.get('Date In Stock', '')}': {e}")
+                    date_in_stock_val = None
+                
                 # Mark test data in location field if skip_vin_log is enabled
                 location_name = dealership_name
                 if skip_vin_log:
@@ -4313,7 +4342,7 @@ def csv_import():
                     row['Body Style'],  # body_style
                     row['Fuel Type'],  # fuel_type
                     msrp_val,  # msrp
-                    None,  # date_in_stock
+                    date_in_stock_val,  # date_in_stock - FIXED: Now uses parsed CSV date
                     row['Street Address'],  # street_address
                     row['Locality'],  # locality
                     row['Postal Code'],  # postal_code
