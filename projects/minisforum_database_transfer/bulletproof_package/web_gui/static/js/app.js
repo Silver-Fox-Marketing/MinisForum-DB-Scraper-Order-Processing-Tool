@@ -8953,9 +8953,168 @@ Example:
     }
     
     renderReviewSummary() {
+        // Set up dealership selector if multiple dealerships
+        this.setupDealershipSelector();
+
         // Don't overwrite the vehicle data table - just populate it
         this.populateModalVehicleDataTable();
         this.updateModalDownloadButton();
+    }
+
+    setupDealershipSelector() {
+        console.log('🏢 SETUP DEALERSHIP SELECTOR: Starting...');
+        const selectorSection = document.getElementById('modalDealershipSelector');
+        const tabsContainer = document.getElementById('modalDealershipTabs');
+
+        console.log('🏢 SETUP: Elements found:', {
+            selectorSection: !!selectorSection,
+            tabsContainer: !!tabsContainer
+        });
+
+        if (!selectorSection || !tabsContainer) {
+            console.warn('🚨 SETUP: Dealership selector elements not found!');
+            console.log('🔍 SETUP: Available modal elements:', {
+                allElements: document.querySelectorAll('[id*="modal"]').length,
+                reviewSummary: !!document.getElementById('modalReviewSummary')
+            });
+            return;
+        }
+
+        // Get all processed dealerships
+        const dealerships = new Map();
+
+        console.log('🏢 SETUP: Processing orders:', this.processedOrders?.length || 0);
+
+        // Add processed orders
+        this.processedOrders.forEach(order => {
+            console.log('🏢 SETUP: Checking order:', {
+                dealership: order.dealership,
+                hasResult: !!order.result,
+                vehiclesGenerated: order.result?.vehicles_generated,
+                success: order.result?.success
+            });
+
+            // Check for vehicles_processed (current API) or vehicles_generated (legacy)
+            const vehicleCount = order.result?.vehicles_processed || order.result?.vehicles_generated || 0;
+            if (order.result && order.result.success && vehicleCount > 0) {
+                dealerships.set(order.dealership, {
+                    name: order.dealership,
+                    count: vehicleCount,
+                    type: 'cao',
+                    data: order
+                });
+                console.log('🏢 SETUP: Added dealership:', order.dealership, 'with', vehicleCount, 'vehicles');
+            }
+        });
+
+        // Add maintenance results
+        if (this.maintenanceResults && this.maintenanceResults.length > 0) {
+            this.maintenanceResults.forEach(result => {
+                const vehicleCount = (result.caoResults?.vehicles?.length || 0) + (result.manualVins?.length || 0);
+                dealerships.set(result.order.name, {
+                    name: result.order.name,
+                    count: vehicleCount,
+                    type: 'maintenance',
+                    data: result
+                });
+            });
+        }
+
+        console.log('🏢 SETUP: Final dealership count:', dealerships.size);
+        console.log('🏢 SETUP: Dealerships found:', Array.from(dealerships.keys()));
+
+        // Show selector only if multiple dealerships
+        if (dealerships.size <= 1) {
+            console.log('🏢 SETUP: Not showing selector - only', dealerships.size, 'dealerships');
+            selectorSection.style.display = 'none';
+            this.selectedReviewDealership = null;
+            return;
+        }
+
+        console.log('🏢 SETUP: Showing dealership selector for', dealerships.size, 'dealerships');
+        selectorSection.style.display = 'block';
+
+        // Initialize selected dealership if not set
+        if (!this.selectedReviewDealership) {
+            this.selectedReviewDealership = 'all';
+        }
+
+        // Render dealership tabs
+        let tabsHTML = '';
+
+        // Add "All Dealerships" tab
+        const totalVehicles = Array.from(dealerships.values()).reduce((sum, d) => sum + d.count, 0);
+        tabsHTML += `
+            <div class="dealership-tab all-dealerships ${this.selectedReviewDealership === 'all' ? 'active' : ''}"
+                 data-dealership="all">
+                <i class="fas fa-list tab-icon"></i>
+                <span class="tab-name">All Dealerships</span>
+                <span class="vehicle-count">${totalVehicles}</span>
+            </div>
+        `;
+
+        // Add individual dealership tabs
+        Array.from(dealerships.values()).forEach(dealership => {
+            tabsHTML += `
+                <div class="dealership-tab ${this.selectedReviewDealership === dealership.name ? 'active' : ''}"
+                     data-dealership="${dealership.name}">
+                    <i class="fas fa-building tab-icon"></i>
+                    <span class="tab-name">${dealership.name}</span>
+                    <span class="vehicle-count">${dealership.count}</span>
+                </div>
+            `;
+        });
+
+        tabsContainer.innerHTML = tabsHTML;
+
+        // Add click event listeners
+        tabsContainer.addEventListener('click', (e) => {
+            const tab = e.target.closest('.dealership-tab');
+            if (tab) {
+                const dealership = tab.dataset.dealership;
+                this.switchReviewDealership(dealership);
+            }
+        });
+
+        // Update current dealership badge
+        this.updateCurrentDealershipBadge();
+    }
+
+    switchReviewDealership(dealershipName) {
+        console.log('Switching review to dealership:', dealershipName);
+
+        this.selectedReviewDealership = dealershipName;
+
+        // Update active tab
+        document.querySelectorAll('.dealership-tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+
+        const activeTab = document.querySelector(`[data-dealership="${dealershipName}"]`);
+        if (activeTab) {
+            activeTab.classList.add('active');
+        }
+
+        // Update current dealership badge
+        this.updateCurrentDealershipBadge();
+
+        // Refresh vehicle data table for selected dealership
+        this.populateModalVehicleDataTable();
+        this.updateModalDownloadButton();
+    }
+
+    updateCurrentDealershipBadge() {
+        const badge = document.getElementById('modalCurrentDealership');
+        const nameSpan = document.getElementById('modalCurrentDealershipName');
+
+        if (!badge || !nameSpan) return;
+
+        if (this.selectedReviewDealership && this.selectedReviewDealership !== 'all') {
+            badge.style.display = 'flex';
+            nameSpan.textContent = this.selectedReviewDealership;
+        } else {
+            badge.style.display = 'none';
+        }
     }
     
     populateModalVehicleDataTable() {
@@ -8970,17 +9129,30 @@ Example:
         
         console.log('Populating modal vehicle data table...');
         console.log('Processed orders:', this.processedOrders);
-        
-        // Get all vehicles from processed orders
+        console.log('Selected dealership filter:', this.selectedReviewDealership);
+
+        // Get all vehicles from processed orders, filtered by selected dealership
         let allVehicles = [];
-        
+
         // Handle maintenance orders - they're stored in this.maintenanceResults
         if (this.maintenanceResults && this.maintenanceResults.length > 0) {
             console.log('Processing maintenance results:', this.maintenanceResults);
             this.maintenanceResults.forEach(maintenanceResult => {
+                // Filter by selected dealership
+                if (this.selectedReviewDealership && this.selectedReviewDealership !== 'all') {
+                    if (maintenanceResult.order.name !== this.selectedReviewDealership) {
+                        return; // Skip this dealership
+                    }
+                }
+
                 if (maintenanceResult && maintenanceResult.caoResults && maintenanceResult.caoResults.vehicles) {
                     console.log(`Found ${maintenanceResult.caoResults.vehicles.length} vehicles from maintenance CAO results for ${maintenanceResult.order.name}`);
-                    allVehicles.push(...maintenanceResult.caoResults.vehicles);
+                    // Add dealership info to vehicles
+                    const vehiclesWithDealership = maintenanceResult.caoResults.vehicles.map(vehicle => ({
+                        ...vehicle,
+                        dealership: maintenanceResult.order.name
+                    }));
+                    allVehicles.push(...vehiclesWithDealership);
                 }
                 // Also include manual VINs if any
                 if (maintenanceResult && maintenanceResult.manualVins && maintenanceResult.manualVins.length > 0) {
@@ -8991,7 +9163,8 @@ Example:
                         year: 'Manual',
                         make: 'Entry',
                         model: 'VIN',
-                        stock: 'MANUAL'
+                        stock: 'MANUAL',
+                        dealership: maintenanceResult.order.name
                     }));
                     allVehicles.push(...manualVehicles);
                 }
@@ -9000,6 +9173,13 @@ Example:
         
         // Generate sample vehicle data for all processed orders (regular CAO/LIST orders)
         this.processedOrders.forEach(order => {
+            // Filter by selected dealership
+            if (this.selectedReviewDealership && this.selectedReviewDealership !== 'all') {
+                if (order.dealership !== this.selectedReviewDealership) {
+                    return; // Skip this dealership
+                }
+            }
+
             if (order.result) {
                 // CRITICAL FIX: Use REAL vehicle data from API instead of sample data
                 console.log('DEBUG: Full order result structure for', order.dealership, ':', order.result);

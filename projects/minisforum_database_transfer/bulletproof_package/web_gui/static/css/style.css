@@ -11719,3 +11719,115 @@ body:has(#dealership-settings-panel.active) .sidebar-navigation,
 }
 
 /* END SIDEBAR VISIBILITY FIX */
+
+/* Dealership Selector for Review Stage */
+.dealership-selector-section {
+    background: linear-gradient(135deg, var(--theme-bg-primary) 0%, var(--theme-surface) 100%);
+    border-radius: 16px;
+    padding: 24px;
+    margin: 16px 0;
+    border: 2px solid rgba(253, 65, 13, 0.08);
+}
+
+.dealership-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.dealership-tab {
+    background: linear-gradient(135deg, var(--theme-surface) 0%, var(--theme-bg-primary) 100%);
+    border: 2px solid rgba(253, 65, 13, 0.15);
+    border-radius: 8px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: var(--theme-text-primary);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 120px;
+}
+
+.dealership-tab:hover {
+    background: linear-gradient(135deg, var(--theme-surface-elevated) 0%, var(--theme-surface) 100%);
+    border-color: var(--primary-red);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(253, 65, 13, 0.15);
+}
+
+.dealership-tab.active {
+    background: linear-gradient(135deg, var(--primary-red), var(--dark-red));
+    color: var(--white);
+    border-color: var(--primary-red);
+    box-shadow: 0 4px 16px rgba(253, 65, 13, 0.25);
+}
+
+.dealership-tab.active:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 6px 20px rgba(253, 65, 13, 0.35);
+}
+
+.dealership-tab .tab-icon {
+    font-size: 14px;
+}
+
+.dealership-tab .tab-name {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.dealership-tab .vehicle-count {
+    background: rgba(255, 255, 255, 0.15);
+    padding: 2px 6px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-left: auto;
+}
+
+.dealership-tab.active .vehicle-count {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.current-dealership-badge {
+    background: linear-gradient(135deg, var(--theme-surface) 0%, var(--theme-bg-primary) 100%);
+    border: 2px solid rgba(253, 65, 13, 0.15);
+    border-radius: 8px;
+    padding: 6px 12px;
+    color: var(--theme-text-primary);
+    font-size: 12px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.current-dealership-badge i {
+    font-size: 10px;
+    color: var(--primary-red);
+}
+
+.section-description {
+    color: var(--theme-text-secondary);
+    font-size: 14px;
+    margin: 8px 0 0 0;
+}
+
+/* Special styling for "All Dealerships" tab */
+.dealership-tab.all-dealerships {
+    background: linear-gradient(135deg, var(--theme-surface-elevated) 0%, var(--theme-surface) 100%);
+    border-color: rgba(253, 65, 13, 0.25);
+}
+
+.dealership-tab.all-dealerships:hover {
+    border-color: var(--primary-red);
+}
+
+.dealership-tab.all-dealerships.active {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    border-color: #2563eb;
+    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.25);
+}
