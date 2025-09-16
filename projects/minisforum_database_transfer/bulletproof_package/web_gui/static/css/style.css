@@ -11831,3 +11831,96 @@ body:has(#dealership-settings-panel.active) .sidebar-navigation,
     border-color: #2563eb;
     box-shadow: 0 4px 16px rgba(37, 99, 235, 0.25);
 }
+
+/* Multi-dealership order number styling */
+.multi-order-input {
+    margin-top: 20px;
+}
+
+.multi-order-header h3 {
+    color: var(--theme-text-primary);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.2em;
+}
+
+.multi-order-description {
+    color: var(--theme-text-secondary);
+    margin-bottom: 20px;
+    font-size: 0.95em;
+}
+
+.dealership-order-item {
+    background: linear-gradient(135deg, var(--theme-surface) 0%, var(--theme-bg-primary) 100%);
+    border: 2px solid rgba(253, 65, 13, 0.15);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    transition: all 0.3s ease;
+}
+
+.dealership-order-item:hover {
+    border-color: rgba(253, 65, 13, 0.3);
+    box-shadow: 0 4px 16px rgba(253, 65, 13, 0.1);
+    transform: translateY(-2px);
+}
+
+.dealership-order-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.dealership-order-name {
+    font-weight: 600;
+    color: var(--theme-text-primary);
+    font-size: 1.1em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dealership-vehicle-count {
+    background: var(--theme-accent);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+
+.dealership-order-input {
+    margin-top: 8px;
+}
+
+.dealership-order-input label {
+    color: var(--theme-text-secondary);
+    font-size: 0.9em;
+    margin-bottom: 6px;
+    display: block;
+}
+
+.dealership-order-input input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    background: var(--theme-bg-secondary);
+    color: var(--theme-text-primary);
+    font-size: 1em;
+    transition: all 0.3s ease;
+}
+
+.dealership-order-input input:focus {
+    outline: none;
+    border-color: var(--theme-accent);
+    box-shadow: 0 0 0 3px rgba(253, 65, 13, 0.1);
+    background: var(--theme-bg-primary);
+}
+
+.dealership-order-input input::placeholder {
+    color: var(--theme-text-muted);
+}

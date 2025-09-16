@@ -9768,17 +9768,141 @@ Example:
     proceedToQRGeneration() {
         this.updateModalProgress('order');
         this.showStep('orderNumber');
+
+        // Set up multi-dealership order input if needed
+        this.setupMultiDealershipOrderInput();
     }
     
-    generateFinalOutput() {
-        const orderNumberInput = document.getElementById('modalOrderNumber');
-        const orderNumber = orderNumberInput?.value.trim();
-        
-        if (!orderNumber) {
-            alert('Please enter an order number');
+    setupMultiDealershipOrderInput() {
+        console.log('🏢 SETUP MULTI-DEALERSHIP ORDER INPUT: Starting...');
+
+        const singleOrderInput = document.getElementById('singleOrderInput');
+        const multiOrderInput = document.getElementById('multiOrderInput');
+        const dealershipOrderList = document.getElementById('dealershipOrderList');
+
+        // Get successful dealerships with vehicles (same logic as dealership selector)
+        const dealerships = new Map();
+
+        this.processedOrders.forEach(order => {
+            const vehicleCount = order.result?.vehicles_processed || order.result?.vehicles_generated || 0;
+            if (order.result && order.result.success && vehicleCount > 0) {
+                dealerships.set(order.dealership, {
+                    name: order.dealership,
+                    count: vehicleCount,
+                    type: 'cao',
+                    data: order
+                });
+            }
+        });
+
+        // Add maintenance results if any
+        if (this.maintenanceResults && this.maintenanceResults.length > 0) {
+            this.maintenanceResults.forEach(result => {
+                const vehicleCount = (result.caoResults?.vehicles?.length || 0) + (result.manualVins?.length || 0);
+                if (vehicleCount > 0) {
+                    dealerships.set(result.order.name, {
+                        name: result.order.name,
+                        count: vehicleCount,
+                        type: 'maintenance',
+                        data: result
+                    });
+                }
+            });
+        }
+
+        console.log('🏢 ORDER INPUT: Found', dealerships.size, 'dealerships with vehicles');
+
+        // Show multi-input for 2+ dealerships, single input for 1 dealership
+        if (dealerships.size <= 1) {
+            singleOrderInput.style.display = 'block';
+            multiOrderInput.style.display = 'none';
             return;
         }
-        
+
+        // Set up multi-dealership interface
+        singleOrderInput.style.display = 'none';
+        multiOrderInput.style.display = 'block';
+
+        // Clear existing content
+        dealershipOrderList.innerHTML = '';
+
+        // Create input for each dealership
+        dealerships.forEach((dealershipData, dealershipName) => {
+            const dealershipItem = document.createElement('div');
+            dealershipItem.className = 'dealership-order-item';
+            dealershipItem.innerHTML = `
+                <div class="dealership-order-header">
+                    <div class="dealership-order-name">
+                        <i class="fas fa-building"></i>
+                        ${dealershipName}
+                    </div>
+                    <div class="dealership-vehicle-count">${dealershipData.count} vehicles</div>
+                </div>
+                <div class="dealership-order-input">
+                    <label for="orderNumber_${dealershipName.replace(/\s+/g, '_')}">Order Number for ${dealershipName}:</label>
+                    <input type="text"
+                           id="orderNumber_${dealershipName.replace(/\s+/g, '_')}"
+                           class="form-control dealership-order-field"
+                           data-dealership="${dealershipName}"
+                           placeholder="e.g., SF24001-${dealershipName.split(' ').map(w => w[0]).join('')}"
+                           maxlength="20" required>
+                </div>
+            `;
+            dealershipOrderList.appendChild(dealershipItem);
+        });
+
+        console.log('🏢 ORDER INPUT: Created inputs for', dealerships.size, 'dealerships');
+    }
+
+    generateFinalOutput() {
+        const singleOrderInput = document.getElementById('singleOrderInput');
+        const multiOrderInput = document.getElementById('multiOrderInput');
+
+        // Check if we're in single or multi mode
+        const isMultiMode = multiOrderInput.style.display !== 'none';
+
+        if (isMultiMode) {
+            // Validate all dealership order numbers
+            const dealershipOrderFields = document.querySelectorAll('.dealership-order-field');
+            const orderNumbers = new Map();
+            let hasErrors = false;
+
+            dealershipOrderFields.forEach(field => {
+                const dealership = field.dataset.dealership;
+                const orderNumber = field.value.trim();
+
+                if (!orderNumber) {
+                    field.style.borderColor = '#ff4444';
+                    hasErrors = true;
+                } else {
+                    field.style.borderColor = '';
+                    orderNumbers.set(dealership, orderNumber);
+                }
+            });
+
+            if (hasErrors) {
+                alert('Please enter order numbers for all dealerships');
+                return;
+            }
+
+            // Store order numbers for each dealership
+            this.dealershipOrderNumbers = orderNumbers;
+            console.log('🏢 ORDER NUMBERS: Collected for', orderNumbers.size, 'dealerships:', Object.fromEntries(orderNumbers));
+
+        } else {
+            // Single dealership mode
+            const orderNumberInput = document.getElementById('modalOrderNumber');
+            const orderNumber = orderNumberInput?.value.trim();
+
+            if (!orderNumber) {
+                alert('Please enter an order number');
+                return;
+            }
+
+            // Store single order number
+            this.singleOrderNumber = orderNumber;
+        }
+
         // Complete the process
         this.completeProcessing();
     }

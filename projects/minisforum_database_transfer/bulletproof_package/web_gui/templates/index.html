@@ -1750,12 +1750,24 @@ SF24002
                             <p class="step-description">Provide the order number for file organization and tracking</p>
                         </div>
 
-                        <div class="order-number-input">
+                        <!-- Single Dealership Order Number Input (default) -->
+                        <div class="single-order-input" id="singleOrderInput">
                             <div class="form-group">
                                 <label for="modalOrderNumber">Order Number:</label>
-                                <input type="text" id="modalOrderNumber" class="form-control" 
-                                       placeholder="e.g., SF24001, Order123, etc." 
+                                <input type="text" id="modalOrderNumber" class="form-control"
+                                       placeholder="e.g., SF24001, Order123, etc."
                                        maxlength="20" required>
+                            </div>
+                        </div>
+
+                        <!-- Multi-Dealership Order Number Input -->
+                        <div class="multi-order-input" id="multiOrderInput" style="display: none;">
+                            <div class="multi-order-header">
+                                <h3><i class="fas fa-building"></i> Order Numbers by Dealership</h3>
+                                <p class="multi-order-description">Enter a unique order number for each dealership being processed</p>
+                            </div>
+                            <div class="dealership-order-list" id="dealershipOrderList">
+                                <!-- Dealership order inputs will be populated here -->
                             </div>
                         </div>
 
