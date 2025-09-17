@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MinisForum Database Control - Silver Fox Marketing</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=positioning-and-background-fix-{{ range(100000, 999999) | random }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=compact-panels-{{ range(100000, 999999) | random }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/vin_log_update.css') }}?v=2025081903">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -15,9 +15,9 @@
         .modern-dealer-panel {
             background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
             border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 12px;
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 8px;
             cursor: pointer;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -43,12 +43,12 @@
         .modern-dealer-panel .panel-content {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 8px;
         }
         
         .modern-dealer-panel .dealer-title {
             margin: 0;
-            font-size: 1.1rem;
+            font-size: 1.0rem;
             font-weight: 600;
             color: #1e293b;
             letter-spacing: -0.02em;
@@ -66,9 +66,9 @@
         
         .modern-dealer-panel .detail-row {
             display: flex;
-            gap: 8px;
+            gap: 6px;
             align-items: center;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
         }
         
         .modern-dealer-panel .detail-label {
@@ -91,9 +91,9 @@
         
         /* Order Type Badge */
         .modern-dealer-panel .order-type-badge {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.75rem;
+            padding: 3px 10px;
+            border-radius: 16px;
+            font-size: 0.7rem;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.05em;
@@ -125,6 +125,184 @@
         .modern-dealer-panel.dragging {
             opacity: 0.5;
             transform: rotate(2deg);
+        }
+
+        /* Raw Data Toggle Styles */
+        .raw-data-toggle-container {
+            margin: 16px 0;
+            padding: 16px;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+
+        [data-theme="dark"] .raw-data-toggle-container {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            border-color: #475569;
+        }
+
+        .raw-data-toggle {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .raw-data-toggle input[type="checkbox"] {
+            display: none;
+        }
+
+        .toggle-slider {
+            position: relative;
+            width: 52px;
+            height: 28px;
+            background: #cbd5e1;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .toggle-slider::before {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 24px;
+            height: 24px;
+            background: white;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+        }
+
+        .raw-data-toggle input:checked + .toggle-slider {
+            background: #fd410d;
+        }
+
+        .raw-data-toggle input:checked + .toggle-slider::before {
+            transform: translateX(24px);
+        }
+
+        .toggle-label {
+            font-weight: 600;
+            color: #334155;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.95rem;
+        }
+
+        [data-theme="dark"] .toggle-label {
+            color: #e2e8f0;
+        }
+
+        .toggle-label i {
+            color: #64748b;
+            font-size: 1rem;
+        }
+
+        [data-theme="dark"] .toggle-label i {
+            color: #94a3b8;
+        }
+
+        .raw-data-toggle input:checked ~ .toggle-label i {
+            color: #fd410d;
+        }
+
+        .toggle-description {
+            margin-top: 8px;
+            margin-left: 64px;
+        }
+
+        .toggle-description p {
+            margin: 0;
+            font-size: 0.85rem;
+            color: #64748b;
+            font-style: italic;
+        }
+
+        [data-theme="dark"] .toggle-description p {
+            color: #94a3b8;
+        }
+
+        /* Raw Data Table Styles */
+        .raw-data-row {
+            background: linear-gradient(135deg, #fef7f0 0%, #fef3e7 100%);
+            border-left: 3px solid #fd410d;
+        }
+
+        [data-theme="dark"] .raw-data-row {
+            background: linear-gradient(135deg, #2d1b13 0%, #1f1611 100%);
+        }
+
+        .raw-data-status {
+            position: relative;
+        }
+
+        .raw-status-badge {
+            background: linear-gradient(135deg, #fd410d, #ff6b3d);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .raw-data-tooltip {
+            position: absolute;
+            top: 50%;
+            right: 8px;
+            transform: translateY(-50%);
+            cursor: pointer;
+        }
+
+        .raw-data-tooltip i {
+            color: #64748b;
+            font-size: 0.9rem;
+            transition: color 0.3s ease;
+        }
+
+        .raw-data-tooltip:hover i {
+            color: #fd410d;
+        }
+
+        .tooltip-content {
+            position: absolute;
+            top: -8px;
+            right: 25px;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            line-height: 1.4;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            max-width: 300px;
+            white-space: normal;
+            word-wrap: break-word;
+        }
+
+        .raw-data-tooltip:hover .tooltip-content {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .tooltip-content::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 100%;
+            transform: translateY(-50%);
+            border: 6px solid transparent;
+            border-left-color: rgba(0, 0, 0, 0.9);
         }
     </style>
     
@@ -1685,6 +1863,8 @@ SF24002
                             <div class="vehicle-preview-section">
                                 <div class="section-header">
                                     <h3><i class="fas fa-car"></i> Vehicle Data Preview</h3>
+
+
                                     <div class="preview-stats">
                                         <span class="vehicle-count-badge">
                                             <i class="fas fa-list-ol"></i>
@@ -1712,6 +1892,7 @@ SF24002
                                                 <th>Stock</th>
                                                 <th>VIN</th>
                                                 <th class="raw-status-header">Raw Status</th>
+                                                <th class="data-toggle-header">Data Type</th>
                                                 <th></th>
                                             </tr>
                                         </thead>
@@ -1930,7 +2111,7 @@ SF24002
     </div>
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?cache-bust=dealership-selector-{{ range(100000, 999999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?cache-bust=auffenberg-config-updated-{{ range(100000, 999999) | random }}"></script>
     
     <!-- MODERN TESTING MODE TOGGLE FUNCTION -->
     <script>

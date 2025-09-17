@@ -416,6 +416,88 @@ Silver Fox Marketing Brand Colors and Typography
     font-weight: 600;
 }
 
+/* Data Toggle Switch for Modal Tables */
+.data-toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 22px;
+    cursor: pointer;
+}
+
+.data-toggle-switch input[type="checkbox"] {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.data-toggle-switch .toggle-slider {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--theme-bg-secondary);
+    border: 1.5px solid var(--theme-border);
+    border-radius: 12px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4px;
+}
+
+.data-toggle-switch .toggle-slider .toggle-label-raw,
+.data-toggle-switch .toggle-slider .toggle-label-norm {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--theme-text-secondary);
+    transition: all 0.3s ease;
+    line-height: 1;
+    z-index: 1;
+    opacity: 0.6;
+}
+
+.data-toggle-switch .toggle-slider::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    background: var(--theme-text-secondary);
+    border-radius: 50%;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    z-index: 0;
+}
+
+.data-toggle-switch input[type="checkbox"]:checked + .toggle-slider {
+    background: var(--primary-red);
+    border-color: var(--primary-red);
+}
+
+.data-toggle-switch input[type="checkbox"]:checked + .toggle-slider::before {
+    transform: translateX(22px);
+    background: var(--theme-bg-primary);
+}
+
+.data-toggle-switch input[type="checkbox"]:checked + .toggle-slider .toggle-label-norm {
+    color: var(--theme-bg-primary);
+    opacity: 1;
+}
+
+.data-toggle-switch input[type="checkbox"]:not(:checked) + .toggle-slider .toggle-label-raw {
+    color: var(--theme-text-primary);
+    opacity: 1;
+}
+
+.toggle-cell {
+    width: 60px;
+    text-align: center;
+    padding: 8px 4px !important;
+}
+
 body {
     font-family: var(--font-body);
     font-size: 14px;
@@ -6808,8 +6890,8 @@ body[data-manual-mode="true"] #startVinLogImport {
 
 .settings-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-    gap: 32px;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
     max-width: 1800px;
     margin: 0 auto;
     position: relative;
@@ -8075,9 +8157,9 @@ body[data-manual-mode="true"] #startVinLogImport {
 /* Enhanced Dealership Settings Grid */
 .dealership-settings-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    gap: 24px;
-    padding: 24px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    padding: 20px;
 }
 
 .dealership-settings-card {
@@ -10201,6 +10283,9 @@ body[data-manual-mode="true"] #startVinLogImport {
     font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
 .vehicle-data-table tbody tr {
@@ -11923,4 +12008,23 @@ body:has(#dealership-settings-panel.active) .sidebar-navigation,
 
 .dealership-order-input input::placeholder {
     color: var(--theme-text-muted);
+}
+
+/* Raw Data Scrollbar Styles */
+.raw-data-scroll::-webkit-scrollbar {
+    height: 8px;
+}
+
+.raw-data-scroll::-webkit-scrollbar-track {
+    background: rgba(255, 152, 0, 0.1);
+    border-radius: 4px;
+}
+
+.raw-data-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 152, 0, 0.6);
+    border-radius: 4px;
+}
+
+.raw-data-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 152, 0, 0.8);
 }

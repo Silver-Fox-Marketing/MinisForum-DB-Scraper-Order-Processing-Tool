@@ -5069,6 +5069,77 @@ def test_endpoint():
     """Test endpoint to verify route registration"""
     return jsonify({'message': 'Test endpoint works!', 'method': request.method})
 
+@app.route('/api/get_raw_scraper_data', methods=['POST'])
+def get_raw_scraper_data():
+    """Get raw scraper data for specific VINs from a dealership"""
+    try:
+        data = request.get_json()
+        vins = data.get('vins', [])
+        dealership = data.get('dealership', '')
+
+        if not vins or not dealership:
+            return jsonify({'error': 'VINs and dealership are required'}), 400
+
+        logger.info(f"[RAW DATA API] Fetching raw data for {len(vins)} VINs from {dealership}")
+
+        conn = get_database_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+
+        cursor = conn.cursor()
+
+        # Query raw_vehicle_data for these VINs from active imports for this dealership
+        placeholders = ','.join(['%s'] * len(vins))
+        query = """
+            SELECT rvd.vin, rvd.year, rvd.make, rvd.model, rvd.trim, rvd.stock_number,
+                   rvd.vehicle_condition, rvd.price, rvd.location, rvd.import_date,
+                   rvd.raw_year_make, rvd.raw_model, rvd.raw_trim, rvd.raw_stock,
+                   rvd.raw_price, rvd.raw_condition
+            FROM raw_vehicle_data rvd
+            JOIN scraper_imports si ON rvd.import_id = si.import_id
+            WHERE rvd.vin IN ({})
+            AND rvd.location = %s
+            AND si.status = 'active'
+            ORDER BY rvd.import_date DESC
+        """.format(placeholders)
+
+        # Add dealership to the end of VINs list for the query
+        cursor.execute(query, vins + [dealership])
+        rows = cursor.fetchall()
+
+        # Convert to dictionary with VIN as key
+        raw_data = {}
+        for row in rows:
+            vin = row[0]
+            raw_data[vin] = {
+                'vin': row[0],
+                'year': row[1],
+                'make': row[2],
+                'model': row[3],
+                'trim': row[4],
+                'stock_number': row[5],
+                'vehicle_condition': row[6],
+                'price': row[7],
+                'location': row[8],
+                'import_date': row[9].isoformat() if row[9] else None,
+                'raw_year_make': row[10],
+                'raw_model': row[11],
+                'raw_trim': row[12],
+                'raw_stock': row[13],
+                'raw_price': row[14],
+                'raw_condition': row[15]
+            }
+
+        cursor.close()
+        conn.close()
+
+        logger.info(f"[RAW DATA API] Retrieved raw data for {len(raw_data)} VINs from {dealership}")
+        return jsonify(raw_data)
+
+    except Exception as e:
+        logger.error(f"[RAW DATA API] Error fetching raw data: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     # Create necessary directories
     os.makedirs('exports', exist_ok=True)

@@ -33,12 +33,18 @@ class CorrectOrderProcessor:
         # Map dealership config names to actual data location names
         # Map dealership config names to actual data location names (for CAO processing)
         self.dealership_name_mapping = {
-            'Dave Sinclair Lincoln South': 'Dave Sinclair Lincoln',
+            'BMW West St. Louis': 'BMW of West St Louis',
             'BMW of West St. Louis': 'BMW of West St Louis',  # Config has period, CSV doesn't
+            'CDJR of Columbia': 'Joe Machens Chrysler Dodge Jeep Ram',  # CDJR of Columbia is the new name
             'Columbia Honda': 'Columbia Honda',
-            'South County DCJR': 'South County Dodge Chrysler Jeep RAM',  # Map config name TO CSV name
+            'Dave Sinclair Lincoln South': 'Dave Sinclair Lincoln',
             'Glendale CDJR': 'Glendale Chrysler Jeep Dodge Ram',  # Map config name to CSV name
-            'HW Kia': 'HW Kia of West County'  # Map config name to CSV name
+            'HW Kia': 'HW Kia of West County',  # Map config name to CSV name
+            'KIA of Columbia': 'Kia of Columbia',
+            'Mini of St. Louis': 'MINI OF ST. LOUIS',
+            'Rusty Drewing Chevy BGMC': 'Rusty Drewing Chevrolet Buick GMC',
+            'South County DCJR': 'South County Dodge Chrysler Jeep RAM',  # Map config name TO CSV name
+            'Weber Chevrolet': 'Weber Creve Coeur',
         }
         
         # Reverse mapping for VIN history lookups
@@ -546,16 +552,51 @@ class CorrectOrderProcessor:
             # Use normalized_vehicle_data for consistent data structure
             # IMPORTANT: Include VIN log comparison even in simplified query
             vin_log_table = self._get_dealership_vin_log_table(dealership_name)
+
+            # Apply dealership-specific filtering to simplified query
             simplified_query = f"""
                 SELECT nvd.*, rvd.status as raw_status FROM normalized_vehicle_data nvd
                 JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
                 JOIN scraper_imports si ON rvd.import_id = si.import_id
-                WHERE nvd.location = %s 
+                WHERE nvd.location = %s
                 AND nvd.on_lot_status IN ('onlot', 'on lot')
                 AND si.status = 'active'
                 AND nvd.vin NOT IN (SELECT vin FROM {vin_log_table} WHERE vin IS NOT NULL)
-                ORDER BY nvd.updated_at DESC
             """
+
+            # Add critical filters based on dealership configuration
+            if filtering_rules.get('exclude_missing_price', False):
+                simplified_query += " AND nvd.price > 0"
+
+            if filtering_rules.get('exclude_missing_stock_number', True):
+                simplified_query += " AND nvd.stock IS NOT NULL AND nvd.stock != '' AND nvd.stock != '*'"
+
+            # Add vehicle type filtering for simplified query
+            vehicle_types = filtering_rules.get('allowed_vehicle_types', filtering_rules.get('vehicle_types', ['new', 'used']))
+            if vehicle_types and 'all' not in vehicle_types:
+                allowed_conditions = []
+                for vtype in vehicle_types:
+                    if vtype == 'new':
+                        allowed_conditions.append('new')
+                    elif vtype == 'used':
+                        allowed_conditions.extend(['po', 'cpo'])
+                    elif vtype in ['certified', 'cpo']:
+                        allowed_conditions.append('cpo')
+                    elif vtype in ['po', 'pre-owned']:
+                        allowed_conditions.append('po')
+
+                if allowed_conditions:
+                    allowed_conditions = list(set(allowed_conditions))
+                    placeholders = ', '.join([f"'{cond}'" for cond in allowed_conditions])
+                    simplified_query += f" AND nvd.vehicle_condition IN ({placeholders})"
+
+            # Add status exclusions for simplified query
+            exclude_statuses = filtering_rules.get('exclude_status')
+            if exclude_statuses:
+                for status in exclude_statuses:
+                    simplified_query += f" AND nvd.status NOT ILIKE '%{status}%'"
+
+            simplified_query += " ORDER BY nvd.updated_at DESC"
             try:
                 result = db_manager.execute_query(simplified_query, (actual_location_name,))
                 logger.info(f"Simplified query returned {len(result)} vehicles")
@@ -647,43 +688,120 @@ class CorrectOrderProcessor:
                 if max_price and vehicle_price > max_price:
                     continue
                 
-                # Seasoning filter (minimum days on lot) - ENHANCED DEBUG
-                seasoning_days = filtering_rules.get('seasoning_days', 0)
-                if seasoning_days > 0:
+                # Days on lot filter (seasoning) - Updated to use standardized template structure
+                days_on_lot_config = filtering_rules.get('days_on_lot', {})
+                if days_on_lot_config:
+                    min_days = days_on_lot_config.get('min', 0)
+                    max_days = days_on_lot_config.get('max', 999)
+
                     date_in_stock = vehicle.get('date_in_stock')
-                    logger.info(f"[SEASONING DEBUG] VIN {vehicle.get('vin')} - date_in_stock: {date_in_stock} (type: {type(date_in_stock)})")
+                    created_at = vehicle.get('created_at')
+
+                    logger.info(f"[DAYS_ON_LOT DEBUG] VIN {vehicle.get('vin')} - date_in_stock: {date_in_stock} (type: {type(date_in_stock)}), created_at: {created_at}")
+
+                    # Determine which date to use for seasoning calculation
+                    reference_date = None
+                    date_source = None
+
                     if date_in_stock:
-                        # Convert date_in_stock to datetime if it's a string
+                        # Check if date_in_stock looks like a scrape date (today or yesterday)
                         if isinstance(date_in_stock, str):
                             try:
-                                from datetime import datetime
                                 stock_date = datetime.strptime(date_in_stock, '%Y-%m-%d')
-                                days_on_lot = (datetime.now() - stock_date).days
-                                
-                                # Skip vehicles that haven't been on the lot long enough
-                                if days_on_lot < seasoning_days:
-                                    logger.info(f"[SEASONING] Skipping VIN {vehicle.get('vin')} - only {days_on_lot} days on lot (requires {seasoning_days})")
-                                    continue
+                                days_since_stock_date = (datetime.now() - stock_date).days
+
+                                # If date_in_stock is very recent (0-2 days), it's likely a scrape date, use created_at instead
+                                if days_since_stock_date <= 2 and created_at:
+                                    reference_date = created_at
+                                    date_source = "created_at (date_in_stock too recent)"
+                                else:
+                                    reference_date = stock_date
+                                    date_source = "date_in_stock"
                             except ValueError:
-                                # If date parsing fails, log and continue (don't filter out)
-                                logger.warning(f"[SEASONING] Could not parse date_in_stock for VIN {vehicle.get('vin')}: {date_in_stock}")
-                        elif hasattr(date_in_stock, 'days'):  # datetime object
-                            days_on_lot = (datetime.now() - date_in_stock).days
-                            if days_on_lot < seasoning_days:
-                                logger.info(f"[SEASONING] Skipping VIN {vehicle.get('vin')} - only {days_on_lot} days on lot (requires {seasoning_days})")
-                                continue
+                                # If date parsing fails, fall back to created_at
+                                reference_date = created_at
+                                date_source = "created_at (date_in_stock parse failed)"
+                        elif hasattr(date_in_stock, 'days'):  # datetime.date object
+                            days_since_stock_date = (datetime.now().date() - date_in_stock).days
+
+                            # If date_in_stock is very recent (0-2 days), it's likely a scrape date, use created_at instead
+                            if days_since_stock_date <= 2 and created_at:
+                                reference_date = created_at
+                                date_source = "created_at (date_in_stock too recent)"
+                            else:
+                                reference_date = date_in_stock
+                                date_source = "date_in_stock"
+                    else:
+                        # No date_in_stock, use created_at
+                        reference_date = created_at
+                        date_source = "created_at (no date_in_stock)"
+
+                    if reference_date:
+                        # Calculate actual days on lot
+                        if isinstance(reference_date, str):
+                            try:
+                                ref_date = datetime.strptime(reference_date, '%Y-%m-%d %H:%M:%S.%f')
+                                actual_days_on_lot = (datetime.now() - ref_date).days
+                            except ValueError:
+                                try:
+                                    ref_date = datetime.strptime(reference_date, '%Y-%m-%d')
+                                    actual_days_on_lot = (datetime.now() - ref_date).days
+                                except ValueError:
+                                    logger.warning(f"[DAYS_ON_LOT] Could not parse reference date for VIN {vehicle.get('vin')}: {reference_date}")
+                                    continue
+                        elif hasattr(reference_date, 'days'):  # date object
+                            actual_days_on_lot = (datetime.now().date() - reference_date).days
+                        else:  # datetime object
+                            actual_days_on_lot = (datetime.now() - reference_date).days
+
+                        logger.info(f"[DAYS_ON_LOT] VIN {vehicle.get('vin')} - Using {date_source}, calculated {actual_days_on_lot} days on lot")
+
+                        # Apply min/max days filter
+                        if actual_days_on_lot < min_days:
+                            logger.info(f"[DAYS_ON_LOT] Skipping VIN {vehicle.get('vin')} - only {actual_days_on_lot} days on lot (requires min {min_days})")
+                            continue
+                        if actual_days_on_lot > max_days:
+                            logger.info(f"[DAYS_ON_LOT] Skipping VIN {vehicle.get('vin')} - {actual_days_on_lot} days on lot (exceeds max {max_days})")
+                            continue
+
+                        logger.info(f"[DAYS_ON_LOT] VIN {vehicle.get('vin')} passed filter - {actual_days_on_lot} days (min: {min_days}, max: {max_days})")
+                    else:
+                        logger.warning(f"[DAYS_ON_LOT] No usable date found for VIN {vehicle.get('vin')}, allowing through filter")
+
+                # LEGACY SUPPORT: Fall back to old seasoning_days format for backwards compatibility
+                elif 'seasoning_days' in filtering_rules:
+                    seasoning_days = filtering_rules.get('seasoning_days', 0)
+                    if seasoning_days > 0:
+                        date_in_stock = vehicle.get('date_in_stock')
+                        logger.info(f"[LEGACY SEASONING] VIN {vehicle.get('vin')} - using legacy seasoning_days: {seasoning_days}")
+                        if date_in_stock:
+                            if isinstance(date_in_stock, str):
+                                try:
+                                    stock_date = datetime.strptime(date_in_stock, '%Y-%m-%d')
+                                    actual_days_on_lot = (datetime.now() - stock_date).days
+
+                                    if actual_days_on_lot < seasoning_days:
+                                        logger.info(f"[LEGACY SEASONING] Skipping VIN {vehicle.get('vin')} - only {actual_days_on_lot} days on lot (requires {seasoning_days})")
+                                        continue
+                                except ValueError:
+                                    logger.warning(f"[LEGACY SEASONING] Could not parse date_in_stock for VIN {vehicle.get('vin')}: {date_in_stock}")
+                            elif hasattr(date_in_stock, 'days'):
+                                actual_days_on_lot = (datetime.now() - date_in_stock).days
+                                if actual_days_on_lot < seasoning_days:
+                                    logger.info(f"[LEGACY SEASONING] Skipping VIN {vehicle.get('vin')} - only {actual_days_on_lot} days on lot (requires {seasoning_days})")
+                                    continue
                 
                 # Brand filter (e.g., Pappas Toyota only wants Toyota vehicles)
                 required_brands = filtering_rules.get('required_brands', [])
                 if required_brands:
                     vehicle_make = vehicle.get('make', '').lower()
                     # Check if vehicle make matches any required brands
-                    brand_matches = any(brand.lower() in vehicle_make or vehicle_make in brand.lower() 
+                    brand_matches = any(brand.lower() in vehicle_make or vehicle_make in brand.lower()
                                       for brand in required_brands)
                     if not brand_matches:
                         logger.info(f"[BRAND FILTER] Skipping VIN {vehicle.get('vin')} - make '{vehicle.get('make')}' not in required brands {required_brands}")
                         continue
-                
+
                 # If all filters pass, include the vehicle
                 filtered_vehicles.append(vehicle)
         
@@ -1476,6 +1594,6 @@ class CorrectOrderProcessor:
 if __name__ == "__main__":
     processor = CorrectOrderProcessor()
     
-    # Test CAO order with Dave Sinclair Lincoln
-    result = processor.process_cao_order("Dave Sinclair Lincoln", "shortcut_pack")
+    # Test CAO order with Auffenberg Hyundai
+    result = processor.process_cao_order("Auffenberg Hyundai", "shortcut_pack")
     print(json.dumps(result, indent=2))

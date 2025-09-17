@@ -9116,7 +9116,60 @@ Example:
             badge.style.display = 'none';
         }
     }
-    
+
+    setupRawDataToggle() {
+        console.log('🔄 SETUP RAW DATA TOGGLE: Starting...');
+        const toggle = document.getElementById('modalRawDataToggle');
+
+        if (!toggle) {
+            console.warn('Raw data toggle not found');
+            return;
+        }
+
+        // Store raw data toggle state
+        this.showRawData = false;
+
+        // Add event listener for toggle changes
+        toggle.addEventListener('change', (e) => {
+            console.log('🔄 RAW DATA TOGGLE: Changed to', e.target.checked);
+            this.showRawData = e.target.checked;
+
+            // Re-populate table with current mode
+            this.populateModalVehicleDataTable();
+        });
+
+        console.log('✅ RAW DATA TOGGLE: Setup complete');
+    }
+
+    async fetchRawDataForVins(vins, dealership) {
+        console.log('🔍 FETCH RAW DATA: Fetching raw data for VINs:', vins, 'from dealership:', dealership);
+
+        try {
+            const response = await fetch('/api/get_raw_scraper_data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    vins: vins,
+                    dealership: dealership
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const rawData = await response.json();
+            console.log('✅ FETCH RAW DATA: Retrieved raw data:', rawData);
+            return rawData;
+
+        } catch (error) {
+            console.error('❌ FETCH RAW DATA: Error fetching raw data:', error);
+            return {};
+        }
+    }
+
     populateModalVehicleDataTable() {
         const tableBody = document.getElementById('modalVehicleDataBody');
         const vehicleCountEl = document.getElementById('modalVehicleCount');
@@ -9215,7 +9268,16 @@ Example:
                             console.log('DEBUG: Found elements:', {tableBody, noDataPlaceholder, vehicleCountEl});
                             
                             if (tableBody) {
-                                this.renderVehicleTable(vehicles, tableBody);
+                                // Check if raw data mode is enabled
+                                if (this.showRawData) {
+                                    // Extract VINs and fetch raw data
+                                    const vins = vehicles.map(v => v.VIN || v.vin).filter(vin => vin);
+                                    this.fetchRawDataForVins(vins, order.dealership).then(rawData => {
+                                        this.renderVehicleTableWithRawData(vehicles, tableBody, rawData);
+                                    });
+                                } else {
+                                    this.renderVehicleTable(vehicles, tableBody);
+                                }
                                 console.log(`Populated table with ${vehicles.length} REAL vehicles for ${order.dealership}`);
                             } else {
                                 console.error('Could not find modal table body element');
@@ -9248,7 +9310,35 @@ Example:
             window.reviewVehicleData = allVehicles;
             
             // Generate and render table rows
-            this.renderVehicleTable(allVehicles, tableBody);
+            if (this.showRawData && allVehicles.length > 0) {
+                // Extract VINs and dealerships for raw data fetching
+                const vinsByDealership = {};
+                allVehicles.forEach(vehicle => {
+                    const dealership = vehicle.dealership;
+                    const vin = vehicle.VIN || vehicle.vin;
+                    if (dealership && vin) {
+                        if (!vinsByDealership[dealership]) {
+                            vinsByDealership[dealership] = [];
+                        }
+                        vinsByDealership[dealership].push(vin);
+                    }
+                });
+
+                // Fetch raw data for all dealerships
+                const rawDataPromises = Object.entries(vinsByDealership).map(([dealership, vins]) =>
+                    this.fetchRawDataForVins(vins, dealership).then(rawData => ({ dealership, rawData }))
+                );
+
+                Promise.all(rawDataPromises).then(results => {
+                    const combinedRawData = {};
+                    results.forEach(({ dealership, rawData }) => {
+                        Object.assign(combinedRawData, rawData);
+                    });
+                    this.renderVehicleTableWithRawData(allVehicles, tableBody, combinedRawData);
+                });
+            } else {
+                this.renderVehicleTable(allVehicles, tableBody);
+            }
             return;
         }
         
@@ -9670,6 +9760,15 @@ Example:
                     <td class="raw-status-cell" data-field="raw_status" data-index="${index}">
                         <span class="display-value">${vehicle.raw_status || vehicle.RAW_STATUS || 'N/A'}</span>
                     </td>
+                    <td class="toggle-cell" onclick="event.stopPropagation();">
+                        <label class="data-toggle-switch">
+                            <input type="checkbox" class="toggle-input" data-vin="${vehicle.VIN || vehicle.vin || ''}" onchange="window.modalWizard.toggleVehicleDataType('${vehicle.VIN || vehicle.vin || ''}', this)">
+                            <span class="toggle-slider">
+                                <span class="toggle-label-raw">R</span>
+                                <span class="toggle-label-norm">N</span>
+                            </span>
+                        </label>
+                    </td>
                     <td>
                         <button class="btn-save btn-icon-only" onclick="window.modalWizard.saveRowEdit(${index})" id="save-btn-${index}" title="Save changes" style="display: none;">
                             <i class="fas fa-save"></i>
@@ -9749,19 +9848,50 @@ Example:
     updateModalDownloadButton() {
         const downloadBtn = document.getElementById('modalDownloadCsv');
         if (!downloadBtn) return;
-        
+
         // Show download button if there are processed orders
         if (this.processedOrders.length > 0) {
             downloadBtn.style.display = 'inline-flex';
             downloadBtn.onclick = () => {
-                // Download the first CSV file (could be enhanced to show multiple)
-                const firstOrder = this.processedOrders[0];
-                if (firstOrder.result && firstOrder.result.download_csv) {
-                    window.open(firstOrder.result.download_csv, '_blank');
-                }
+                this.downloadCurrentDealershipCsv();
             };
         } else {
             downloadBtn.style.display = 'none';
+        }
+    }
+
+    downloadCurrentDealershipCsv() {
+        // Check if we have a dealership selector (multi-dealership mode)
+        const dealershipSelector = document.getElementById('modalDealershipSelector');
+        const isMultiMode = dealershipSelector && dealershipSelector.style.display !== 'none';
+
+        if (isMultiMode && this.selectedReviewDealership) {
+            // Multi-dealership mode: download CSV for selected dealership
+            console.log('🏢 DOWNLOAD: Multi-dealership mode, downloading for:', this.selectedReviewDealership);
+
+            // Find the order result for the selected dealership
+            const selectedOrder = this.processedOrders.find(order =>
+                order.dealership === this.selectedReviewDealership
+            );
+
+            if (selectedOrder && selectedOrder.result && selectedOrder.result.download_csv) {
+                console.log('🏢 DOWNLOAD: Found CSV for', this.selectedReviewDealership, ':', selectedOrder.result.download_csv);
+                window.open(selectedOrder.result.download_csv, '_blank');
+            } else {
+                console.error('🏢 DOWNLOAD: No CSV found for selected dealership:', this.selectedReviewDealership);
+                alert(`No CSV file available for ${this.selectedReviewDealership}`);
+            }
+        } else {
+            // Single dealership mode: download first available CSV
+            console.log('🏢 DOWNLOAD: Single dealership mode, downloading first available CSV');
+            const firstOrder = this.processedOrders[0];
+            if (firstOrder.result && firstOrder.result.download_csv) {
+                console.log('🏢 DOWNLOAD: Opening CSV:', firstOrder.result.download_csv);
+                window.open(firstOrder.result.download_csv, '_blank');
+            } else {
+                console.error('🏢 DOWNLOAD: No CSV file available');
+                alert('No CSV file available for download');
+            }
         }
     }
     
@@ -9772,7 +9902,83 @@ Example:
         // Set up multi-dealership order input if needed
         this.setupMultiDealershipOrderInput();
     }
-    
+
+    renderVehicleTableWithRawData(vehicles, tableBody, rawData) {
+        console.log('🗂️ RENDER RAW DATA TABLE: Starting with', vehicles.length, 'vehicles and raw data:', Object.keys(rawData).length, 'entries');
+
+        if (!vehicles || vehicles.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="8">No vehicles to display</td></tr>';
+            return;
+        }
+
+        // Store vehicles for editing
+        this.reviewVehicleData = vehicles;
+
+        // Generate table rows with raw data - show all available fields
+        const rows = vehicles.map((vehicle, index) => {
+            const vin = vehicle.VIN || vehicle.vin || '';
+            const rawVehicle = rawData[vin] || {};
+
+            // Display raw data fields or normalized data as fallback
+            const yearMake = rawVehicle.year_make || rawVehicle.YEARMAKE || vehicle.YEARMAKE || vehicle.year || '';
+            const model = rawVehicle.model || rawVehicle.MODEL || vehicle.MODEL || vehicle.model || '';
+            const trim = rawVehicle.trim || rawVehicle.TRIM || vehicle.TRIM || vehicle.trim || '';
+            const stock = rawVehicle.stock_number || rawVehicle.STOCK || vehicle.STOCK || vehicle.stock || vehicle.stock_number || '';
+            const rawStatus = rawVehicle.vehicle_condition || rawVehicle.raw_status || rawVehicle.RAW_STATUS || vehicle.raw_status || vehicle.RAW_STATUS || 'N/A';
+
+            return `
+                <tr id="vehicle-row-${index}" data-editing="false" class="raw-data-row">
+                    <td>
+                        <button class="btn-edit btn-icon-only" onclick="window.modalWizard.toggleRowEdit(${index})" id="edit-btn-${index}" title="Edit row">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </td>
+                    <td class="editable-cell" data-field="year-make" data-index="${index}">
+                        <span class="display-value">${yearMake}</span>
+                        <input type="text" class="edit-input" value="${yearMake}" style="display: none;">
+                    </td>
+                    <td class="editable-cell" data-field="model" data-index="${index}">
+                        <span class="display-value">${model}</span>
+                        <input type="text" class="edit-input" value="${model}" style="display: none;">
+                    </td>
+                    <td class="editable-cell" data-field="trim" data-index="${index}">
+                        <span class="display-value">${trim}</span>
+                        <input type="text" class="edit-input" value="${trim}" style="display: none;">
+                    </td>
+                    <td class="editable-cell" data-field="stock" data-index="${index}">
+                        <span class="display-value stock-badge">${stock}</span>
+                        <input type="text" class="edit-input" value="${stock}" style="display: none;">
+                    </td>
+                    <td class="editable-cell" data-field="vin" data-index="${index}">
+                        <span class="display-value vin-display" title="${vin}">${vin}</span>
+                        <input type="text" class="edit-input" value="${vin}" style="display: none;" maxlength="17">
+                    </td>
+                    <td class="raw-status-cell raw-data-status" data-field="raw_status" data-index="${index}">
+                        <span class="display-value raw-status-badge">${rawStatus}</span>
+                        <div class="raw-data-tooltip">
+                            <i class="fas fa-info-circle"></i>
+                            <div class="tooltip-content">
+                                <strong>Raw Scraper Data:</strong><br>
+                                ${Object.entries(rawVehicle).map(([key, value]) => `${key}: ${value || 'N/A'}`).join('<br>')}
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <button class="btn-save btn-icon-only" onclick="window.modalWizard.saveRowEdit(${index})" id="save-btn-${index}" title="Save changes" style="display: none;">
+                            <i class="fas fa-save"></i>
+                        </button>
+                        <button class="btn-delete-row btn-icon-only" onclick="window.modalWizard.deleteVehicleRow(${index})" id="delete-btn-${index}" title="Delete row">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        tableBody.innerHTML = rows;
+        console.log(`✅ RENDER RAW DATA TABLE: Rendered ${vehicles.length} vehicle rows with raw data`);
+    }
+
     setupMultiDealershipOrderInput() {
         console.log('🏢 SETUP MULTI-DEALERSHIP ORDER INPUT: Starting...');
 
@@ -10503,7 +10709,242 @@ Example:
         // Clear manual entry after successful import
         this.clearManualEntry();
     }
-    
+
+    async toggleVehicleDataType(vin, toggleElement) {
+        if (!vin) return;
+
+        // Clean the VIN for API call (remove prefixes like "NEW - ", "USED - ", etc.)
+        // but keep the original for display purposes
+        let cleanVin = vin;
+        if (vin.includes(' - ')) {
+            cleanVin = vin.split(' - ').pop();
+        }
+
+        const isNormalized = !toggleElement.checked;
+        const rowElement = toggleElement.closest('tr');
+
+        if (!rowElement) return;
+
+        try {
+            // Show loading state
+            toggleElement.disabled = true;
+            const originalRow = rowElement.innerHTML;
+
+            // Fetch the appropriate data type for this VIN (use cleaned VIN for API)
+            // When checked (true) = show raw view, when unchecked (false) = show normalized view
+            const dataType = toggleElement.checked ? 'raw' : 'normalized';
+            console.log(`Fetching ${dataType} data for VIN: ${cleanVin} (toggle checked: ${toggleElement.checked})`);
+
+            const response = await fetch(`/api/data/vehicle-single/${encodeURIComponent(cleanVin)}?data_type=${dataType}`);
+            const data = await response.json();
+
+            console.log('API Response:', data);
+
+            if (data.success && data.vehicle) {
+                // Update the row with new data while preserving the toggle state
+                // Pass both original VIN (for display) and clean VIN (for data attributes)
+                this.updateModalVehicleRow(rowElement, data.vehicle, isNormalized, vin, cleanVin);
+            } else {
+                // If no normalized data exists, show message and revert toggle
+                if (isNormalized && data.error && data.error.includes('No normalized data')) {
+                    this.showModalToast('No normalized data available for this vehicle', 'warning');
+                    toggleElement.checked = false;
+                } else if (!isNormalized && data.error) {
+                    // For raw data, show error but still try to display something
+                    console.error('Raw data fetch error:', data.error);
+                    this.showModalToast(`No raw data found for this VIN`, 'info');
+                    toggleElement.checked = true; // Revert to normalized
+                } else {
+                    throw new Error(data.error || 'Failed to load vehicle data');
+                }
+            }
+
+        } catch (error) {
+            console.error('Error toggling vehicle data type:', error);
+            this.showModalToast(`Error loading ${isNormalized ? 'normalized' : 'raw'} data: ${error.message}`, 'error');
+            // Revert toggle state on error
+            toggleElement.checked = !isNormalized;
+        } finally {
+            toggleElement.disabled = false;
+        }
+    }
+
+    updateModalVehicleRow(rowElement, vehicleData, isNormalized, originalVin, cleanVin) {
+        // Use original VIN for display (keeps "NEW - " prefix for graphics)
+        // Use clean VIN for data attributes and API calls
+        if (!originalVin) {
+            originalVin = vehicleData.vin || vehicleData.VIN || '';
+        }
+        if (!cleanVin) {
+            cleanVin = originalVin;
+            if (originalVin.includes(' - ')) {
+                cleanVin = originalVin.split(' - ').pop();
+            }
+        }
+
+        // Format the new vehicle data for modal context
+        const dataSourceBadge = `<span class="data-type-badge data-type-${isNormalized ? 'normalized' : 'raw'}">${isNormalized ? 'NORMALIZED' : 'RAW'}</span>`;
+
+        const scrapedTime = vehicleData.import_timestamp ?
+            new Date(vehicleData.import_timestamp).toLocaleDateString() : 'Unknown';
+
+        // Get row index for button IDs
+        const allRows = Array.from(rowElement.parentNode.children);
+        const index = allRows.indexOf(rowElement);
+
+        // Update the row content while preserving structure
+        // Use original VIN for display (keeps "NEW - " prefix) but clean VIN for data attribute
+        const displayVin = originalVin;
+
+        // When in raw view, disable editing and show raw data for reference
+        const isRawView = !isNormalized;
+        const rawDataInfo = isRawView ? ` | Price: $${vehicleData.price || 'N/A'} | Mileage: ${vehicleData.mileage || 'N/A'}` : '';
+
+        // Store original row data before modifying for data preservation
+        if (!rowElement.dataset.originalRowData) {
+            rowElement.dataset.originalRowData = rowElement.innerHTML;
+        }
+
+        // For raw view, create a scrollable container that spans the data columns
+        if (isRawView) {
+            rowElement.innerHTML = `
+                <td>
+                    <button class="btn-edit btn-icon-only" onclick="window.modalWizard.toggleRowEdit(${index})" id="edit-btn-${index}" title="Editing disabled in raw view" disabled style="opacity: 0.3; cursor: not-allowed;">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                </td>
+                <td colspan="6" style="padding: 0; position: relative; background: rgba(255, 152, 0, 0.1);">
+                    <div class="raw-data-scroll" style="overflow-x: auto; overflow-y: hidden; width: 100%; max-width: 600px; padding: 8px; scrollbar-width: thin; -webkit-overflow-scrolling: touch; height: 45px; border: 1px solid rgba(255, 152, 0, 0.3);">
+                        <div style="display: flex; align-items: center; min-width: 1200px; gap: 20px; white-space: nowrap; font-size: 0.9em;">
+                            <span><strong>Year:</strong> ${vehicleData.year || 'N/A'}</span>
+                            <span><strong>Make:</strong> ${vehicleData.make || 'N/A'}</span>
+                            <span><strong>Model:</strong> ${vehicleData.model || 'N/A'}</span>
+                            <span><strong>Trim:</strong> ${vehicleData.trim || 'N/A'}</span>
+                            <span><strong>Stock:</strong> ${vehicleData.stock || vehicleData.stock_number || 'N/A'}</span>
+                            <span><strong>VIN:</strong> ${cleanVin}</span>
+                            <span style="color: var(--accent-primary); font-weight: 600;"><strong>Price:</strong> $${vehicleData.price || 'N/A'}</span>
+                            <span><strong>Mileage:</strong> ${vehicleData.mileage || 'N/A'}</span>
+                            <span><strong>Type:</strong> ${vehicleData.vehicle_type || 'N/A'}</span>
+                            <span><strong>Exterior:</strong> ${vehicleData.exterior_color || 'N/A'}</span>
+                            <span><strong>Interior:</strong> ${vehicleData.interior_color || 'N/A'}</span>
+                            <span><strong>Engine:</strong> ${vehicleData.engine || 'N/A'}</span>
+                            <span><strong>Transmission:</strong> ${vehicleData.transmission || 'N/A'}</span>
+                            <span><strong>Fuel:</strong> ${vehicleData.fuel_type || 'N/A'}</span>
+                        </div>
+                    </div>
+                </td>
+                <td class="toggle-cell" onclick="event.stopPropagation();">
+                    <label class="data-toggle-switch">
+                        <input type="checkbox" class="toggle-input" data-vin="${originalVin}" checked onchange="window.modalWizard.toggleVehicleDataType('${originalVin}', this)">
+                        <span class="toggle-slider">
+                            <span class="toggle-label-raw">R</span>
+                            <span class="toggle-label-norm">N</span>
+                        </span>
+                    </label>
+                </td>
+                <td>
+                    <button class="btn-save btn-icon-only" onclick="window.modalWizard.saveRowEdit(${index})" id="save-btn-${index}" title="Save changes" style="display: none;">
+                        <i class="fas fa-save"></i>
+                    </button>
+                    <button class="btn-delete-row btn-icon-only" onclick="window.modalWizard.deleteVehicleRow(${index})" id="delete-btn-${index}" title="Deletion disabled in raw view" disabled style="opacity: 0.3; cursor: not-allowed;">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+        } else {
+            // Normal view - restore original data if available, otherwise reconstruct
+            if (rowElement.dataset.originalRowData) {
+                // Restore the original row data
+                rowElement.innerHTML = rowElement.dataset.originalRowData;
+                // Update the toggle state to unchecked
+                const toggleInput = rowElement.querySelector('.toggle-input');
+                if (toggleInput) {
+                    toggleInput.checked = false;
+                }
+                // Clear the stored data
+                delete rowElement.dataset.originalRowData;
+                return;
+            }
+
+            // Fallback: reconstruct the normalized view
+            rowElement.innerHTML = `
+                <td>
+                    <button class="btn-edit btn-icon-only" onclick="window.modalWizard.toggleRowEdit(${index})" id="edit-btn-${index}" title="Edit row">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                </td>
+                <td class="editable-cell" data-field="year-make" data-index="${index}">
+                    <span class="display-value">${vehicleData.YEARMAKE || ''}</span>
+                    <input type="text" class="edit-input" value="${vehicleData.YEARMAKE || ''}" style="display: none;">
+                </td>
+                <td class="editable-cell" data-field="model" data-index="${index}">
+                    <span class="display-value">${vehicleData.MODEL || ''}</span>
+                    <input type="text" class="edit-input" value="${vehicleData.MODEL || ''}" style="display: none;">
+                </td>
+                <td class="editable-cell" data-field="trim" data-index="${index}">
+                    <span class="display-value">${vehicleData.TRIM || ''}</span>
+                    <input type="text" class="edit-input" value="${vehicleData.TRIM || ''}" style="display: none;">
+                </td>
+                <td class="editable-cell" data-field="stock" data-index="${index}">
+                    <span class="display-value stock-badge">${vehicleData.STOCK || ''}</span>
+                    <input type="text" class="edit-input" value="${vehicleData.STOCK || ''}" style="display: none;">
+                </td>
+                <td class="editable-cell" data-field="vin" data-index="${index}">
+                    <span class="display-value vin-display" title="${displayVin}">${displayVin}</span>
+                    <input type="text" class="edit-input" value="${displayVin}" style="display: none;" maxlength="17">
+                </td>
+                <td class="raw-status-cell" data-field="raw_status" data-index="${index}">
+                    <span class="display-value">${vehicleData.raw_status || 'N/A'}</span>
+                </td>
+                <td class="toggle-cell" onclick="event.stopPropagation();">
+                    <label class="data-toggle-switch">
+                        <input type="checkbox" class="toggle-input" data-vin="${originalVin}" onchange="window.modalWizard.toggleVehicleDataType('${originalVin}', this)">
+                        <span class="toggle-slider">
+                            <span class="toggle-label-raw">R</span>
+                            <span class="toggle-label-norm">N</span>
+                        </span>
+                    </label>
+                </td>
+                <td>
+                    <button class="btn-save btn-icon-only" onclick="window.modalWizard.saveRowEdit(${index})" id="save-btn-${index}" title="Save changes" style="display: none;">
+                        <i class="fas fa-save"></i>
+                    </button>
+                    <button class="btn-delete-row btn-icon-only" onclick="window.modalWizard.deleteVehicleRow(${index})" id="delete-btn-${index}" title="Delete row">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+        }
+    }
+
+    showModalToast(message, type = 'info') {
+        // Simple toast notification for modal context
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.textContent = message;
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 24px;
+            border-radius: 4px;
+            color: white;
+            font-weight: 500;
+            z-index: 10000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            background: ${type === 'error' ? '#dc3545' : type === 'warning' ? '#ffc107' : '#28a745'};
+        `;
+
+        document.body.appendChild(toast);
+
+        // Auto remove after 3 seconds
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
+            }
+        }, 3000);
+    }
+
 }
 
 // EMERGENCY INLINE FUNCTIONS - DIRECT IMPLEMENTATION

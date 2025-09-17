@@ -188,8 +188,12 @@ class AutomatedNormalizationManager:
             
             # 4. Handle NULL stock values for database constraints
             stock_value = stock_data if stock_data else 'AUTO'
-            
-            # 5. Build normalized record tuple
+
+            # 5. CRITICAL: Normalize price data - convert NULL/invalid to 0
+            normalized_price = normalizer.normalize_price(record.get('price'))
+            normalized_msrp = normalizer.normalize_price(record.get('msrp'))
+
+            # 6. Build normalized record tuple
             normalized_tuple = (
                 record['id'],  # raw_data_id
                 record['vin'],
@@ -200,8 +204,8 @@ class AutomatedNormalizationManager:
                 record['model'],
                 record['trim'],
                 normalized_lot_status,  # status (onlot, offlot)
-                record['price'],
-                record['msrp'],
+                normalized_price,  # Normalized price (0 for invalid/missing)
+                normalized_msrp,   # Normalized MSRP (0 for invalid/missing)
                 record['date_in_stock'],
                 record['location'],
                 record['vehicle_url'],

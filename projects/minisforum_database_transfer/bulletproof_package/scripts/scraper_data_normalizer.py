@@ -149,7 +149,51 @@ class ScraperDataNormalizer:
         
         # Conservative default - assume on lot if unsure
         return 'onlot'
-    
+
+    def normalize_price(self, raw_price) -> float:
+        """
+        Normalize price data to float, converting invalid/missing values to 0
+
+        Args:
+            raw_price: Raw price value from scraper (can be None, string, float, etc.)
+
+        Returns:
+            float: Normalized price (0 for invalid/missing values)
+        """
+        # Handle None/NULL
+        if raw_price is None:
+            return 0.0
+
+        # Convert to string for processing
+        price_str = str(raw_price).strip()
+
+        # Check for empty or invalid price indicators
+        invalid_indicators = ['', '*', 'call', 'tbd', 'n/a', 'na', 'none', 'null', '-']
+        if price_str.lower() in invalid_indicators:
+            return 0.0
+
+        # Check for patterns that indicate missing price
+        if any(pattern in price_str.lower() for pattern in ['call', 'contact', 'ask', 'inquire']):
+            return 0.0
+
+        # Try to extract numeric value
+        try:
+            # Remove common currency symbols and formatting
+            cleaned = price_str.replace('$', '').replace(',', '').replace(' ', '')
+
+            # Convert to float
+            price_value = float(cleaned)
+
+            # Negative prices or exactly 0 are invalid
+            if price_value <= 0:
+                return 0.0
+
+            return price_value
+
+        except (ValueError, TypeError):
+            # If conversion fails, return 0
+            return 0.0
+
     def _merge_with_fallback_mappings(self):
         """Merge current mappings with fallback mappings to ensure code additions are included"""
         
