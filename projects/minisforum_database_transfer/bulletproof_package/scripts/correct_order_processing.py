@@ -520,13 +520,12 @@ class CorrectOrderProcessor:
             query += " AND nvd.stock IS NOT NULL AND nvd.stock != %s AND nvd.stock != %s"
             params.extend(['', '*'])
             
-        # Apply price filter - Enhanced to exclude placeholder values
+        # Apply price filter - Fixed to work with numeric price fields
         if filtering_rules.get('exclude_missing_price', False):
-            # Enhanced price filtering: exclude NULL, 0, negative values, and common placeholders
+            # Enhanced price filtering: exclude NULL, 0, negative values
             query += " AND nvd.price IS NOT NULL AND nvd.price > 0"
-            # Also check raw price data for placeholder values that might have been normalized incorrectly
-            query += " AND rvd.price IS NOT NULL AND rvd.price NOT IN ('*', '', 'Call', 'TBD', 'N/A', '0', '$0')"
-            query += " AND rvd.price NOT LIKE '%*%' AND rvd.price NOT LIKE '%Call%'"
+            # Also check raw price data for valid numeric values only
+            query += " AND rvd.price IS NOT NULL AND rvd.price > 0"
         
         query += " ORDER BY created_at DESC"
         
