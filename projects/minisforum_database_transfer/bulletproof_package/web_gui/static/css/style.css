@@ -11734,6 +11734,88 @@ html[data-theme="dark"] .selection-panel * {
     flex-shrink: 0 !important;
 }
 
+/* COLLAPSED SIDEBAR FIX - Complete Rewrite */
+.sidebar-navigation.collapsed {
+    width: 70px !important;
+    min-width: 70px !important;
+}
+
+/* Hide ALL text elements in collapsed state */
+.sidebar-navigation.collapsed .tab-label,
+.sidebar-navigation.collapsed .status-text,
+.sidebar-navigation.collapsed .last-scrape,
+.sidebar-navigation.collapsed .sidebar-section-title {
+    display: none !important;
+}
+
+/* Center all buttons and icons */
+.sidebar-navigation.collapsed .sidebar-tab {
+    justify-content: center !important;
+    padding: 12px !important;
+    margin: 2px 8px !important;
+}
+
+.sidebar-navigation.collapsed .sidebar-tab i {
+    margin: 0 !important;
+    font-size: 16px !important;
+}
+
+/* Fix status section */
+.sidebar-navigation.collapsed .sidebar-status-section {
+    padding: 12px !important;
+    justify-content: center !important;
+    margin-bottom: 8px !important;
+}
+
+.sidebar-navigation.collapsed .sidebar-status-section .status-indicator {
+    justify-content: center !important;
+}
+
+.sidebar-navigation.collapsed .sidebar-status-section .status-icon {
+    margin: 0 !important;
+    font-size: 14px !important;
+}
+
+/* Fix scrape section */
+.sidebar-navigation.collapsed .sidebar-scrape-section {
+    display: none !important;
+}
+
+/* Sidebar Theme Toggle Section */
+.sidebar-theme-section {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 8px 20px;
+    margin-bottom: 12px;
+}
+
+.sidebar-theme-section .theme-toggle-container {
+    margin: 0;
+}
+
+/* Collapsed state - keep theme toggle visible but smaller */
+.sidebar-navigation.collapsed .sidebar-theme-section {
+    padding: 8px 12px !important;
+    justify-content: center !important;
+}
+
+.sidebar-navigation.collapsed .sidebar-theme-section .theme-toggle {
+    width: 45px !important;
+    height: 24px !important;
+}
+
+.sidebar-navigation.collapsed .sidebar-theme-section .theme-toggle-thumb {
+    width: 18px !important;
+    height: 18px !important;
+    top: 2px !important;
+    left: 2px !important;
+}
+
+.sidebar-navigation.collapsed .sidebar-theme-section .theme-toggle-input:checked + .theme-toggle-slider .theme-toggle-thumb {
+    transform: translateX(19px) !important;
+}
+
 /* Force sidebar visibility when dealership settings panel is active */
 body:has(#dealership-settings-panel.active) .sidebar-navigation,
 .main-content:has(#dealership-settings-panel.active) .sidebar-navigation {
@@ -11770,13 +11852,17 @@ body:has(#dealership-settings-panel.active) .sidebar-navigation,
     display: block !important;
 }
 
-/* Emergency expand button - always visible if sidebar hidden */
-.sidebar-expand {
-    display: block !important;
-    position: fixed !important;
-    top: 100px !important;
-    left: 10px !important;
-    z-index: 9999 !important;
+/* Position expand button in the exact same location as collapse button */
+.sidebar-navigation.collapsed .sidebar-header {
+    position: relative !important;
+}
+
+.sidebar-navigation.collapsed .sidebar-expand {
+    display: flex !important;
+    position: absolute !important;
+    top: 0 !important;
+    right: 0 !important;
+    z-index: 10 !important;
     background: var(--primary-red) !important;
     color: white !important;
     border: none !important;
@@ -11784,11 +11870,12 @@ body:has(#dealership-settings-panel.active) .sidebar-navigation,
     height: 40px !important;
     border-radius: 50% !important;
     cursor: pointer !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
-    transition: all 0.3s ease !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
 }
 
-.sidebar-expand:hover {
+.sidebar-navigation.collapsed .sidebar-expand:hover {
     background: var(--dark-red) !important;
     transform: scale(1.1) !important;
 }
