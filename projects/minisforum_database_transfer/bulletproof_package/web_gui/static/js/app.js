@@ -3324,25 +3324,55 @@ class MinisFornumApp {
     
     setupDealershipSearchListeners() {
         console.log('🔍 Setting up dealership search listeners...');
-        
+
         // Wait a bit for DOM to be ready
         setTimeout(() => {
             const searchInput = document.getElementById('dealershipSearchInput');
             const searchBtn = document.getElementById('dealershipSearchBtn');
             const clearBtn = document.getElementById('clearDealershipSearchBtn');
-            
+            const dealershipList = document.getElementById('dealershipList');
+
             console.log('Search elements found:', {
                 searchInput: !!searchInput,
                 searchBtn: !!searchBtn,
-                clearBtn: !!clearBtn
+                clearBtn: !!clearBtn,
+                dealershipList: !!dealershipList
             });
-            
+
             if (searchInput) {
                 console.log('✅ Search input found, adding listeners');
-                
+
+                // Show dealership list when search input is clicked or focused
+                searchInput.addEventListener('focus', () => {
+                    if (dealershipList) {
+                        dealershipList.style.display = 'block';
+                        // Load dealerships if not already loaded
+                        if (dealershipList.innerHTML.includes('Loading')) {
+                            this.loadDealershipList();
+                        }
+                    }
+                });
+
+                // Hide dealership list when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (dealershipList &&
+                        !searchInput.contains(e.target) &&
+                        !dealershipList.contains(e.target) &&
+                        !e.target.closest('.dealership-search')) {
+                        // Only hide if search is empty
+                        if (!searchInput.value.trim()) {
+                            dealershipList.style.display = 'none';
+                        }
+                    }
+                });
+
                 // Add fresh listeners (don't try to remove since we don't have references)
                 searchInput.addEventListener('input', () => {
                     console.log('🔍 Search input changed:', searchInput.value);
+                    // Show list when typing
+                    if (dealershipList && searchInput.value.trim()) {
+                        dealershipList.style.display = 'block';
+                    }
                     this.filterDealershipList();
                 });
                 searchInput.addEventListener('keypress', (e) => {
@@ -3430,14 +3460,20 @@ class MinisFornumApp {
     clearDealershipSearch() {
         const searchInput = document.getElementById('dealershipSearchInput');
         const clearBtn = document.getElementById('clearDealershipSearchBtn');
-        
+        const dealershipList = document.getElementById('dealershipList');
+
         if (searchInput) {
             searchInput.value = '';
         }
         if (clearBtn) {
             clearBtn.style.display = 'none';
         }
-        
+
+        // Hide the dealership list when clearing the search
+        if (dealershipList) {
+            dealershipList.style.display = 'none';
+        }
+
         this.filterDealershipList();
     }
     

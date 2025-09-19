@@ -862,24 +862,26 @@ class CorrectOrderProcessor:
                     logger.warning(f"No valid QR content for vehicle {vin} - {stock}, skipping")
                     continue
                 
-                # Generate QR code
+                # Generate QR code locally with exact API specifications
                 qr = qrcode.QRCode(
-                    version=1,
-                    error_correction=qrcode.constants.ERROR_CORRECT_L,
-                    box_size=10,
-                    border=4,
+                    version=1,  # Automatically determines version based on data
+                    error_correction=qrcode.constants.ERROR_CORRECT_L,  # Same as API default
+                    box_size=10,  # Will be resized to exact 388x388
+                    border=0,  # No border to match API output
                 )
                 qr.add_data(qr_content)
                 qr.make(fit=True)
-                
-                # Create QR image - 388x388 as per reference
-                img = qr.make_image(fill_color="rgb(50,50,50)", back_color="white")
+
+                # Create QR image with exact API color specification: #323232 (50, 50, 50 in RGB)
+                img = qr.make_image(fill_color=(50, 50, 50), back_color="white")
+
+                # Resize to exact 388x388 pixels to match API output
                 img = img.resize((388, 388), Image.Resampling.LANCZOS)
-                
-                # Save with exact naming convention from reference
-                filename = f"{clean_name}_QR_Code_{idx}.PNG"
+
+                # Save with exact naming convention from current system
+                filename = f"{clean_name}_QR_Code_{idx}.png"
                 filepath = output_folder / filename
-                img.save(filepath)
+                img.save(filepath, format='PNG')
                 
                 qr_paths.append(str(filepath))
                 
@@ -1019,7 +1021,17 @@ class CorrectOrderProcessor:
         
         clean_name = dealership_name.replace(' ', '_')
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"{clean_name}_{template_type}_{timestamp}.csv"
+        # Updated filename pattern to match current system
+        date_str = datetime.now().strftime('%m.%d')  # Format: 9.18
+        if template_type == "shortcut_pack":
+            abbr = "SCP"
+        elif template_type == "shortcut":
+            abbr = "SC"
+        else:
+            abbr = template_type.upper()[:3]
+
+        clean_name_upper = clean_name.upper().replace(' ', '').replace("'", '')
+        filename = f"{clean_name_upper}_{abbr}_{date_str} - CSV.csv"
         csv_path = output_folder / filename
         
         with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
@@ -1061,21 +1073,20 @@ class CorrectOrderProcessor:
                     
                     qr_path = qr_paths[idx] if idx < len(qr_paths) else ''
                     
-                    # Handle NEW prefix for new vehicles
+                    # Format fields based on NEW/USED status
                     if type_prefix == "NEW":
-                        yearmake = f"{year} {make}"
-                        stock_field = f"{year} {model} - {stock}"
-                        vin_field = f"{type_prefix} - {vin}"
-                        qryearmodel = f"{year} {model} - {stock}"
-                        qrstock = f"{type_prefix} - {vin}"
-                        misc = f"{year} {model} - {stock} - {type_prefix} - {vin}"
+                        # New vehicles get "NEW" prefix in YEARMAKE field
+                        yearmake = f"NEW {year} {make}"
                     else:
+                        # Used vehicles have no prefix in YEARMAKE field
                         yearmake = f"{year} {make}"
-                        stock_field = f"{year} {model} - {stock}"
-                        vin_field = f"{type_prefix} - {vin}"
-                        qryearmodel = f"{year} {model} - {stock}"
-                        qrstock = f"{type_prefix} - {vin}"
-                        misc = f"{year} {model} - {stock} - {type_prefix} - {vin}"
+
+                    # Common fields for both new and used
+                    stock_field = f"{year} {model} - {stock}"
+                    vin_field = f"{type_prefix} - {vin}"
+                    qryearmodel = f"{year} {model} - {stock}"
+                    qrstock = f"{type_prefix} - {vin}"
+                    misc = f"{year} {model.title()} - {vin} - {stock}"
                     
                     writer.writerow([
                         yearmake, model, trim, stock_field, vin_field, qr_path,
@@ -1086,13 +1097,12 @@ class CorrectOrderProcessor:
         return csv_path
     
     def _get_type_prefix(self, vehicle_type: str) -> str:
-        """Convert vehicle type to prefix used in Adobe CSVs"""
+        """Convert vehicle type to prefix used in Adobe CSVs - ONLY NEW or USED"""
         vtype = vehicle_type.lower()
         if 'new' in vtype:
             return 'NEW'
-        elif 'certified' in vtype or 'cpo' in vtype:
-            return 'CERTIFIED'
         else:
+            # All non-new vehicles (including certified, cpo, po, pre-owned) become USED
             return 'USED'
     
     def _process_cdjr_columbia_dual_output(self, vehicles: List[Dict], dealership_name: str, 
@@ -1216,82 +1226,81 @@ class CorrectOrderProcessor:
         return csv_path
     
     def _generate_billing_sheet_csv(self, vehicles: List[Dict], dealership_name: str, output_folder: Path, timestamp: str) -> Path:
-        """Generate billing sheet CSV automatically after QR codes - matches exact format from examples"""
-        
-        # File naming pattern: [DEALERSHIP NAME] [DATE] - BILLING.csv
-        clean_name = dealership_name.upper().replace(' ', '')
-        date_str = datetime.now().strftime('%m-%d')  # Format: 8-19
-        filename = f"{clean_name}_{date_str} - BILLING.csv"
+        """Generate billing sheet CSV - matches EXACT format from current system"""
+
+        # File naming pattern: SOCODCJR_SCP_9.18 - BILLING2.csv pattern
+        clean_name = dealership_name.upper().replace(' ', '').replace("'", '')
+        date_str = datetime.now().strftime('%m.%d')  # Format: 9.18
+        template_abbr = 'SCP'  # Shortcut Pack abbreviation
+        filename = f"{clean_name}_{template_abbr}_{date_str} - BILLING2.csv"
         billing_path = output_folder / filename
-        
+
         logger.info(f"Generating billing sheet CSV: {billing_path}")
-        
-        # Count vehicle types
+
+        # Count vehicle types (ONLY NEW or USED)
         new_count = 0
         used_count = 0
-        cpo_count = 0
-        
-        vehicle_lines = []
         vin_list = []
-        
+
         for vehicle in vehicles:
-            year = vehicle.get('year', '')
-            make = vehicle.get('make', '')
-            model = vehicle.get('model', '')
-            stock = vehicle.get('stock', '')
             vin = vehicle.get('vin', '')
             vtype = vehicle.get('vehicle_condition', '').lower()
-            
-            # Determine vehicle type for billing
+
+            # Simple NEW/USED determination
             if 'new' in vtype:
-                billing_type = 'New'
                 new_count += 1
-            elif 'certified' in vtype or 'cpo' in vtype or 'pre-owned' in vtype:
-                billing_type = 'Pre-Owned'
-                cpo_count += 1
             else:
-                billing_type = 'Used'
+                # Everything else (including cpo, certified, po, pre-owned) is USED
                 used_count += 1
-            
-            # Format vehicle line: "Year Make Model - Stock - VIN"
-            vehicle_line = f"{year} {make} {model} - {stock} - {vin}"
-            vehicle_lines.append([vehicle_line, billing_type])
+
             vin_list.append(vin)
-        
+
         total_vehicles = len(vehicles)
-        
-        # Write billing CSV in exact format from examples
+
+        # Write billing CSV in EXACT format from example
         with open(billing_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
-            
-            # Header row - matches format from examples
-            writer.writerow(['Printed Vehicles:', '', 'TOTALS:', '', 'VINLOG:', '', 'Duplicates:'])
-            
-            # Vehicle lines with summary statistics in right columns
-            for i, (vehicle_line, vehicle_type) in enumerate(vehicle_lines):
-                if i == 0:
-                    # First row includes New count
-                    writer.writerow([vehicle_line, vehicle_type, 'New:', new_count, vin_list[i] if i < len(vin_list) else '', '', 'No Dupes'])
-                elif i == 1:
-                    # Second row includes Used count
-                    writer.writerow([vehicle_line, vehicle_type, 'Used:', used_count, vin_list[i] if i < len(vin_list) else '', '', ''])
-                elif i == 2:
-                    # Third row includes Pre-Owned count
-                    writer.writerow([vehicle_line, vehicle_type, 'Pre-Owned:', cpo_count, vin_list[i] if i < len(vin_list) else '', '', ''])
-                elif i == 3:
-                    # Fourth row includes Total
-                    writer.writerow([vehicle_line, vehicle_type, 'Total:', total_vehicles, vin_list[i] if i < len(vin_list) else '', '', ''])
-                elif i == 4:
-                    # Fifth row includes Duplicates count (always 0 for new orders)
-                    writer.writerow([vehicle_line, vehicle_type, 'Duplicates:', 0, vin_list[i] if i < len(vin_list) else '', '', ''])
-                else:
-                    # Remaining rows just have vehicle info and VIN
-                    writer.writerow([vehicle_line, vehicle_type, '', '', vin_list[i] if i < len(vin_list) else '', '', ''])
-            
-            # Add empty rows if needed (billing sheets typically have some padding)
-            for _ in range(3):
-                writer.writerow(['', '', '', '', '', '', ''])
-        
+
+            # Header row - EXACT format
+            writer.writerow(['Totals:', '', '', 'DUPLICATES', '', '', '', 'ORDERED', 'PRODUCED'])
+
+            # Summary rows
+            writer.writerow(['Total Ordered', total_vehicles, '', '', '', '', '',
+                           vin_list[0] if len(vin_list) > 0 else '',
+                           vin_list[0] if len(vin_list) > 0 else ''])
+
+            writer.writerow(['Total Produced:', total_vehicles, '', '', '', '', '',
+                           vin_list[1] if len(vin_list) > 1 else '',
+                           vin_list[1] if len(vin_list) > 1 else ''])
+
+            writer.writerow(['Total New:', new_count, '', '', '', '', '',
+                           vin_list[2] if len(vin_list) > 2 else '',
+                           vin_list[2] if len(vin_list) > 2 else ''])
+
+            writer.writerow(['Total Used:', used_count, '', '', '', '', '',
+                           vin_list[3] if len(vin_list) > 3 else '',
+                           vin_list[3] if len(vin_list) > 3 else ''])
+
+            writer.writerow(['', '', '', '', '', '', '',
+                           vin_list[4] if len(vin_list) > 4 else '',
+                           vin_list[4] if len(vin_list) > 4 else ''])
+
+            writer.writerow(['Used Duplicates:', 0, '', '', '', '', '',
+                           vin_list[5] if len(vin_list) > 5 else '',
+                           vin_list[5] if len(vin_list) > 5 else ''])
+
+            writer.writerow(['New Duplicates', 0, '', '', '', '', '',
+                           vin_list[6] if len(vin_list) > 6 else '',
+                           vin_list[6] if len(vin_list) > 6 else ''])
+
+            writer.writerow(['Duplicates:', 0, '', '', '', '', '',
+                           vin_list[7] if len(vin_list) > 7 else '',
+                           vin_list[7] if len(vin_list) > 7 else ''])
+
+            # Fill in remaining VINs if there are more than 8
+            for i in range(8, len(vin_list)):
+                writer.writerow(['', '', '', '', '', '', '', vin_list[i], vin_list[i]])
+
         logger.info(f"Generated billing sheet CSV: {billing_path}")
         return billing_path
     
