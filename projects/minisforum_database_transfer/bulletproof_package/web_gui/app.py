@@ -224,15 +224,24 @@ class ScraperController:
             logger.error(f"Failed to get last order dates: {e}")
             return {}
     
-    def update_dealership_config(self, dealership_name, filtering_rules, is_active=True):
+    def update_dealership_config(self, dealership_name, filtering_rules, output_rules=None, is_active=True):
         """Update dealership configuration"""
         try:
-            db_manager.execute_query("""
-                UPDATE dealership_configs 
-                SET filtering_rules = %s, is_active = %s, updated_at = CURRENT_TIMESTAMP
-                WHERE name = %s
-            """, (json.dumps(filtering_rules), is_active, dealership_name))
-            
+            if output_rules is not None:
+                # Update both filtering_rules and output_rules
+                db_manager.execute_query("""
+                    UPDATE dealership_configs
+                    SET filtering_rules = %s, output_rules = %s, is_active = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE name = %s
+                """, (json.dumps(filtering_rules), json.dumps(output_rules), is_active, dealership_name))
+            else:
+                # Update only filtering_rules
+                db_manager.execute_query("""
+                    UPDATE dealership_configs
+                    SET filtering_rules = %s, is_active = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE name = %s
+                """, (json.dumps(filtering_rules), is_active, dealership_name))
+
             return True
         except Exception as e:
             logger.error(f"Failed to update dealership config: {e}")
@@ -543,6 +552,20 @@ def cleanup_old_js_files(js_dir):
 # Generate unique JS files on startup
 UNIQUE_JS_FILES = generate_unique_js_files()
 
+def _convert_paths_to_strings(obj):
+    """
+    Recursively convert all Path objects to strings for JSON serialization.
+    This is needed for mixed template processing that returns Path objects.
+    """
+    if isinstance(obj, Path):
+        return str(obj)
+    elif isinstance(obj, dict):
+        return {key: _convert_paths_to_strings(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [_convert_paths_to_strings(item) for item in obj]
+    else:
+        return obj
+
 
 @app.route('/logotest')
 def logotest():
@@ -630,12 +653,13 @@ def get_dealership_last_orders():
 def update_dealership(dealership_name):
     """API endpoint to update dealership configuration"""
     data = request.get_json()
-    
+
     filtering_rules = data.get('filtering_rules', {})
+    output_rules = data.get('output_rules', None)
     is_active = data.get('is_active', True)
-    
-    success = scraper_controller.update_dealership_config(dealership_name, filtering_rules, is_active)
-    
+
+    success = scraper_controller.update_dealership_config(dealership_name, filtering_rules, output_rules, is_active)
+
     if success:
         return jsonify({'success': True, 'message': 'Dealership updated successfully'})
     else:
@@ -1218,25 +1242,40 @@ def process_cao_orders():
         data = request.get_json()
         dealerships = data.get('dealerships', [])
         vehicle_types = data.get('vehicle_types', ['new', 'cpo', 'used'])
+        # Get skip_vin_logging from request or default to False
         skip_vin_logging = data.get('skip_vin_logging', False)
         
         results = []
         for dealership in dealerships:
             # CorrectOrderProcessor uses template_type and skip_vin_logging parameters
             # The filtering is handled automatically using dealership configs in the database
-            result = order_processor.process_cao_order(dealership, template_type="shortcut_pack", skip_vin_logging=skip_vin_logging)
+            # Template type will be determined from dealership config
+            result = order_processor.process_cao_order(dealership, skip_vin_logging=skip_vin_logging)
             
             # DEBUG: Log the actual result being returned
             logger.info(f"CAO result for {dealership}: success={result.get('success')}, vehicle_count={result.get('vehicle_count')}, new_vehicles={result.get('new_vehicles')}")
-            
+
             # Transform result for web interface compatibility
             if result.get('success') and result.get('csv_file'):
-                # Extract filename from full path for download URL
-                csv_path = Path(result['csv_file'])
-                result['download_csv'] = f"/download_csv/{csv_path.name}"
+                # Handle both simple path strings and dict responses from mixed template processing
+                csv_file = result['csv_file']
+
+                if isinstance(csv_file, dict):
+                    # Mixed template processing - get primary CSV file
+                    primary_csv = csv_file.get('primary_csv')
+                    if primary_csv:
+                        result['download_csv'] = f"/download_csv/{Path(primary_csv).name}"
+                    else:
+                        logger.error(f"Mixed template result missing primary_csv for {dealership}")
+                else:
+                    # Standard single CSV file path
+                    csv_path = Path(csv_file)
+                    result['download_csv'] = f"/download_csv/{csv_path.name}"
                 
+            # Convert all Path objects to strings for JSON serialization
+            result = _convert_paths_to_strings(result)
             results.append(result)
-        
+
         return jsonify(results)
     except Exception as e:
         logger.error(f"Error processing CAO orders: {e}")
@@ -1281,6 +1320,7 @@ def process_list_order():
         data = request.get_json()
         dealership = data.get('dealership')
         vins = data.get('vins', [])
+        # Get skip_vin_logging from request or default to False
         skip_vin_logging = data.get('skip_vin_logging', False)
         
         if not dealership:
@@ -1288,8 +1328,7 @@ def process_list_order():
         if not vins:
             return jsonify({'error': 'VIN list required'}), 400
         
-        template_type = data.get('template_type', 'shortcut_pack')
-        # OrderProcessingWorkflow.process_list_order only takes dealership and vins
+        # Template type will be determined from dealership config
         result = order_processor.process_list_order(dealership, vins)
         return jsonify(result)
     except Exception as e:
@@ -3444,7 +3483,8 @@ def process_csv_import():
                 # CAO processing - compare against VIN history with dealership-specific filtering
                 logger.info(f"Processing CAO order for {dealership_name} (test_mode: {skip_vin_logging})")
                 # Use CorrectOrderProcessor with dealership-specific filtering
-                result = order_processor.process_cao_order(dealership_name, template_type="shortcut_pack", skip_vin_logging=skip_vin_logging)
+                # Template type will be determined from dealership config
+                result = order_processor.process_cao_order(dealership_name, skip_vin_logging=skip_vin_logging)
             else:
                 # LIST processing - process specific VIN list
                 logger.info(f"Processing LIST order for {dealership_name} with {len(imported_vins)} VINs (skip_vin_logging: {skip_vin_logging})")
@@ -4975,6 +5015,70 @@ def export_vin_log_data():
         
     except Exception as e:
         logger.error(f"Error exporting VIN log data: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/vin-log/remove-order-group', methods=['POST'])
+def remove_order_group():
+    """Remove an entire order group from VIN log for mistake correction"""
+    try:
+        data = request.get_json()
+        dealership_name = data.get('dealership_name')
+        order_number = data.get('order_number')
+
+        if not dealership_name or not order_number:
+            return jsonify({'error': 'Dealership name and order number are required'}), 400
+
+        # Generate dealership table name
+        clean_name = dealership_name.lower().replace(' ', '_').replace('-', '_').replace('.', '').replace("'", '')
+        table_name = f"{clean_name}_vin_log"
+
+        # Check if table exists first
+        check_table_query = """
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_schema = 'public'
+                AND table_name = %s
+            );
+        """
+
+        table_exists = db_manager.execute_query(check_table_query, (table_name,))
+
+        if not table_exists or not table_exists[0]['exists']:
+            return jsonify({'error': f'No VIN log data found for {dealership_name}'}), 404
+
+        # Count VINs to be removed first
+        count_query = f"""
+            SELECT COUNT(*) as count
+            FROM {table_name}
+            WHERE order_number = %s
+        """
+
+        count_result = db_manager.execute_query(count_query, (order_number,))
+        vins_to_remove = count_result[0]['count'] if count_result else 0
+
+        if vins_to_remove == 0:
+            return jsonify({'error': f'No VINs found with order number {order_number}'}), 404
+
+        # Remove all VINs with the specified order number
+        delete_query = f"""
+            DELETE FROM {table_name}
+            WHERE order_number = %s
+        """
+
+        db_manager.execute_query(delete_query, (order_number,))
+
+        logger.info(f"Removed order group {order_number} from {dealership_name} VIN log: {vins_to_remove} VINs deleted")
+
+        return jsonify({
+            'success': True,
+            'message': f'Successfully removed order group {order_number}',
+            'dealership_name': dealership_name,
+            'order_number': order_number,
+            'vins_removed': vins_to_remove
+        })
+
+    except Exception as e:
+        logger.error(f"Error removing order group: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/scraper-data/export', methods=['POST'])
