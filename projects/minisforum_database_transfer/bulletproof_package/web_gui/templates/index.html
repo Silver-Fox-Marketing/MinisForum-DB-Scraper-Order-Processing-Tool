@@ -558,32 +558,34 @@
 
     /* ORDER QUEUE MANAGEMENT SPACING FIXES */
 
-    /* 1. Balanced spacing between Scheduled Days and Individual Dealerships */
+    /* 1. CRITICAL FIX: Increase spacing between Scheduled Days and Individual Dealerships */
     .day-selection {
-        margin-bottom: 25px !important;
-        padding-bottom: 15px !important;
+        margin-bottom: 50px !important;
+        padding-bottom: 20px !important;
+        position: relative !important;
+        z-index: 10 !important;
     }
 
     .dealership-selection {
-        margin-top: 20px !important;
+        margin-top: 40px !important;
         clear: both !important;
         position: relative !important;
-    }
-
-    /* 2. Adjust Scheduled Days cards spacing for better density */
-    .day-buttons {
-        gap: 16px !important;
-        margin-bottom: 16px !important;
-        padding: 16px !important;
-    }
-
-    /* 3. Improve visual hierarchy and separation between sections */
-    .dealership-selection {
+        z-index: 5 !important;
         background: var(--theme-surface-elevated) !important;
         border-radius: 12px !important;
         padding: 24px !important;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
         border: 1px solid var(--theme-border) !important;
+    }
+
+    /* 2. Ensure day buttons have proper containment and spacing */
+    .day-buttons {
+        gap: 16px !important;
+        margin-bottom: 0px !important;
+        padding: 16px !important;
+        position: relative !important;
+        z-index: 15 !important;
+        overflow: hidden !important;
     }
 
     .dealership-selection h3 {
@@ -605,7 +607,8 @@
         width: 100% !important;
     }
 
-    .dealership-search-container .search-input {
+    /* Order Queue dealership search - has built-in icon */
+    .dealership-search .dealership-search-container .search-input {
         width: 100% !important;
         padding: 12px 16px 12px 40px !important;
         border: 2px solid var(--theme-border) !important;
@@ -616,13 +619,19 @@
         transition: border-color 0.3s ease !important;
     }
 
-    .dealership-search-container .search-input:focus {
+    .dealership-search .dealership-search-container .search-input:focus {
         outline: none !important;
         border-color: var(--primary-red) !important;
         box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1) !important;
     }
 
-    .dealership-search-container::before {
+    /* CRITICAL: Disable the external CSS search icon that's creating duplicates */
+    .dealership-search::before {
+        display: none !important;
+    }
+
+    /* Order Queue search icon - our properly positioned one */
+    .dealership-search .dealership-search-container::before {
         content: '\f002' !important;
         font-family: 'Font Awesome 5 Free' !important;
         font-weight: 900 !important;
@@ -634,6 +643,18 @@
         font-size: 14px !important;
         pointer-events: none !important;
         z-index: 2 !important;
+    }
+
+    /* VIN History search - has separate button, different styling */
+    .vin-history-interface .dealership-search-container .search-input {
+        width: 100% !important;
+        padding: 12px 16px !important;
+        border: 2px solid var(--theme-border) !important;
+        border-radius: 8px !important;
+        background: var(--theme-surface) !important;
+        color: var(--theme-text-primary) !important;
+        font-size: 14px !important;
+        transition: border-color 0.3s ease !important;
     }
 
     .dealership-autocomplete {
