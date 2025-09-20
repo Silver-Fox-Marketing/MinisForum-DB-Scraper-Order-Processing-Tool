@@ -959,10 +959,27 @@ class MinisFornumApp {
                 }
             }
             filteringRules.order_type = selectedOrderType;
-            
+
+            // Get template type settings and new output configurations
+            const templateVariant = document.getElementById('templateVariant')?.value || 'standard';
+            const priceMarkup = parseInt(document.getElementById('priceMarkup')?.value) || 0;
+
+            const outputRules = {
+                template_types: {
+                    new: document.getElementById('newVehicleTemplate')?.checked ? 'shortcut' : 'shortcut_pack',
+                    used: document.getElementById('usedVehicleTemplate')?.checked ? 'shortcut' : 'shortcut_pack',
+                    default: 'shortcut_pack'
+                },
+                template_variant: templateVariant,
+                price_markup: priceMarkup
+            };
+
+            console.log('Template type settings:', outputRules.template_types);
+
             // Send update to server
             const requestBody = {
                 filtering_rules: filteringRules,
+                output_rules: outputRules,
                 is_active: true
             };
             
@@ -2927,7 +2944,55 @@ class MinisFornumApp {
         if (excludeMissingPriceCheckbox) {
             excludeMissingPriceCheckbox.checked = filteringRules.exclude_missing_price || false;
         }
-        
+
+        // Set template type toggles based on output_rules
+        const outputRules = dealership.output_rules || {};
+        const templateTypes = outputRules.template_types || {};
+
+        // Set template variant and price markup from output_rules
+        const templateVariantSelect = document.getElementById('templateVariant');
+        const priceMarkupInput = document.getElementById('priceMarkup');
+
+        if (templateVariantSelect) {
+            templateVariantSelect.value = outputRules.template_variant || 'standard';
+        }
+        if (priceMarkupInput) {
+            priceMarkupInput.value = outputRules.price_markup || '';
+        }
+
+        // New vehicles template toggle
+        const newVehicleTemplate = document.getElementById('newVehicleTemplate');
+        const newTemplateLabel = document.getElementById('newTemplateLabel');
+        if (newVehicleTemplate && newTemplateLabel) {
+            const isShortcut = templateTypes.new === 'shortcut';
+            newVehicleTemplate.checked = isShortcut;
+            newTemplateLabel.textContent = isShortcut ? 'SHORTCUT' : 'SHORTCUT PACK';
+        }
+
+        // Used vehicles template toggle
+        const usedVehicleTemplate = document.getElementById('usedVehicleTemplate');
+        const usedTemplateLabel = document.getElementById('usedTemplateLabel');
+        if (usedVehicleTemplate && usedTemplateLabel) {
+            const isShortcut = templateTypes.used === 'shortcut';
+            usedVehicleTemplate.checked = isShortcut;
+            usedTemplateLabel.textContent = isShortcut ? 'SHORTCUT' : 'SHORTCUT PACK';
+        }
+
+        // Add toggle event listeners
+        if (newVehicleTemplate && !newVehicleTemplate.hasEventListener) {
+            newVehicleTemplate.addEventListener('change', (e) => {
+                newTemplateLabel.textContent = e.target.checked ? 'SHORTCUT' : 'SHORTCUT PACK';
+            });
+            newVehicleTemplate.hasEventListener = true;
+        }
+
+        if (usedVehicleTemplate && !usedVehicleTemplate.hasEventListener) {
+            usedVehicleTemplate.addEventListener('change', (e) => {
+                usedTemplateLabel.textContent = e.target.checked ? 'SHORTCUT' : 'SHORTCUT PACK';
+            });
+            usedVehicleTemplate.hasEventListener = true;
+        }
+
         // Show the modal
         const modal = document.getElementById('dealershipModal');
         if (modal) {
@@ -4771,6 +4836,11 @@ class MinisFornumApp {
         }, 3000);
     }
 
+    // Alias for showToast to maintain compatibility
+    showNotification(message, type = 'info') {
+        return this.showToast(message, type);
+    }
+
     // =============================================================================
     // VIN HISTORY VIEWER FUNCTIONALITY
     // =============================================================================
@@ -6080,6 +6150,18 @@ class MinisFornumApp {
             });
             updateVinLogBtn.hasEventListener = true;
             console.log('Update VIN Log button event listener attached');
+        }
+
+        // Remove Order Group button
+        const removeOrderGroupBtn = document.getElementById('removeOrderGroupBtn');
+        console.log('Setup removeOrderGroupBtn:', !!removeOrderGroupBtn, 'hasListener:', removeOrderGroupBtn?.hasEventListener);
+        if (removeOrderGroupBtn && !removeOrderGroupBtn.hasEventListener) {
+            removeOrderGroupBtn.addEventListener('click', () => {
+                console.log('Remove Order Group button clicked');
+                this.showOrderGroupSelectionModal();
+            });
+            removeOrderGroupBtn.hasEventListener = true;
+            console.log('Remove Order Group button event listener attached');
         }
     }
     
@@ -8128,7 +8210,128 @@ class MinisFornumApp {
             exportBtn.disabled = false;
         }
     }
-    
+
+    showOrderGroupSelectionModal() {
+        if (!this.currentVinLogData || !this.currentVinLogData.history || this.currentVinLogData.history.length === 0) {
+            this.showNotification('No VIN log data available for selection', 'warning');
+            return;
+        }
+
+        // Get unique order numbers from current VIN log data
+        const orderNumbers = [...new Set(this.currentVinLogData.history
+            .filter(record => record.order_number)
+            .map(record => record.order_number)
+        )].sort();
+
+        if (orderNumbers.length === 0) {
+            this.showNotification('No order groups found in VIN log', 'warning');
+            return;
+        }
+
+        // Create modal HTML for order selection
+        const modalHTML = `
+            <div class="modal" id="orderGroupSelectionModal" style="display: flex;">
+                <div class="modal-content" style="max-width: 500px; margin: auto;">
+                    <div class="modal-header">
+                        <h3>Select Order Group to Remove</h3>
+                        <button class="modal-close" onclick="this.closest('.modal').style.display = 'none'">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <p style="margin-bottom: 15px; color: #e74c3c; font-weight: bold;">
+                            ⚠️ Warning: This will permanently delete all VINs in the selected order group.
+                        </p>
+                        <div class="form-group">
+                            <label for="orderGroupSelect">Order Group:</label>
+                            <select id="orderGroupSelect" class="form-control">
+                                <option value="">Select an order group...</option>
+                                ${orderNumbers.map(order => `<option value="${order}">${order}</option>`).join('')}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" onclick="this.closest('.modal').style.display = 'none'">
+                            Cancel
+                        </button>
+                        <button class="btn btn-danger" id="confirmRemoveOrderGroup">
+                            Remove Order Group
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remove existing modal if it exists
+        const existingModal = document.getElementById('orderGroupSelectionModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Add modal to page
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+        // Add event listener for confirm button
+        const confirmBtn = document.getElementById('confirmRemoveOrderGroup');
+        const orderSelect = document.getElementById('orderGroupSelect');
+
+        confirmBtn.addEventListener('click', () => {
+            const selectedOrder = orderSelect.value;
+            if (!selectedOrder) {
+                this.showNotification('Please select an order group', 'warning');
+                return;
+            }
+
+            // Get count of VINs to be removed
+            const vinsToRemove = this.currentVinLogData.history.filter(record => record.order_number === selectedOrder).length;
+
+            // Confirm deletion
+            const confirmMessage = `Are you sure you want to remove order group "${selectedOrder}"?\n\nThis will delete ${vinsToRemove} VIN(s) permanently.`;
+            if (confirm(confirmMessage)) {
+                this.removeOrderGroup(selectedOrder);
+                document.getElementById('orderGroupSelectionModal').style.display = 'none';
+            }
+        });
+    }
+
+    async removeOrderGroup(orderNumber) {
+        try {
+            if (!this.currentDealership || !orderNumber) {
+                this.showNotification('Missing dealership or order number', 'error');
+                return;
+            }
+
+            // Show loading state
+            this.showNotification('Removing order group...', 'info');
+
+            const response = await fetch('/api/vin-log/remove-order-group', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    dealership_name: this.currentDealership,
+                    order_number: orderNumber
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to remove order group');
+            }
+
+            this.showNotification(`Successfully removed order group ${orderNumber} (${data.vins_removed} VINs)`, 'success');
+
+            // Reload VIN log data to reflect changes
+            await this.loadVinLogData(this.currentDealership);
+
+        } catch (error) {
+            console.error('Remove order group error:', error);
+            this.showNotification(`Failed to remove order group: ${error.message}`, 'error');
+        }
+    }
+
     // Dark Mode Theme System
     initTheme() {
         console.log('Initializing theme system...');
@@ -8992,9 +9195,87 @@ Example:
         // Set up dealership selector if multiple dealerships
         this.setupDealershipSelector();
 
+        // Update table headers based on current dealership template variant
+        this.updateTableHeaders();
+
         // Don't overwrite the vehicle data table - just populate it
         this.populateModalVehicleDataTable();
         this.updateModalDownloadButton();
+    }
+
+    updateTableHeaders() {
+        // Get current dealership's template variant
+        const currentDealership = this.selectedReviewDealership ||
+                                (this.processedOrders && this.processedOrders[0] && this.processedOrders[0].dealership);
+
+        console.log('🔍 DEBUG updateTableHeaders: currentDealership =', currentDealership);
+        console.log('🔍 DEBUG updateTableHeaders: this =', this);
+        console.log('🔍 DEBUG updateTableHeaders: this.constructor.name =', this.constructor.name);
+        console.log('🔍 DEBUG updateTableHeaders: this.dealerships =', this.dealerships ? 'AVAILABLE' : 'NULL');
+
+        // Compare this to window.app
+        console.log('🔍 DEBUG: this === window.app =', this === window.app);
+        console.log('🔍 DEBUG: window.app.dealerships =', window.app?.dealerships ? 'AVAILABLE' : 'NULL');
+
+        if (!currentDealership) return;
+
+        if (this.dealerships) {
+            console.log('🔍 DEBUG: Total dealerships loaded =', this.dealerships.length);
+            const glendaleDealer = this.dealerships.find(d => d.name === 'Glendale CDJR');
+            console.log('🔍 DEBUG: Glendale CDJR found =', glendaleDealer ? 'YES' : 'NO');
+            if (glendaleDealer) {
+                console.log('🔍 DEBUG: Glendale data keys =', Object.keys(glendaleDealer));
+                console.log('🔍 DEBUG: Glendale output_rules =', glendaleDealer.output_rules);
+            }
+        }
+
+        // Check if dealership uses SCP + $ format (Glendale format)
+        // Use fallback to window.app.dealerships if this.dealerships is not available (modal context)
+        const dealerships = this.dealerships || window.app?.dealerships;
+        const dealershipData = dealerships?.find(d => d.name === currentDealership);
+        console.log('🔍 DEBUG: dealershipData found =', dealershipData ? 'YES' : 'NO');
+
+        const outputRules = dealershipData?.output_rules || {};
+        const templateVariant = outputRules.template_variant || 'standard';
+        console.log('🔍 DEBUG: outputRules =', outputRules);
+        console.log('🔍 DEBUG: templateVariant =', templateVariant);
+
+        const isGlendaleFormat = templateVariant === 'glendale_format';
+        console.log('🔍 DEBUG: isGlendaleFormat =', isGlendaleFormat);
+
+        // Update table headers
+        const headerRow = document.querySelector('#modalVehicleDataTable thead tr');
+        if (!headerRow) return;
+
+        if (isGlendaleFormat) {
+            // Glendale format: Empty, Year/Model, Trim, Price, Stock, VIN, Raw Status, Data Type, Actions
+            headerRow.innerHTML = `
+                <th></th>
+                <th>Year/Model</th>
+                <th>Trim</th>
+                <th>Price</th>
+                <th>Stock</th>
+                <th>VIN</th>
+                <th class="raw-status-header">Raw Status</th>
+                <th class="data-toggle-header">Data Type</th>
+                <th></th>
+            `;
+        } else {
+            // Standard format: Empty, Year/Make, Model, Trim, Stock, VIN, Raw Status, Data Type, Actions
+            headerRow.innerHTML = `
+                <th></th>
+                <th>Year/Make</th>
+                <th>Model</th>
+                <th>Trim</th>
+                <th>Stock</th>
+                <th>VIN</th>
+                <th class="raw-status-header">Raw Status</th>
+                <th class="data-toggle-header">Data Type</th>
+                <th></th>
+            `;
+        }
+
+        console.log(`Updated table headers for ${isGlendaleFormat ? 'Glendale' : 'standard'} format`);
     }
 
     setupDealershipSelector() {
@@ -9133,6 +9414,9 @@ Example:
 
         // Update current dealership badge
         this.updateCurrentDealershipBadge();
+
+        // Update table headers for new dealership
+        this.updateTableHeaders();
 
         // Refresh vehicle data table for selected dealership
         this.populateModalVehicleDataTable();
@@ -9757,69 +10041,133 @@ Example:
     
     renderVehicleTable(vehicles, tableBody) {
         if (!vehicles || vehicles.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="8">No vehicles to display</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="9">No vehicles to display</td></tr>';
             return;
         }
-        
+
         // Store vehicles for editing
         this.reviewVehicleData = vehicles;
-        
+
+        // Determine if we're using Glendale format
+        const currentDealership = this.selectedReviewDealership ||
+                                (this.processedOrders && this.processedOrders[0] && this.processedOrders[0].dealership);
+        // Use fallback to window.app.dealerships if this.dealerships is not available (modal context)
+        const dealerships = this.dealerships || window.app?.dealerships;
+        const dealershipData = dealerships?.find(d => d.name === currentDealership);
+        const outputRules = dealershipData?.output_rules || {};
+        const templateVariant = outputRules.template_variant || 'standard';
+        const isGlendaleFormat = templateVariant === 'glendale_format';
+
         // Generate table rows with actual vehicle data - map CSV columns to display format
         const rows = vehicles.map((vehicle, index) => {
-            return `
-                <tr id="vehicle-row-${index}" data-editing="false">
-                    <td>
-                        <button class="btn-edit btn-icon-only" onclick="window.modalWizard.toggleRowEdit(${index})" id="edit-btn-${index}" title="Edit row">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                    </td>
-                    <td class="editable-cell" data-field="year-make" data-index="${index}">
-                        <span class="display-value">${vehicle.YEARMAKE || vehicle.year || ''}</span>
-                        <input type="text" class="edit-input" value="${vehicle.YEARMAKE || vehicle.year || ''}" style="display: none;">
-                    </td>
-                    <td class="editable-cell" data-field="model" data-index="${index}">
-                        <span class="display-value">${vehicle.MODEL || vehicle.model || ''}</span>
-                        <input type="text" class="edit-input" value="${vehicle.MODEL || vehicle.model || ''}" style="display: none;">
-                    </td>
-                    <td class="editable-cell" data-field="trim" data-index="${index}">
-                        <span class="display-value">${vehicle.TRIM || vehicle.trim || ''}</span>
-                        <input type="text" class="edit-input" value="${vehicle.TRIM || vehicle.trim || ''}" style="display: none;">
-                    </td>
-                    <td class="editable-cell" data-field="stock" data-index="${index}">
-                        <span class="display-value stock-badge">${vehicle.STOCK || vehicle.stock || vehicle.stock_number || ''}</span>
-                        <input type="text" class="edit-input" value="${vehicle.STOCK || vehicle.stock || vehicle.stock_number || ''}" style="display: none;">
-                    </td>
-                    <td class="editable-cell" data-field="vin" data-index="${index}">
-                        <span class="display-value vin-display" title="${vehicle.VIN || vehicle.vin || ''}">${vehicle.VIN || vehicle.vin || ''}</span>
-                        <input type="text" class="edit-input" value="${vehicle.VIN || vehicle.vin || ''}" style="display: none;" maxlength="17">
-                    </td>
-                    <td class="raw-status-cell" data-field="raw_status" data-index="${index}">
-                        <span class="display-value">${vehicle.raw_status || vehicle.RAW_STATUS || 'N/A'}</span>
-                    </td>
-                    <td class="toggle-cell" onclick="event.stopPropagation();">
-                        <label class="data-toggle-switch">
-                            <input type="checkbox" class="toggle-input" data-vin="${vehicle.VIN || vehicle.vin || ''}" onchange="window.modalWizard.toggleVehicleDataType('${vehicle.VIN || vehicle.vin || ''}', this)">
-                            <span class="toggle-slider">
-                                <span class="toggle-label-raw">R</span>
-                                <span class="toggle-label-norm">N</span>
-                            </span>
-                        </label>
-                    </td>
-                    <td>
-                        <button class="btn-save btn-icon-only" onclick="window.modalWizard.saveRowEdit(${index})" id="save-btn-${index}" title="Save changes" style="display: none;">
-                            <i class="fas fa-save"></i>
-                        </button>
-                        <button class="btn-delete-row btn-icon-only" onclick="window.modalWizard.deleteVehicleRow(${index})" id="delete-btn-${index}" title="Delete row">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                </tr>
-            `;
+            if (isGlendaleFormat) {
+                // Glendale format: YEARMODEL, TRIM, PRICE, STOCK, VIN
+                return `
+                    <tr id="vehicle-row-${index}" data-editing="false">
+                        <td>
+                            <button class="btn-edit btn-icon-only" onclick="window.modalWizard.toggleRowEdit(${index})" id="edit-btn-${index}" title="Edit row">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                        </td>
+                        <td class="editable-cell" data-field="yearmodel" data-index="${index}">
+                            <span class="display-value">${vehicle.YEARMODEL || vehicle.yearmodel || ''}</span>
+                            <input type="text" class="edit-input" value="${vehicle.YEARMODEL || vehicle.yearmodel || ''}" style="display: none;">
+                        </td>
+                        <td class="editable-cell" data-field="trim" data-index="${index}">
+                            <span class="display-value">${vehicle.TRIM || vehicle.trim || ''}</span>
+                            <input type="text" class="edit-input" value="${vehicle.TRIM || vehicle.trim || ''}" style="display: none;">
+                        </td>
+                        <td class="editable-cell" data-field="price" data-index="${index}">
+                            <span class="display-value price-badge">${vehicle.PRICE || vehicle.price || ''}</span>
+                            <input type="text" class="edit-input" value="${vehicle.PRICE || vehicle.price || ''}" style="display: none;">
+                        </td>
+                        <td class="editable-cell" data-field="stock" data-index="${index}">
+                            <span class="display-value stock-badge">${vehicle.STOCK || vehicle.stock || vehicle.stock_number || ''}</span>
+                            <input type="text" class="edit-input" value="${vehicle.STOCK || vehicle.stock || vehicle.stock_number || ''}" style="display: none;">
+                        </td>
+                        <td class="editable-cell" data-field="vin" data-index="${index}">
+                            <span class="display-value vin-display" title="${vehicle.VIN || vehicle.vin || ''}">${vehicle.VIN || vehicle.vin || ''}</span>
+                            <input type="text" class="edit-input" value="${vehicle.VIN || vehicle.vin || ''}" style="display: none;" maxlength="17">
+                        </td>
+                        <td class="raw-status-cell" data-field="raw_status" data-index="${index}">
+                            <span class="display-value">${vehicle.raw_status || vehicle.RAW_STATUS || 'N/A'}</span>
+                        </td>
+                        <td class="toggle-cell" onclick="event.stopPropagation();">
+                            <label class="data-toggle-switch">
+                                <input type="checkbox" class="toggle-input" data-vin="${vehicle.VIN || vehicle.vin || ''}" onchange="window.modalWizard.toggleVehicleDataType('${vehicle.VIN || vehicle.vin || ''}', this)">
+                                <span class="toggle-slider">
+                                    <span class="toggle-label-raw">R</span>
+                                    <span class="toggle-label-norm">N</span>
+                                </span>
+                            </label>
+                        </td>
+                        <td>
+                            <button class="btn-save btn-icon-only" onclick="window.modalWizard.saveRowEdit(${index})" id="save-btn-${index}" title="Save changes" style="display: none;">
+                                <i class="fas fa-save"></i>
+                            </button>
+                            <button class="btn-delete-row btn-icon-only" onclick="window.modalWizard.deleteVehicleRow(${index})" id="delete-btn-${index}" title="Delete row">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            } else {
+                // Standard format: YEARMAKE, MODEL, TRIM, STOCK, VIN
+                return `
+                    <tr id="vehicle-row-${index}" data-editing="false">
+                        <td>
+                            <button class="btn-edit btn-icon-only" onclick="window.modalWizard.toggleRowEdit(${index})" id="edit-btn-${index}" title="Edit row">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                        </td>
+                        <td class="editable-cell" data-field="year-make" data-index="${index}">
+                            <span class="display-value">${vehicle.YEARMAKE || vehicle.year || ''}</span>
+                            <input type="text" class="edit-input" value="${vehicle.YEARMAKE || vehicle.year || ''}" style="display: none;">
+                        </td>
+                        <td class="editable-cell" data-field="model" data-index="${index}">
+                            <span class="display-value">${vehicle.MODEL || vehicle.model || ''}</span>
+                            <input type="text" class="edit-input" value="${vehicle.MODEL || vehicle.model || ''}" style="display: none;">
+                        </td>
+                        <td class="editable-cell" data-field="trim" data-index="${index}">
+                            <span class="display-value">${vehicle.TRIM || vehicle.trim || ''}</span>
+                            <input type="text" class="edit-input" value="${vehicle.TRIM || vehicle.trim || ''}" style="display: none;">
+                        </td>
+                        <td class="editable-cell" data-field="stock" data-index="${index}">
+                            <span class="display-value stock-badge">${vehicle.STOCK || vehicle.stock || vehicle.stock_number || ''}</span>
+                            <input type="text" class="edit-input" value="${vehicle.STOCK || vehicle.stock || vehicle.stock_number || ''}" style="display: none;">
+                        </td>
+                        <td class="editable-cell" data-field="vin" data-index="${index}">
+                            <span class="display-value vin-display" title="${vehicle.VIN || vehicle.vin || ''}">${vehicle.VIN || vehicle.vin || ''}</span>
+                            <input type="text" class="edit-input" value="${vehicle.VIN || vehicle.vin || ''}" style="display: none;" maxlength="17">
+                        </td>
+                        <td class="raw-status-cell" data-field="raw_status" data-index="${index}">
+                            <span class="display-value">${vehicle.raw_status || vehicle.RAW_STATUS || 'N/A'}</span>
+                        </td>
+                        <td class="toggle-cell" onclick="event.stopPropagation();">
+                            <label class="data-toggle-switch">
+                                <input type="checkbox" class="toggle-input" data-vin="${vehicle.VIN || vehicle.vin || ''}" onchange="window.modalWizard.toggleVehicleDataType('${vehicle.VIN || vehicle.vin || ''}', this)">
+                                <span class="toggle-slider">
+                                    <span class="toggle-label-raw">R</span>
+                                    <span class="toggle-label-norm">N</span>
+                                </span>
+                            </label>
+                        </td>
+                        <td>
+                            <button class="btn-save btn-icon-only" onclick="window.modalWizard.saveRowEdit(${index})" id="save-btn-${index}" title="Save changes" style="display: none;">
+                                <i class="fas fa-save"></i>
+                            </button>
+                            <button class="btn-delete-row btn-icon-only" onclick="window.modalWizard.deleteVehicleRow(${index})" id="delete-btn-${index}" title="Delete row">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }
         }).join('');
-        
+
         tableBody.innerHTML = rows;
-        console.log(`Rendered ${vehicles.length} vehicle rows in table`);
-        
+        console.log(`Rendered ${vehicles.length} vehicle rows in table (${isGlendaleFormat ? 'Glendale' : 'standard'} format)`);
+
         // EMERGENCY: Force raw_status data via DOM injection (bypasses all caching)
         this.injectRawStatusData(vehicles, tableBody);
     }
@@ -9937,6 +10285,145 @@ Example:
 
         // Set up multi-dealership order input if needed
         this.setupMultiDealershipOrderInput();
+    }
+
+    async processThisDealershipNow() {
+        // Process the current dealership immediately with order number
+        console.log('Processing current dealership immediately...');
+
+        // Get current dealership and result from current processing state
+        let currentDealership = null;
+        let currentResult = null;
+
+        // Get the currently selected dealership from the tabs
+        const activeDealershipTab = document.querySelector('.dealership-tab.active');
+        if (activeDealershipTab) {
+            currentDealership = activeDealershipTab.textContent.trim();
+        }
+
+        // Find the result for this dealership from processedOrders
+        if (currentDealership && this.processedOrders) {
+            const dealershipOrder = this.processedOrders.find(order =>
+                order.dealership === currentDealership
+            );
+            if (dealershipOrder) {
+                currentResult = dealershipOrder.result;
+            }
+        }
+
+        if (!currentDealership) {
+            alert('Could not determine which dealership to process');
+            return;
+        }
+
+        if (!currentResult || !currentResult.download_csv) {
+            alert('No CSV data available for this dealership');
+            return;
+        }
+
+        // Prompt for order number
+        const orderNumber = prompt(`Enter order number for ${currentDealership}:`, '');
+        if (!orderNumber || !orderNumber.trim()) {
+            alert('Order number is required to process');
+            return;
+        }
+
+        // Show processing message
+        console.log(`Processing ${currentDealership} with order number: ${orderNumber}`);
+
+        try {
+            // Extract CSV filename from download path
+            const csvPath = currentResult.download_csv;
+            const csvFilename = csvPath.split('/').pop();
+
+            // Step 1: Generate QR codes from CSV
+            console.log('Generating QR codes from CSV...');
+            const qrResponse = await fetch('/api/qr/generate-from-csv', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    csv_filename: csvFilename,
+                    dealership_name: currentDealership,
+                    order_number: orderNumber.trim()
+                })
+            });
+
+            if (!qrResponse.ok) {
+                const errorData = await qrResponse.json();
+                throw new Error(errorData.error || 'Failed to generate QR codes');
+            }
+
+            const qrResult = await qrResponse.json();
+            console.log('QR generation result:', qrResult);
+
+            // Step 2: Apply order number to VIN log
+            console.log('Applying order number to VIN log...');
+
+            // Get VINs from the CSV result or extract from CSV
+            let vins = currentResult.processed_vins || [];
+
+            // If no VINs in result, extract from CSV file
+            if (vins.length === 0) {
+                vins = ['EXTRACT_FROM_CSV'];  // Special flag to extract from CSV on backend
+            }
+
+            const applyResponse = await fetch('/api/orders/apply-order-number', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    dealership_name: currentDealership,
+                    order_number: orderNumber.trim(),
+                    vins: vins,
+                    csv_file: csvPath,
+                    qr_codes_generated: qrResult.qr_codes_generated || 0
+                })
+            });
+
+            if (!applyResponse.ok) {
+                const errorData = await applyResponse.json();
+                throw new Error(errorData.error || 'Failed to apply order number');
+            }
+
+            const applyResult = await applyResponse.json();
+            console.log('Apply order number result:', applyResult);
+
+            // Show success message
+            const successMessage = `Successfully processed ${currentDealership}!\n\n` +
+                `Order Number: ${orderNumber}\n` +
+                `QR Codes Generated: ${qrResult.qr_codes_generated || 0}\n` +
+                `VINs Updated: ${applyResult.updated_vins || vins.length}\n` +
+                `${qrResult.billing_csv_generated ? 'Billing CSV Generated\n' : ''}` +
+                `${qrResult.qr_folder ? `Files saved to: ${qrResult.qr_folder_name || 'orders folder'}` : ''}`;
+
+            alert(successMessage);
+
+            // Remove this dealership from the tabs if it was successfully processed
+            if (activeDealershipTab) {
+                const tabContainer = activeDealershipTab.parentElement;
+                activeDealershipTab.remove();
+
+                // If there are remaining dealerships, select the first one
+                const remainingTabs = tabContainer.querySelectorAll('.dealership-tab');
+                if (remainingTabs.length > 0) {
+                    remainingTabs[0].click();
+                } else {
+                    // All dealerships processed, complete the wizard
+                    setTimeout(() => {
+                        if (confirm('All dealerships have been processed. Complete the wizard?')) {
+                            this.completeProcessing();
+                        }
+                    }, 500);
+                }
+            }
+
+        } catch (error) {
+            console.error('Error processing dealership:', error);
+            alert(`Failed to process ${currentDealership}: ${error.message}`);
+        }
     }
 
     renderVehicleTableWithRawData(vehicles, tableBody, rawData) {
@@ -11086,10 +11573,9 @@ function switchToCSVModeInline() {
 let app;
 document.addEventListener('DOMContentLoaded', () => {
     app = new MinisFornumApp();
+    // Global function for inline event handlers - must be set after app is created
+    window.app = app;
 });
-
-// Global function for inline event handlers
-window.app = app;
 
 // ===== EMERGENCY MANUAL VIN ENTRY FUNCTIONS - DIRECT INJECTION =====
 // These functions MUST work regardless of caching issues
