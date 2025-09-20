@@ -338,32 +338,356 @@
         left: auto !important;
         transform: none !important;
     }
+
+    /* Sidebar Logo Section - Responsive to sidebar state with optimized spacing for larger logos */
+    .sidebar-logo-section {
+        text-align: center;
+        padding: 25px 20px;
+        margin: 20px 0;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        border-top: 1px solid rgba(253, 65, 13, 0.1);
+        border-bottom: 1px solid rgba(253, 65, 13, 0.1);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+    }
+
+    /* Both logos - Larger size when sidebar is expanded for professional appearance */
+    .sidebar-sf-logo,
+    .sidebar-car-logo {
+        width: 150px;
+        height: 150px;
+        object-fit: contain;
+        filter: brightness(1.1);
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .sidebar-sf-logo:hover,
+    .sidebar-car-logo:hover {
+        transform: scale(1.05);
+        filter: brightness(1.2);
+    }
+
+    /* Both logos - SMALLER when sidebar is collapsed */
+    .sidebar-navigation.collapsed .sidebar-logo-section {
+        padding: 8px 6px;
+        margin: 6px 0;
+        gap: 6px;
+    }
+
+    .sidebar-navigation.collapsed .sidebar-sf-logo,
+    .sidebar-navigation.collapsed .sidebar-car-logo {
+        width: 30px;
+        height: 30px;
+    }
+
+    /* Better vertical space distribution */
+    .sidebar-nav {
+        flex: 0 1 auto;
+        min-height: 0;
+    }
+
+    .sidebar-footer {
+        margin-top: auto;
+        flex-shrink: 0;
+    }
+
+    /* CRITICAL SIDEBAR OPTIMIZATION - Step by step fixes */
+
+    /* 1. Reduce excessive sidebar width from 280px to 240px */
+    .sidebar-navigation {
+        width: 240px !important;
+        min-width: 240px !important;
+    }
+
+    /* 2. Modern Professional Theme Toggle - Responsive Design */
+    .sidebar-theme-section {
+        padding: 8px 20px !important;
+        margin-bottom: 8px !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+    }
+
+    /* Modern Toggle Container */
+    .sidebar-theme-section .theme-toggle-container {
+        margin: 0 !important;
+        position: relative !important;
+    }
+
+    /* EXPANDED STATE - Modern Professional Toggle */
+    .sidebar-theme-section .theme-toggle {
+        width: 72px !important;
+        height: 36px !important;
+        border-radius: 18px !important;
+        background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%) !important;
+        border: 2px solid #e2e8f0 !important;
+        position: relative !important;
+        cursor: pointer !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        box-shadow:
+            inset 0 2px 4px rgba(0, 0, 0, 0.1),
+            0 1px 2px rgba(0, 0, 0, 0.05) !important;
+    }
+
+    /* Toggle Thumb - Expanded */
+    .sidebar-theme-section .theme-toggle-thumb {
+        width: 28px !important;
+        height: 28px !important;
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+        border-radius: 50% !important;
+        position: absolute !important;
+        top: 2px !important;
+        left: 4px !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        box-shadow:
+            0 2px 4px rgba(0, 0, 0, 0.1),
+            0 1px 2px rgba(0, 0, 0, 0.06) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    /* Icons in Thumb */
+    .sidebar-theme-section .theme-icon {
+        font-size: 14px !important;
+        transition: all 0.3s ease !important;
+        position: absolute !important;
+    }
+
+    .sidebar-theme-section .light-icon {
+        color: #f59e0b !important;
+        opacity: 1 !important;
+    }
+
+    .sidebar-theme-section .dark-icon {
+        color: #6366f1 !important;
+        opacity: 0 !important;
+    }
+
+    /* Dark Mode Active State */
+    .sidebar-theme-section .theme-toggle-input:checked + .theme-toggle-slider {
+        background: linear-gradient(135deg, #1e293b 0%, #374151 100%) !important;
+        border-color: #374151 !important;
+    }
+
+    .sidebar-theme-section .theme-toggle-input:checked + .theme-toggle-slider .theme-toggle-thumb {
+        transform: translateX(36px) !important;
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+    }
+
+    .sidebar-theme-section .theme-toggle-input:checked + .theme-toggle-slider .light-icon {
+        opacity: 0 !important;
+    }
+
+    .sidebar-theme-section .theme-toggle-input:checked + .theme-toggle-slider .dark-icon {
+        opacity: 1 !important;
+        color: #ffffff !important;
+    }
+
+    /* Hover Effects */
+    .sidebar-theme-section .theme-toggle:hover {
+        transform: scale(1.02) !important;
+        box-shadow:
+            inset 0 2px 4px rgba(0, 0, 0, 0.1),
+            0 2px 8px rgba(0, 0, 0, 0.1) !important;
+    }
+
+    /* COLLAPSED STATE - Proportional Scaling */
+    .sidebar-navigation.collapsed .sidebar-theme-section {
+        padding: 6px 8px !important;
+        margin-bottom: 6px !important;
+    }
+
+    .sidebar-navigation.collapsed .sidebar-theme-section .theme-toggle {
+        width: 52px !important;
+        height: 26px !important;
+        border-radius: 13px !important;
+    }
+
+    .sidebar-navigation.collapsed .sidebar-theme-section .theme-toggle-thumb {
+        width: 20px !important;
+        height: 20px !important;
+        top: 1px !important;
+        left: 3px !important;
+    }
+
+    .sidebar-navigation.collapsed .sidebar-theme-section .theme-icon {
+        font-size: 10px !important;
+    }
+
+    .sidebar-navigation.collapsed .sidebar-theme-section .theme-toggle-input:checked + .theme-toggle-slider .theme-toggle-thumb {
+        transform: translateX(26px) !important;
+    }
+
+    /* 3. Fix footer padding and system status visibility */
+    .sidebar-footer {
+        padding: 12px 16px !important;
+    }
+
+    .sidebar-status {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        font-size: 12px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    .status-label {
+        max-width: 120px !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    /* 4. Update collapsed state for new width */
+    .sidebar-navigation.collapsed {
+        width: 60px !important;
+        min-width: 60px !important;
+    }
+
+    /* 5. Ensure responsive grid layouts use new width */
+    @media (max-width: 768px) {
+        .sidebar-navigation {
+            left: -240px !important;
+        }
+    }
+
+    /* ORDER QUEUE MANAGEMENT SPACING FIXES */
+
+    /* 1. Balanced spacing between Scheduled Days and Individual Dealerships */
+    .day-selection {
+        margin-bottom: 25px !important;
+        padding-bottom: 15px !important;
+    }
+
+    .dealership-selection {
+        margin-top: 20px !important;
+        clear: both !important;
+        position: relative !important;
+    }
+
+    /* 2. Adjust Scheduled Days cards spacing for better density */
+    .day-buttons {
+        gap: 16px !important;
+        margin-bottom: 16px !important;
+        padding: 16px !important;
+    }
+
+    /* 3. Improve visual hierarchy and separation between sections */
+    .dealership-selection {
+        background: var(--theme-surface-elevated) !important;
+        border-radius: 12px !important;
+        padding: 24px !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+        border: 1px solid var(--theme-border) !important;
+    }
+
+    .dealership-selection h3 {
+        color: var(--primary-red) !important;
+        margin-bottom: 20px !important;
+        font-size: 1.3rem !important;
+        font-weight: 700 !important;
+    }
+
+    /* 4. Enhanced search section visual hierarchy */
+    .dealership-search {
+        margin-top: 12px !important;
+        position: relative !important;
+    }
+
+    /* 5. Autocomplete container and search bar fixes */
+    .dealership-search-container {
+        position: relative !important;
+        width: 100% !important;
+    }
+
+    .dealership-search-container .search-input {
+        width: 100% !important;
+        padding: 12px 16px 12px 40px !important;
+        border: 2px solid var(--theme-border) !important;
+        border-radius: 8px !important;
+        background: var(--theme-surface) !important;
+        color: var(--theme-text-primary) !important;
+        font-size: 14px !important;
+        transition: border-color 0.3s ease !important;
+    }
+
+    .dealership-search-container .search-input:focus {
+        outline: none !important;
+        border-color: var(--primary-red) !important;
+        box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1) !important;
+    }
+
+    .dealership-search-container::before {
+        content: '\f002' !important;
+        font-family: 'Font Awesome 5 Free' !important;
+        font-weight: 900 !important;
+        position: absolute !important;
+        left: 14px !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        color: var(--theme-text-secondary) !important;
+        font-size: 14px !important;
+        pointer-events: none !important;
+        z-index: 2 !important;
+    }
+
+    .dealership-autocomplete {
+        position: absolute !important;
+        top: 100% !important;
+        left: 0 !important;
+        right: 0 !important;
+        background: var(--theme-surface) !important;
+        border: 1px solid var(--theme-border) !important;
+        border-top: none !important;
+        border-radius: 0 0 8px 8px !important;
+        max-height: 200px !important;
+        overflow-y: auto !important;
+        z-index: 1000 !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+        display: none !important;
+    }
+
+    .autocomplete-item {
+        padding: 12px 16px !important;
+        cursor: pointer !important;
+        border-bottom: 1px solid var(--theme-border-light) !important;
+        transition: background 0.2s ease !important;
+    }
+
+    .autocomplete-item:hover {
+        background: var(--theme-bg-secondary) !important;
+    }
+
+    .autocomplete-item.selected {
+        background: var(--primary-red) !important;
+        color: white !important;
+    }
+
+    /* 6. Dealership list always visible and 2 panels per row - PRESERVE EXISTING GRID SYSTEM */
+    .dealership-list {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 12px !important;
+        margin-top: 16px !important;
+        padding: 8px !important;
+    }
+
+    /* Ensure dealership panels work properly in 2-column grid */
+    .dealership-list .modern-dealer-panel {
+        margin: 0 !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
     </style>
 
 </head>
 <body>
     <div class="app-container">
-        <!-- Header -->
-        <header class="app-header">
-            <button class="mobile-menu-toggle" id="mobileMenuToggle">
-                <i class="fas fa-bars"></i>
-            </button>
-            <div class="header-content">
-                <div class="logo-section">
-                    <img src="{{ url_for('static', filename='images/Asset_58.svg') }}?v={{ range(1000, 9999) | random }}&logo-fix" alt="Silver Fox Marketing" class="header-logo">
-                    <div class="title-section">
-                        <div class="title-with-logo">
-                            <div class="title-text">
-                                <span class="company-name"></span>
-                            </div>
-                            <img src="{{ url_for('static', filename='images/car_logo_orange.png') }}?v=123" alt="LotSherpa" class="car-logo">
-                        </div>
-                    </div>
-                </div>
-                <div class="status-section">
-                </div>
-            </div>
-        </header>
 
         <!-- Main Content Area -->
         <div class="main-content">
@@ -474,6 +798,10 @@
                 </nav>
                 
                 <div class="sidebar-footer">
+                    <div class="sidebar-logo-section">
+                        <img src="{{ url_for('static', filename='images/silver_fox_logo.svg') }}?v={{ range(1000, 9999) | random }}" alt="Silver Fox Marketing" class="sidebar-sf-logo">
+                        <img src="{{ url_for('static', filename='images/car_logo_orange.png') }}?v=123" alt="LotSherpa" class="sidebar-car-logo">
+                    </div>
                     <div class="sidebar-status">
                         <i class="fas fa-circle status-dot"></i>
                         <span class="status-label">All Systems Online</span>
@@ -816,16 +1144,15 @@
                                     
                                     <!-- Dealership Search -->
                                     <div class="dealership-search">
-                                        <input type="text" id="dealershipSearchInput" placeholder="Search dealerships..." class="search-input">
-                                        <button class="search-btn" id="dealershipSearchBtn">
-                                            <i class="fas fa-search"></i>
-                                        </button>
-                                        <button class="clear-search-btn" id="clearDealershipSearchBtn" style="display: none;">
-                                            <i class="fas fa-times"></i>
-                                        </button>
+                                        <div class="dealership-search-container">
+                                            <input type="text" id="dealershipSearchInput" placeholder="Search dealerships..." class="search-input">
+                                            <div class="dealership-autocomplete" id="dealershipAutocomplete">
+                                                <!-- Autocomplete suggestions will be populated here -->
+                                            </div>
+                                        </div>
                                     </div>
                                     
-                                    <div class="dealership-list" id="dealershipList" style="display: none;">
+                                    <div class="dealership-list" id="dealershipList">
                                         <!-- Will be populated dynamically -->
                                         <div class="loading">Loading dealerships...</div>
                                     </div>
@@ -1012,29 +1339,51 @@
                             <h4>Vehicle Types</h4>
                         </div>
                         <div class="modern-checkbox-grid">
-                            <div class="modern-checkbox-item">
-                                <input type="checkbox" id="vehicleNew" name="vehicle_types" value="new" checked>
-                                <label for="vehicleNew" class="modern-checkbox-label">
-                                    <div class="checkbox-indicator">
-                                        <i class="fas fa-check"></i>
-                                    </div>
-                                    <div class="checkbox-content">
-                                        <i class="fas fa-star"></i>
-                                        <span>New Vehicles</span>
-                                    </div>
-                                </label>
+                            <div class="modern-checkbox-item" style="flex-direction: column; align-items: flex-start;">
+                                <div style="display: flex; align-items: center; width: 100%;">
+                                    <input type="checkbox" id="vehicleNew" name="vehicle_types" value="new" checked>
+                                    <label for="vehicleNew" class="modern-checkbox-label">
+                                        <div class="checkbox-indicator">
+                                            <i class="fas fa-check"></i>
+                                        </div>
+                                        <div class="checkbox-content">
+                                            <i class="fas fa-star"></i>
+                                            <span>New Vehicles</span>
+                                        </div>
+                                    </label>
+                                </div>
+                                <!-- Template Type Toggle for New Vehicles -->
+                                <div class="template-type-toggle" style="margin-top: 10px; margin-left: 30px; display: flex; align-items: center; gap: 10px;">
+                                    <span style="font-size: 12px; color: #666;">Template:</span>
+                                    <label class="switch" style="margin: 0;">
+                                        <input type="checkbox" id="newVehicleTemplate" name="new_template_type" data-vehicle-type="new">
+                                        <span class="slider round"></span>
+                                    </label>
+                                    <span id="newTemplateLabel" style="font-size: 12px; color: #666; min-width: 100px;">SHORTCUT PACK</span>
+                                </div>
                             </div>
-                            <div class="modern-checkbox-item">
-                                <input type="checkbox" id="vehicleUsed" name="vehicle_types" value="used" checked>
-                                <label for="vehicleUsed" class="modern-checkbox-label">
-                                    <div class="checkbox-indicator">
-                                        <i class="fas fa-check"></i>
-                                    </div>
-                                    <div class="checkbox-content">
-                                        <i class="fas fa-history"></i>
-                                        <span>Used Vehicles</span>
-                                    </div>
-                                </label>
+                            <div class="modern-checkbox-item" style="flex-direction: column; align-items: flex-start;">
+                                <div style="display: flex; align-items: center; width: 100%;">
+                                    <input type="checkbox" id="vehicleUsed" name="vehicle_types" value="used" checked>
+                                    <label for="vehicleUsed" class="modern-checkbox-label">
+                                        <div class="checkbox-indicator">
+                                            <i class="fas fa-check"></i>
+                                        </div>
+                                        <div class="checkbox-content">
+                                            <i class="fas fa-history"></i>
+                                            <span>Used Vehicles</span>
+                                        </div>
+                                    </label>
+                                </div>
+                                <!-- Template Type Toggle for Used Vehicles -->
+                                <div class="template-type-toggle" style="margin-top: 10px; margin-left: 30px; display: flex; align-items: center; gap: 10px;">
+                                    <span style="font-size: 12px; color: #666;">Template:</span>
+                                    <label class="switch" style="margin: 0;">
+                                        <input type="checkbox" id="usedVehicleTemplate" name="used_template_type" data-vehicle-type="used">
+                                        <span class="slider round"></span>
+                                    </label>
+                                    <span id="usedTemplateLabel" style="font-size: 12px; color: #666; min-width: 100px;">SHORTCUT PACK</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1104,6 +1453,35 @@
                                             <small>Required for graphics with printed prices</small>
                                         </div>
                                     </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Output Format Section -->
+                        <div class="form-section">
+                            <div class="section-header">
+                                <i class="fas fa-file-export"></i>
+                                <h4>Output Format Settings</h4>
+                            </div>
+                            <div class="filter-grid">
+                                <div class="filter-item">
+                                    <label for="templateVariant" class="modern-input-label">
+                                        <i class="fas fa-columns"></i>
+                                        Template Format
+                                    </label>
+                                    <select id="templateVariant" name="template_variant" class="modern-input">
+                                        <option value="standard">Standard Format</option>
+                                        <option value="glendale_format">SCP + $</option>
+                                    </select>
+                                    <small class="help-text">Column structure for CSV output</small>
+                                </div>
+                                <div class="filter-item">
+                                    <label for="priceMarkup" class="modern-input-label">
+                                        <i class="fas fa-plus-circle"></i>
+                                        Price Markup ($)
+                                    </label>
+                                    <input type="number" id="priceMarkup" name="price_markup" min="0" placeholder="0" class="modern-input">
+                                    <small class="help-text">Amount to add to vehicle price in output</small>
                                 </div>
                             </div>
                         </div>
@@ -1398,6 +1776,10 @@
                 <button class="modern-modal-btn update-btn" id="updateVinLogBtn">
                     <i class="fas fa-upload"></i>
                     Update VIN Log
+                </button>
+                <button class="modern-modal-btn delete-btn" id="removeOrderGroupBtn" style="background-color: #dc3545;">
+                    <i class="fas fa-trash-alt"></i>
+                    Remove Order Group
                 </button>
                 <button class="modern-modal-btn close-btn" id="closeVinLogModalBtn">
                     <i class="fas fa-times-circle"></i>
@@ -2113,8 +2495,179 @@ SF24002
     </div>
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?cache-bust=auffenberg-config-updated-{{ range(100000, 999999) | random }}"></script>
-    
+    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?cache-bust=fallback-dealership-fix-{{ range(100000, 999999) | random }}"></script>
+
+    <!-- Dealership Autocomplete Enhancement -->
+    <script>
+    // Enhanced dealership autocomplete functionality
+    class DealershipAutocomplete {
+        constructor() {
+            this.dealerships = [];
+            this.selectedIndex = -1;
+            this.isVisible = false;
+            this.init();
+        }
+
+        init() {
+            // Wait for app to be ready and dealerships to be loaded
+            document.addEventListener('DOMContentLoaded', () => {
+                setTimeout(() => this.setupAutocomplete(), 1000);
+            });
+        }
+
+        setupAutocomplete() {
+            const searchInput = document.getElementById('dealershipSearchInput');
+            const autocompleteContainer = document.getElementById('dealershipAutocomplete');
+
+            if (!searchInput || !autocompleteContainer) {
+                console.log('Autocomplete elements not found, retrying...');
+                setTimeout(() => this.setupAutocomplete(), 500);
+                return;
+            }
+
+            // Load dealerships from the app instance
+            this.loadDealerships();
+
+            // Input event for real-time suggestions
+            searchInput.addEventListener('input', (e) => {
+                this.showSuggestions(e.target.value);
+            });
+
+            // Keyboard navigation
+            searchInput.addEventListener('keydown', (e) => {
+                this.handleKeydown(e);
+            });
+
+            // Hide suggestions when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.dealership-search-container')) {
+                    this.hideSuggestions();
+                }
+            });
+
+            console.log('✅ Dealership autocomplete initialized');
+        }
+
+        loadDealerships() {
+            // Try to get dealerships from the app instance
+            if (window.app && window.app.dealerships) {
+                this.dealerships = window.app.dealerships.map(d => d.name).sort();
+            } else {
+                // Fallback: common dealership names
+                this.dealerships = [
+                    'Auffenberg Hyundai', 'Bommarito Cadillac', 'Frank Leta Honda',
+                    'Glendale CDJR', 'Serra Honda', 'South County DCJR', 'Weber Chevrolet'
+                ].sort();
+            }
+            console.log(`📋 Loaded ${this.dealerships.length} dealerships for autocomplete`);
+        }
+
+        showSuggestions(query) {
+            const autocompleteContainer = document.getElementById('dealershipAutocomplete');
+            if (!query.trim()) {
+                this.hideSuggestions();
+                return;
+            }
+
+            const matches = this.dealerships.filter(name =>
+                name.toLowerCase().includes(query.toLowerCase())
+            ).slice(0, 8); // Limit to 8 suggestions
+
+            if (matches.length === 0) {
+                this.hideSuggestions();
+                return;
+            }
+
+            const html = matches.map((name, index) =>
+                `<div class="autocomplete-item" data-index="${index}" data-name="${name}">
+                    ${name}
+                </div>`
+            ).join('');
+
+            autocompleteContainer.innerHTML = html;
+            autocompleteContainer.style.display = 'block';
+            this.isVisible = true;
+            this.selectedIndex = -1;
+
+            // Add click handlers
+            autocompleteContainer.querySelectorAll('.autocomplete-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    this.selectSuggestion(item.dataset.name);
+                });
+            });
+        }
+
+        hideSuggestions() {
+            const autocompleteContainer = document.getElementById('dealershipAutocomplete');
+            if (autocompleteContainer) {
+                autocompleteContainer.style.display = 'none';
+                this.isVisible = false;
+                this.selectedIndex = -1;
+            }
+        }
+
+        handleKeydown(e) {
+            if (!this.isVisible) return;
+
+            const items = document.querySelectorAll('.autocomplete-item');
+
+            switch(e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    this.selectedIndex = Math.min(this.selectedIndex + 1, items.length - 1);
+                    this.updateSelection(items);
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    this.selectedIndex = Math.max(this.selectedIndex - 1, -1);
+                    this.updateSelection(items);
+                    break;
+                case 'Enter':
+                    e.preventDefault();
+                    if (this.selectedIndex >= 0 && items[this.selectedIndex]) {
+                        this.selectSuggestion(items[this.selectedIndex].dataset.name);
+                    }
+                    break;
+                case 'Escape':
+                    this.hideSuggestions();
+                    break;
+            }
+        }
+
+        updateSelection(items) {
+            items.forEach((item, index) => {
+                item.classList.toggle('selected', index === this.selectedIndex);
+            });
+        }
+
+        selectSuggestion(name) {
+            const searchInput = document.getElementById('dealershipSearchInput');
+            if (searchInput) {
+                searchInput.value = name;
+
+                // Trigger existing search functionality
+                if (window.app && window.app.filterDealershipList) {
+                    window.app.filterDealershipList();
+                }
+
+                // Also trigger the input event to ensure all handlers are called
+                const event = new Event('input', { bubbles: true });
+                searchInput.dispatchEvent(event);
+
+                // Show the clear button if it exists
+                const clearBtn = document.getElementById('clearDealershipSearchBtn');
+                if (clearBtn) {
+                    clearBtn.style.display = 'inline-block';
+                }
+            }
+            this.hideSuggestions();
+        }
+    }
+
+    // Initialize autocomplete
+    window.dealershipAutocomplete = new DealershipAutocomplete();
+    </script>
+
     <!-- MODERN TESTING MODE TOGGLE FUNCTION -->
     <script>
     function toggleTestingMode() {
