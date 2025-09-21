@@ -8642,10 +8642,12 @@ class ModalOrderWizard {
     async processCaoOrder(dealershipName) {
         // Get testing mode checkbox state from modal checkbox
         const modalTestingCheckbox = document.getElementById('modalSkipVinLogging');
-        const testingMode = modalTestingCheckbox ? modalTestingCheckbox.checked : 
+        const testingMode = modalTestingCheckbox ? modalTestingCheckbox.checked :
                            (localStorage.getItem('orderWizardTestingMode') === 'true');
-        
-        const response = await fetch('/api/orders/process-cao', {
+
+        // ORIGINAL CAO PROCESSING (maintain backward compatibility)
+        console.log(`Processing CAO order for ${dealershipName} (original workflow)`);
+        const originalResponse = await fetch('/api/orders/process-cao', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -8656,39 +8658,204 @@ class ModalOrderWizard {
                 skip_vin_logging: testingMode
             })
         });
-        
-        if (!response.ok) {
-            throw new Error(`Failed to process CAO order: ${response.statusText}`);
+
+        if (!originalResponse.ok) {
+            throw new Error(`Failed to process CAO order: ${originalResponse.statusText}`);
         }
-        
-        const results = await response.json();
-        console.log('Raw API response:', results);
-        const result = results[0] || results; // Handle both array and single object responses
-        console.log('Processed result:', result);
-        
-        // DEBUG: Check all possible vehicle count fields
-        console.log('DEBUG vehicle counts:', {
-            new_vehicles: result.new_vehicles,
-            vehicle_count: result.vehicle_count,
-            vehicles_processed: result.vehicles_processed
+
+        const originalResults = await originalResponse.json();
+        console.log('Original CAO API response:', originalResults);
+        const originalResult = originalResults[0] || originalResults; // Handle both array and single object responses
+        console.log('Original CAO processed result:', originalResult);
+
+        // PHASE 1: ALSO prepare CAO data for the new two-phase workflow
+        console.log(`[PHASE 1] ALSO preparing CAO data for ${dealershipName} for new workflow`);
+        let phase1Result = null;
+        try {
+            const phase1Response = await fetch('/api/orders/prepare-cao', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    dealerships: [dealershipName],
+                    skip_vin_logging: testingMode
+                })
+            });
+
+            if (phase1Response.ok) {
+                const phase1Results = await phase1Response.json();
+                console.log('[PHASE 1] Prepare CAO API response:', phase1Results);
+                phase1Result = phase1Results[0] || phase1Results;
+                console.log('[PHASE 1] Prepared data result:', phase1Result);
+            } else {
+                console.warn('[PHASE 1] Failed to prepare CAO data for new workflow, continuing with original only');
+            }
+        } catch (error) {
+            console.warn('[PHASE 1] Error preparing CAO data for new workflow:', error.message);
+        }
+
+        // Return original result with Phase 1 data attached for new workflow
+        const vehicleCount = originalResult.new_vehicles || originalResult.vehicle_count ||
+                           originalResult.vehicles_processed || 0;
+
+        return {
+            ...originalResult,
+            vehicles_processed: vehicleCount,
+            // Store Phase 1 data for the new workflow (if available)
+            phase1_data: phase1Result
+        };
+    }
+
+    async generateFinalFiles(dealershipName, vehiclesData, orderNumber, templateType = null) {
+        // PHASE 2: Generate final files from prepared data + order number
+        const modalTestingCheckbox = document.getElementById('modalSkipVinLogging');
+        const testingMode = modalTestingCheckbox ? modalTestingCheckbox.checked :
+                           (localStorage.getItem('orderWizardTestingMode') === 'true');
+
+        console.log(`[PHASE 2] Generating final files for ${dealershipName} with order number: ${orderNumber}`);
+        console.log(`[PHASE 2] Processing ${vehiclesData.length} vehicles`);
+
+        const response = await fetch('/api/orders/generate-final-files', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                dealership_name: dealershipName,
+                vehicles_data: vehiclesData,
+                order_number: orderNumber,
+                template_type: templateType,
+                skip_vin_logging: testingMode
+            })
         });
-        
-        // Map backend fields to frontend expected fields
+
+        if (!response.ok) {
+            throw new Error(`Failed to generate final files: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        console.log('[PHASE 2] Final file generation result:', result);
+
+        // Map backend fields to frontend expected fields for PHASE 2 (file generation)
         const mappedResult = {
-            vehicles_processed: result.new_vehicles || result.vehicle_count || 0,
+            vehicles_processed: result.vehicle_count || 0,
             files_generated: result.qr_codes_generated || 0,
             success: result.success,
             dealership: result.dealership,
+            order_number: result.order_number,
+            phase: 'files_generated',
             download_csv: result.download_csv,
             qr_folder: result.qr_folder,
             csv_file: result.csv_file,
-            timestamp: result.timestamp
+            billing_csv_file: result.billing_csv_file,
+            download_billing_csv: result.download_billing_csv,
+            timestamp: result.timestamp,
+            vins_logged_to_history: result.vins_logged_to_history,
+            vin_logging_success: result.vin_logging_success
         };
-        
-        console.log('Mapped result for frontend:', mappedResult);
+
+        console.log('[PHASE 2] Mapped result for frontend:', mappedResult);
         return mappedResult;
     }
-    
+
+    async generateAllFinalFiles() {
+        // PHASE 2: Generate final files for all dealerships with prepared data + order numbers
+        console.log('[PHASE 2] Generating final files for all dealerships...');
+
+        // Find all processed orders that have Phase 1 prepared data
+        const dealershipsWithData = this.processedOrders.filter(order =>
+            order.result &&
+            order.result.phase1_data &&
+            order.result.phase1_data.vehicles_data &&
+            order.result.phase1_data.vehicles_data.length > 0
+        );
+
+        console.log(`[PHASE 2] Found ${dealershipsWithData.length} dealerships with prepared data`);
+
+        if (dealershipsWithData.length === 0) {
+            console.log('[PHASE 2] No dealerships with prepared data to process');
+            return;
+        }
+
+        // Collect order numbers for each dealership
+        // TODO: This needs to be implemented to collect order numbers from the UI
+        // For now, use a placeholder method
+        const orderNumbers = this.collectOrderNumbers(dealershipsWithData);
+
+        // Process each dealership with final file generation
+        for (let i = 0; i < dealershipsWithData.length; i++) {
+            const order = dealershipsWithData[i];
+            const dealershipName = order.dealership;
+            const vehiclesData = order.result.phase1_data.vehicles_data;
+            const templateType = order.result.phase1_data.template_type;
+            const orderNumber = orderNumbers[dealershipName];
+
+            if (!orderNumber) {
+                console.warn(`[PHASE 2] No order number provided for ${dealershipName}, skipping...`);
+                continue;
+            }
+
+            console.log(`[PHASE 2] Generating final files for ${dealershipName} with order ${orderNumber}`);
+
+            try {
+                // Call Phase 2 file generation
+                const finalResult = await this.generateFinalFiles(
+                    dealershipName,
+                    vehiclesData,
+                    orderNumber,
+                    templateType
+                );
+
+                // Update the processed order with final file information
+                order.result = {
+                    ...order.result,
+                    ...finalResult,
+                    phase: 'files_generated'
+                };
+
+                console.log(`[PHASE 2] Successfully generated final files for ${dealershipName}`);
+
+            } catch (error) {
+                console.error(`[PHASE 2] Error generating final files for ${dealershipName}:`, error);
+                throw new Error(`Failed to generate final files for ${dealershipName}: ${error.message}`);
+            }
+        }
+
+        console.log('[PHASE 2] All final files generated successfully');
+    }
+
+    collectOrderNumbers(dealershipsWithData) {
+        // Collect order numbers entered by the user in the order number step
+        // This method should extract order numbers from the UI
+        console.log('[PHASE 2] Collecting order numbers from UI...');
+
+        const orderNumbers = {};
+
+        // Try to collect from multi-dealership order inputs if they exist
+        dealershipsWithData.forEach(order => {
+            const dealershipName = order.dealership;
+
+            // Look for dealership-specific order number input
+            const orderInput = document.getElementById(`orderNumber_${dealershipName.replace(/\s+/g, '_')}`);
+
+            if (orderInput && orderInput.value.trim()) {
+                orderNumbers[dealershipName] = orderInput.value.trim();
+                console.log(`[PHASE 2] Collected order number for ${dealershipName}: ${orderInput.value.trim()}`);
+            } else {
+                // Fallback to single order number if available
+                if (this.singleOrderNumber) {
+                    orderNumbers[dealershipName] = this.singleOrderNumber;
+                    console.log(`[PHASE 2] Using single order number for ${dealershipName}: ${this.singleOrderNumber}`);
+                } else {
+                    console.warn(`[PHASE 2] No order number found for ${dealershipName}`);
+                }
+            }
+        });
+
+        return orderNumbers;
+    }
+
     proceedToListProcessing() {
         // Check if we have maintenance orders to process first
         if (this.maintenanceOrders.length > 0) {
@@ -10298,7 +10465,18 @@ Example:
         // Get the currently selected dealership from the tabs
         const activeDealershipTab = document.querySelector('.dealership-tab.active');
         if (activeDealershipTab) {
-            currentDealership = activeDealershipTab.textContent.trim();
+            currentDealership = activeDealershipTab.getAttribute('data-dealership');
+
+            // Skip "all" dealerships view - we need a specific dealership
+            if (currentDealership === 'all') {
+                alert('Please select a specific dealership to process (not "All Dealerships" view)');
+                return;
+            }
+        }
+
+        // Alternative: get from selectedReviewDealership property
+        if (!currentDealership && this.selectedReviewDealership && this.selectedReviewDealership !== 'all') {
+            currentDealership = this.selectedReviewDealership;
         }
 
         // Find the result for this dealership from processedOrders
@@ -10391,12 +10569,58 @@ Example:
             const applyResult = await applyResponse.json();
             console.log('Apply order number result:', applyResult);
 
+            // PHASE 2: Generate final files with order number using EDITED CSV data
+            let phase2Result = null;
+            if (currentResult.phase1_data) {
+                console.log(`[PHASE 2] Generating final files for ${currentDealership} with order number ${orderNumber} using edited CSV data`);
+
+                try {
+                    // Get testing mode checkbox state
+                    const modalTestingCheckbox = document.getElementById('modalSkipVinLogging');
+                    const testingMode = modalTestingCheckbox ? modalTestingCheckbox.checked :
+                                       (localStorage.getItem('orderWizardTestingMode') === 'true');
+
+                    // Extract CSV filename from download path to get the edited data
+                    const csvPath = currentResult.download_csv;
+                    const csvFilename = csvPath.split('/').pop();
+
+                    // Call Phase 2 API with CSV filename to get edited data
+                    const phase2Response = await fetch('/api/orders/generate-final-files', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            dealership_name: currentDealership,
+                            order_number: orderNumber.trim(),
+                            csv_filename: csvFilename,
+                            template_type: currentResult.phase1_data.template_type,
+                            skip_vin_logging: testingMode
+                        })
+                    });
+
+                    if (phase2Response.ok) {
+                        phase2Result = await phase2Response.json();
+                        console.log(`[PHASE 2] Successfully generated final files for ${currentDealership}:`, phase2Result);
+                    } else {
+                        const errorData = await phase2Response.json();
+                        throw new Error(errorData.error || 'Failed to generate final files');
+                    }
+                } catch (error) {
+                    console.warn(`[PHASE 2] Failed to generate final files for ${currentDealership}:`, error.message);
+                    // Don't fail the entire process if Phase 2 fails
+                }
+            } else {
+                console.log(`[PHASE 2] No Phase 1 data available for ${currentDealership}, skipping final file generation`);
+            }
+
             // Show success message
             const successMessage = `Successfully processed ${currentDealership}!\n\n` +
                 `Order Number: ${orderNumber}\n` +
                 `QR Codes Generated: ${qrResult.qr_codes_generated || 0}\n` +
                 `VINs Updated: ${applyResult.updated_vins || vins.length}\n` +
                 `${qrResult.billing_csv_generated ? 'Billing CSV Generated\n' : ''}` +
+                `${phase2Result ? `[PHASE 2] Final files generated with order number\n` : ''}` +
                 `${qrResult.qr_folder ? `Files saved to: ${qrResult.qr_folder_name || 'orders folder'}` : ''}`;
 
             alert(successMessage);
@@ -10636,10 +10860,21 @@ Example:
         this.completeProcessing();
     }
     
-    completeProcessing() {
+    async completeProcessing() {
+        console.log('[PHASE 2] Starting final file generation before completion...');
+
+        try {
+            // PHASE 2: Generate final files for all dealerships with prepared data + order numbers
+            await this.generateAllFinalFiles();
+        } catch (error) {
+            console.error('[PHASE 2] Error during final file generation:', error);
+            alert(`Error generating final files: ${error.message}`);
+            return;
+        }
+
         this.updateModalProgress('complete');
         this.showStep('complete');
-        
+
         const completionContainer = document.getElementById('modalCompletionDetails');
         if (completionContainer) {
             completionContainer.innerHTML = `

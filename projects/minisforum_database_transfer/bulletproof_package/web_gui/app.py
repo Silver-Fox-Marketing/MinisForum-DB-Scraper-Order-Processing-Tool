@@ -1281,6 +1281,92 @@ def process_cao_orders():
         logger.error(f"Error processing CAO orders: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/orders/prepare-cao', methods=['POST'])
+def prepare_cao_data():
+    """PHASE 1: Prepare CAO data for review (no file generation)"""
+    try:
+        data = request.get_json()
+        dealerships = data.get('dealerships', [])
+        skip_vin_logging = data.get('skip_vin_logging', False)
+
+        logger.info(f"[PHASE 1] Preparing CAO data for {len(dealerships)} dealerships")
+
+        results = []
+        for dealership in dealerships:
+            logger.info(f"[PHASE 1] Preparing data for {dealership}")
+
+            # Call the new prepare_cao_data method (no file generation)
+            result = order_processor.prepare_cao_data(dealership)
+
+            logger.info(f"[PHASE 1] Data preparation result for {dealership}: success={result.get('success')}, vehicle_count={result.get('vehicle_count')}")
+
+            # Convert all Path objects to strings for JSON serialization
+            result = _convert_paths_to_strings(result)
+            results.append(result)
+
+        logger.info(f"[PHASE 1] Completed data preparation for {len(dealerships)} dealerships")
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error preparing CAO data: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/orders/generate-final-files', methods=['POST'])
+def generate_final_files():
+    """PHASE 2: Generate final files from prepared data + order number"""
+    try:
+        data = request.get_json()
+        dealership_name = data.get('dealership_name')
+        vehicles_data = data.get('vehicles_data', [])
+        csv_filename = data.get('csv_filename')
+        order_number = data.get('order_number')
+        template_type = data.get('template_type')
+        skip_vin_logging = data.get('skip_vin_logging', False)
+
+        if not dealership_name:
+            return jsonify({'error': 'Missing dealership_name'}), 400
+        if not order_number:
+            return jsonify({'error': 'Missing order_number'}), 400
+
+        # If csv_filename is provided, read edited data from CSV file
+        if csv_filename:
+            logger.info(f"[PHASE 2] Reading edited data from CSV file: {csv_filename}")
+            try:
+                # Extract vehicles data from the edited CSV file using Phase 2 logic
+                vehicles_data = extract_vins_from_csv_for_phase2(csv_filename, return_full_data=True)
+                logger.info(f"[PHASE 2] Extracted {len(vehicles_data)} vehicles from edited CSV")
+                if len(vehicles_data) == 0:
+                    logger.warning(f"[PHASE 2] No vehicles extracted from CSV file {csv_filename}")
+            except Exception as e:
+                logger.error(f"[PHASE 2] Failed to read CSV file {csv_filename}: {e}")
+                import traceback
+                logger.error(f"[PHASE 2] Full traceback: {traceback.format_exc()}")
+                return jsonify({'error': f'Failed to read edited CSV data: {str(e)}'}), 400
+
+        if not vehicles_data:
+            return jsonify({'error': 'No vehicle data available (missing vehicles_data or csv_filename)'}), 400
+
+        logger.info(f"[PHASE 2] Generating final files for {dealership_name} with order number: {order_number}")
+        logger.info(f"[PHASE 2] Processing {len(vehicles_data)} vehicles")
+
+        # Call the new generate_final_files method
+        result = order_processor.generate_final_files(
+            dealership_name=dealership_name,
+            vehicles_data=vehicles_data,
+            order_number=order_number,
+            template_type=template_type,
+            skip_vin_logging=skip_vin_logging
+        )
+
+        logger.info(f"[PHASE 2] File generation result for {dealership_name}: success={result.get('success')}, files_generated={result.get('qr_codes_generated', 0)}")
+
+        # Convert all Path objects to strings for JSON serialization
+        result = _convert_paths_to_strings(result)
+
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error generating final files: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/vehicles/raw-status/<dealership_name>', methods=['GET'])
 def get_vehicle_raw_status(dealership_name):
     """Get raw_status data for vehicles from a specific dealership (for review stage only)"""
@@ -1335,12 +1421,183 @@ def process_list_order():
         logger.error(f"Error processing list order: {e}")
         return jsonify({'error': str(e)}), 500
 
-def extract_vins_from_csv(csv_file_path):
+def find_csv_file_like_download_route(filename):
+    """Find CSV file using the exact same logic as the download_csv route"""
+    import os
+    from pathlib import Path
+
+    logger.info(f"[FIND CSV] Looking for file: {filename}")
+
+    # Use the same directories as download_csv route
+    web_gui_orders_dir = Path(__file__).parent / "orders"
+    scripts_orders_dir = Path(__file__).parent.parent / "scripts" / "orders"
+    bulletproof_orders_dir = Path(__file__).parent.parent / "orders"
+
+    logger.info(f"[FIND CSV] Searching for {filename} in directories:")
+    logger.info(f"  - {web_gui_orders_dir}")
+    logger.info(f"  - {scripts_orders_dir}")
+    logger.info(f"  - {bulletproof_orders_dir}")
+
+    # Search for ALL files with the same name and find the most recent one
+    found_files = []
+    for orders_dir in [web_gui_orders_dir, scripts_orders_dir, bulletproof_orders_dir]:
+        logger.info(f"[FIND CSV] Checking {orders_dir} (exists: {orders_dir.exists()})")
+        if not orders_dir.exists():
+            continue
+
+        for root, dirs, files in os.walk(orders_dir):
+            logger.info(f"[FIND CSV] Checking {root} - files: {len(files)} files")
+            logger.info(f"[FIND CSV] Files in {root}: {files[:5]}")
+            if filename in files:
+                csv_file = Path(root) / filename
+                found_files.append(csv_file)
+                logger.info(f"[FIND CSV] Found file candidate at {csv_file}")
+
+    if not found_files:
+        logger.error(f"[FIND CSV] File not found: {filename}")
+        return None
+
+    # Select the most recent file by modification time
+    most_recent_file = max(found_files, key=lambda f: f.stat().st_mtime)
+    logger.info(f"[FIND CSV] Total files found: {len(found_files)}")
+    logger.info(f"[FIND CSV] Selected most recent file: {most_recent_file}")
+
+    return str(most_recent_file)
+
+def extract_vins_from_csv_for_phase2(csv_filename, return_full_data=True):
+    """
+    NEW FUNCTION: Extract vehicle data for Phase 2 processing using download_csv logic
+    This function uses the exact same file finding logic as the download_csv route
+    """
+    import pandas as pd
+    import os
+
+    logger.info(f"[PHASE2 CSV] extract_vins_from_csv_for_phase2 called with: {csv_filename}")
+
+    try:
+        # Use the new find function that mirrors download_csv exactly
+        csv_file_path = find_csv_file_like_download_route(csv_filename)
+        if not csv_file_path:
+            logger.error(f"[PHASE2 CSV] CSV file not found: {csv_filename}")
+            return []
+
+        # Read CSV file
+        df = pd.read_csv(csv_file_path)
+
+        # Look for VIN column (try different common names)
+        vin_column = None
+        possible_vin_columns = ['VIN', 'vin', 'Vin', 'VIN_Number', 'vin_number', 'VehicleVIN']
+
+        for col in possible_vin_columns:
+            if col in df.columns:
+                vin_column = col
+                break
+
+        if not vin_column:
+            logger.error(f"[PHASE2 CSV] No VIN column found in CSV. Available columns: {list(df.columns)}")
+            return []
+
+        # Filter valid rows (VINs not empty)
+        valid_df = df[df[vin_column].notna() & (df[vin_column].astype(str) != 'nan') & (df[vin_column].astype(str).str.len() >= 10)]
+
+        if return_full_data:
+            # Return full vehicle data as list of dictionaries for Phase 2 processing
+            vehicle_data = []
+            for _, row in valid_df.iterrows():
+                vehicle_dict = {}
+                for col in df.columns:
+                    vehicle_dict[col.lower()] = row[col]  # Normalize column names to lowercase
+
+                # Ensure we have essential fields that the backend expects
+                raw_vin = str(row[vin_column])
+                # Handle VINs with prefixes like "USED - VIN_NUMBER"
+                if ' - ' in raw_vin:
+                    actual_vin = raw_vin.split(' - ')[-1]  # Take the part after the last ' - '
+                else:
+                    actual_vin = raw_vin
+                vehicle_dict['vin'] = actual_vin.strip()
+
+                # Map common fields to expected names
+                if 'YEARMAKE' in row:
+                    parts = str(row['YEARMAKE']).split(' ', 1)
+                    if len(parts) >= 2:
+                        vehicle_dict['year'] = parts[0]
+                        vehicle_dict['make'] = parts[1]
+                    else:
+                        vehicle_dict['year'] = parts[0] if parts else ''
+                        vehicle_dict['make'] = ''
+
+                if 'MODEL' in row:
+                    vehicle_dict['model'] = str(row['MODEL'])
+                if 'TRIM' in row:
+                    vehicle_dict['trim'] = str(row['TRIM'])
+                if 'STOCK' in row:
+                    vehicle_dict['stock_number'] = str(row['STOCK'])
+
+                vehicle_data.append(vehicle_dict)
+
+            logger.info(f"[PHASE2 CSV] Found {len(vehicle_data)} valid vehicles with full data in CSV file {csv_file_path}")
+            return vehicle_data
+        else:
+            # Return just VINs
+            valid_vins = valid_df[vin_column].astype(str).tolist()
+            logger.info(f"[PHASE2 CSV] Found {len(valid_vins)} valid VINs in CSV file {csv_file_path}")
+            return valid_vins
+
+    except Exception as e:
+        logger.error(f"[PHASE2 CSV] Error extracting data from CSV {csv_filename}: {e}")
+        return []
+
+def extract_vins_from_csv(csv_file_path, return_full_data=False):
     """Extract VINs from CSV file for order processing"""
     import pandas as pd
     import os
-    
+    from pathlib import Path
+
+    logger.info(f"[CSV DEBUG] extract_vins_from_csv called with: {csv_file_path}, return_full_data={return_full_data}")
+
     try:
+        # Handle /download_csv/ web paths by converting to file system paths
+        if csv_file_path.startswith('/download_csv/'):
+            filename = csv_file_path.replace('/download_csv/', '')
+            logger.info(f"[CSV DEBUG] Web path detected, extracted filename: {filename}")
+        else:
+            # If just a filename is provided, use it directly for search
+            filename = csv_file_path
+            logger.info(f"[CSV DEBUG] Filename provided directly: {filename}")
+
+        # Search for the file in the same order directories as the download route
+        bulletproof_orders_dir = Path(__file__).parent.parent / "orders"
+        web_gui_orders_dir = Path(__file__).parent / "orders"
+        scripts_orders_dir = Path(__file__).parent.parent / "scripts" / "orders"
+
+        search_dirs = [bulletproof_orders_dir, web_gui_orders_dir, scripts_orders_dir]
+        logger.info(f"[CSV DEBUG] Searching in directories: {[str(d) for d in search_dirs]}")
+
+        # Use the same logic as download_csv route - find ALL matching files and select most recent
+        found_files = []
+        for orders_dir in search_dirs:
+            logger.info(f"[CSV DEBUG] Checking {orders_dir} (exists: {orders_dir.exists()})")
+            if not orders_dir.exists():
+                continue
+
+            for root, dirs, files in os.walk(orders_dir):
+                logger.info(f"[CSV DEBUG] Checking {root} - files: {len(files)} files")
+                if filename in files:
+                    csv_file = Path(root) / filename
+                    found_files.append(csv_file)
+                    logger.info(f"[CSV DEBUG] Found CSV file candidate: {csv_file}")
+
+        if not found_files:
+            logger.error(f"[CSV DEBUG] CSV file not found in any search directory: {filename}")
+            return []
+
+        # Select the most recent file by modification time
+        most_recent_file = max(found_files, key=lambda f: f.stat().st_mtime)
+        csv_file_path = str(most_recent_file)
+        logger.info(f"[CSV DEBUG] Selected most recent CSV file: {csv_file_path}")
+        logger.info(f"[CSV DEBUG] Total files found: {len(found_files)}, selected: {most_recent_file.name}")
+
         # Handle relative path - make it absolute if needed
         if not os.path.isabs(csv_file_path):
             # Try relative to the web_gui directory
@@ -1352,36 +1609,76 @@ def extract_vins_from_csv(csv_file_path):
                 full_path = os.path.join(project_root, csv_file_path)
         else:
             full_path = csv_file_path
-            
+
         if not os.path.exists(full_path):
             logger.error(f"CSV file not found: {full_path}")
             return []
-            
+
         # Read CSV file
         df = pd.read_csv(full_path)
-        
+
         # Look for VIN column (try different common names)
         vin_column = None
         possible_vin_columns = ['VIN', 'vin', 'Vin', 'VIN_Number', 'vin_number', 'VehicleVIN']
-        
+
         for col in possible_vin_columns:
             if col in df.columns:
                 vin_column = col
                 break
-                
+
         if not vin_column:
             logger.error(f"No VIN column found in CSV. Available columns: {list(df.columns)}")
             return []
-            
-        # Extract VINs and filter valid ones (17 characters, not empty)
-        vins = df[vin_column].dropna().astype(str)
-        valid_vins = [vin for vin in vins if len(vin) >= 10 and vin != 'nan']  # Allow 10+ chars for flexibility
-        
-        logger.info(f"Found {len(valid_vins)} valid VINs in CSV file {csv_file_path}")
-        return valid_vins
-        
+
+        # Filter valid rows (VINs not empty)
+        valid_df = df[df[vin_column].notna() & (df[vin_column].astype(str) != 'nan') & (df[vin_column].astype(str).str.len() >= 10)]
+
+        if return_full_data:
+            # Return full vehicle data as list of dictionaries for Phase 2 processing
+            vehicle_data = []
+            for _, row in valid_df.iterrows():
+                vehicle_dict = {}
+                for col in df.columns:
+                    vehicle_dict[col.lower()] = row[col]  # Normalize column names to lowercase
+
+                # Ensure we have essential fields that the backend expects
+                raw_vin = str(row[vin_column])
+                # Handle VINs with prefixes like "USED - VIN_NUMBER"
+                if ' - ' in raw_vin:
+                    actual_vin = raw_vin.split(' - ')[-1]  # Take the part after the last ' - '
+                else:
+                    actual_vin = raw_vin
+                vehicle_dict['vin'] = actual_vin.strip()
+
+                # Map common fields to expected names
+                if 'YEARMAKE' in row:
+                    parts = str(row['YEARMAKE']).split(' ', 1)
+                    if len(parts) >= 2:
+                        vehicle_dict['year'] = parts[0]
+                        vehicle_dict['make'] = parts[1]
+                    else:
+                        vehicle_dict['year'] = parts[0] if parts else ''
+                        vehicle_dict['make'] = ''
+
+                if 'MODEL' in row:
+                    vehicle_dict['model'] = str(row['MODEL'])
+                if 'TRIM' in row:
+                    vehicle_dict['trim'] = str(row['TRIM'])
+                if 'STOCK' in row:
+                    vehicle_dict['stock_number'] = str(row['STOCK'])
+
+                vehicle_data.append(vehicle_dict)
+
+            logger.info(f"Found {len(vehicle_data)} valid vehicles with full data in CSV file {csv_file_path}")
+            return vehicle_data
+        else:
+            # Return just VINs for backward compatibility
+            valid_vins = valid_df[vin_column].astype(str).tolist()
+            logger.info(f"Found {len(valid_vins)} valid VINs in CSV file {csv_file_path}")
+            return valid_vins
+
     except Exception as e:
-        logger.error(f"Error extracting VINs from CSV {csv_file_path}: {e}")
+        logger.error(f"Error extracting data from CSV {csv_file_path}: {e}")
         return []
 
 @app.route('/api/orders/apply-order-number', methods=['POST'])
@@ -3634,17 +3931,24 @@ def save_csv_data():
         if not filename.endswith('.csv'):
             return jsonify({'error': 'Invalid file type'}), 400
         
-        # Find the file in orders directory
+        # Find the file in orders directory - use same logic as Phase 2 to find most recent
         orders_dir = Path(__file__).parent.parent / "orders"
-        
-        csv_file = None
+
+        # Find ALL files with the same name and select the most recent one
+        found_files = []
         for root, dirs, files in os.walk(orders_dir):
             if filename in files:
-                csv_file = Path(root) / filename
-                break
-        
-        if not csv_file:
+                csv_file_candidate = Path(root) / filename
+                found_files.append(csv_file_candidate)
+                logger.info(f"[CSV SAVE] Found file candidate: {csv_file_candidate}")
+
+        if not found_files:
             return jsonify({'error': 'CSV file not found'}), 404
+
+        # Select the most recent file by modification time (same as Phase 2 logic)
+        csv_file = max(found_files, key=lambda f: f.stat().st_mtime)
+        logger.info(f"[CSV SAVE] Total files found: {len(found_files)}")
+        logger.info(f"[CSV SAVE] Selected most recent file for editing: {csv_file}")
         
         # Create backup
         backup_file = csv_file.with_suffix('.csv.backup')
@@ -3812,13 +4116,16 @@ def generate_qr_codes_from_csv():
             logger.error(f"[QR GENERATION] Error reading CSV file: {e}")
             return jsonify({'error': f'Error reading CSV file: {str(e)}'}), 500
         
-        # Check if QR codes already exist (look for QR_Code_Path column)
+        # Check if QR codes already exist (look for QR_Code_Path or @QR columns)
         qr_already_exists = False
         try:
             with open(csv_file_path, 'r', newline='', encoding='utf-8') as csvfile:
                 reader = csv.DictReader(csvfile)
                 fieldnames = reader.fieldnames or []
-                qr_already_exists = 'QR_Code_Path' in fieldnames
+                # Check for multiple QR column formats
+                qr_already_exists = ('QR_Code_Path' in fieldnames or
+                                   '@QR' in fieldnames or
+                                   '@QR2' in fieldnames)
         except:
             pass
         
