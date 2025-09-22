@@ -1943,6 +1943,175 @@ class OrderWizard {
         }
     }
 
+    async processThisDealershipNow() {
+        // Process the current dealership immediately with order number
+        console.log('Processing current dealership immediately...');
+
+        // Get current dealership and result
+        let currentDealership = null;
+        let currentResult = null;
+
+        // First check if we have a current order result from the review
+        if (this.currentOrderResult) {
+            currentResult = this.currentOrderResult;
+
+            // Try to get dealership name from various sources
+            if (this.processedOrders.length > 0) {
+                const lastOrder = this.processedOrders[this.processedOrders.length - 1];
+                currentDealership = lastOrder.dealership;
+            } else {
+                // Try to get from review UI
+                const reviewDealershipEl = document.getElementById('reviewDealershipName');
+                if (reviewDealershipEl) {
+                    currentDealership = reviewDealershipEl.textContent;
+                }
+            }
+        } else {
+            this.showError('No dealership data available to process');
+            return;
+        }
+
+        if (!currentDealership) {
+            this.showError('Could not determine dealership name');
+            return;
+        }
+
+        if (!currentResult || !currentResult.download_csv) {
+            this.showError('No CSV data available for processing');
+            return;
+        }
+
+        // Prompt for order number
+        const orderNumber = prompt(`Enter order number for ${currentDealership}:`, '');
+        if (!orderNumber || !orderNumber.trim()) {
+            this.showMessage('Order number is required to process', 'warning');
+            return;
+        }
+
+        // Show processing message
+        this.showMessage(`Processing ${currentDealership} with order number: ${orderNumber}`, 'info');
+
+        try {
+            // Extract CSV filename from download path
+            const csvPath = currentResult.download_csv;
+            const csvFilename = csvPath.split('/').pop();
+
+            // Step 1: Generate QR codes from CSV
+            console.log('Generating QR codes from CSV...');
+            const qrResponse = await fetch('/api/qr/generate-from-csv', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    csv_filename: csvFilename,
+                    dealership_name: currentDealership,
+                    order_number: orderNumber.trim()
+                })
+            });
+
+            if (!qrResponse.ok) {
+                const errorData = await qrResponse.json();
+                throw new Error(errorData.error || 'Failed to generate QR codes');
+            }
+
+            const qrResult = await qrResponse.json();
+            console.log('QR generation result:', qrResult);
+
+            // Step 2: Apply order number to VIN log
+            console.log('Applying order number to VIN log...');
+
+            // Get VINs from the CSV result or extract from CSV
+            let vins = currentResult.processed_vins || [];
+
+            // If no VINs in result, extract from CSV file
+            if (vins.length === 0) {
+                vins = ['EXTRACT_FROM_CSV'];  // Special flag to extract from CSV on backend
+            }
+
+            const applyResponse = await fetch('/api/orders/apply-order-number', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    dealership_name: currentDealership,
+                    order_number: orderNumber.trim(),
+                    vins: vins,
+                    csv_file: csvPath,
+                    qr_codes_generated: qrResult.qr_codes_generated || 0
+                })
+            });
+
+            if (!applyResponse.ok) {
+                const errorData = await applyResponse.json();
+                throw new Error(errorData.error || 'Failed to apply order number');
+            }
+
+            const applyResult = await applyResponse.json();
+            console.log('Apply order number result:', applyResult);
+
+            // Show success message with details
+            const successMessage = `
+                <div style="text-align: left;">
+                    <strong>Successfully processed ${currentDealership}!</strong><br>
+                    <div style="margin-top: 10px;">
+                        <i class="fas fa-check"></i> Order Number: ${orderNumber}<br>
+                        <i class="fas fa-check"></i> QR Codes Generated: ${qrResult.qr_codes_generated || 0}<br>
+                        <i class="fas fa-check"></i> VINs Updated: ${applyResult.updated_vins || vins.length}<br>
+                        ${qrResult.billing_csv_generated ? '<i class="fas fa-check"></i> Billing CSV Generated<br>' : ''}
+                        ${qrResult.qr_folder ? `<i class="fas fa-folder"></i> Files saved to: ${qrResult.qr_folder_name || 'orders folder'}` : ''}
+                    </div>
+                </div>
+            `;
+
+            // Create custom success notification
+            const successDiv = document.createElement('div');
+            successDiv.className = 'wizard-success-detailed';
+            successDiv.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: var(--bg-surface);
+                border: 2px solid var(--success-green);
+                border-radius: 12px;
+                padding: 24px;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+                z-index: 10001;
+                min-width: 400px;
+            `;
+            successDiv.innerHTML = successMessage;
+
+            document.body.appendChild(successDiv);
+
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                if (successDiv.parentNode) {
+                    successDiv.parentNode.removeChild(successDiv);
+                }
+            }, 5000);
+
+            // Mark this dealership as complete
+            this.processingResults.filesGenerated += (qrResult.qr_codes_generated || 0) + 2; // QR codes + CSVs
+
+            // Option to continue with other dealerships or finish
+            setTimeout(() => {
+                if (confirm(`${currentDealership} has been fully processed. Continue with other dealerships?`)) {
+                    // Continue with normal flow
+                    this.proceedToQRGeneration();
+                } else {
+                    // Complete the wizard
+                    this.completeProcessing();
+                }
+            }, 1000);
+
+        } catch (error) {
+            console.error('Error processing dealership:', error);
+            this.showError(`Failed to process ${currentDealership}: ${error.message}`);
+        }
+    }
+
     downloadCSV() {
         if (this.currentOrderResult && this.currentOrderResult.download_csv) {
             window.open(this.currentOrderResult.download_csv, '_blank');

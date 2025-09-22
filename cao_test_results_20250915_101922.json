@@ -1,0 +1,392 @@
+[
+  {
+    "dealership": "Auffenberg Hyundai",
+    "timestamp": "2025-09-15T10:19:22.767387",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "CAO processing failed: unhashable type: 'list'"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "BMW of Columbia",
+    "timestamp": "2025-09-15T10:19:22.777403",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "CAO processing failed: unhashable type: 'list'"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "BMW of West St Louis",
+    "timestamp": "2025-09-15T10:19:22.780068",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Bommarito Cadillac",
+    "timestamp": "2025-09-15T10:19:22.780068",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "CAO processing failed: unhashable type: 'list'"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Bommarito West County",
+    "timestamp": "2025-09-15T10:19:22.781279",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "CAO processing failed: unhashable type: 'list'"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Columbia Honda",
+    "timestamp": "2025-09-15T10:19:22.783491",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "CAO processing failed: unhashable type: 'list'"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Dave Sinclair Lincoln",
+    "timestamp": "2025-09-15T10:19:22.783491",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "CAO processing failed: unhashable type: 'list'"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Dave Sinclair Lincoln St. Peters",
+    "timestamp": "2025-09-15T10:19:22.783491",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "CAO processing failed: unhashable type: 'list'"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Frank Leta Honda",
+    "timestamp": "2025-09-15T10:19:22.786778",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "CAO processing failed: unhashable type: 'list'"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Glendale Chrysler Jeep Dodge Ram",
+    "timestamp": "2025-09-15T10:19:22.786778",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Honda of Frontenac",
+    "timestamp": "2025-09-15T10:19:22.789094",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "CAO processing failed: unhashable type: 'list'"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "HW Kia of West County",
+    "timestamp": "2025-09-15T10:19:22.789094",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "CAO processing failed: unhashable type: 'list'"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Joe Machens Chrysler Dodge Jeep Ram",
+    "timestamp": "2025-09-15T10:19:22.789094",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Joe Machens Nissan",
+    "timestamp": "2025-09-15T10:19:22.789094",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "CAO processing failed: unhashable type: 'list'"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Kia of Columbia",
+    "timestamp": "2025-09-15T10:19:22.789094",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "MINI OF ST. LOUIS",
+    "timestamp": "2025-09-15T10:19:22.792581",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Pappas Toyota",
+    "timestamp": "2025-09-15T10:19:22.793102",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "CAO processing failed: unhashable type: 'list'"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Porsche St. Louis",
+    "timestamp": "2025-09-15T10:19:22.796465",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "CAO processing failed: unhashable type: 'list'"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Pundmann Ford",
+    "timestamp": "2025-09-15T10:19:22.797468",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "CAO processing failed: unhashable type: 'list'"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Rusty Drewing Cadillac",
+    "timestamp": "2025-09-15T10:19:22.799513",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "CAO processing failed: unhashable type: 'list'"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Rusty Drewing Chevrolet Buick GMC",
+    "timestamp": "2025-09-15T10:19:22.800835",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Serra Honda O'Fallon",
+    "timestamp": "2025-09-15T10:19:22.800835",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "CAO processing failed: unhashable type: 'list'"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "South County Dodge Chrysler Jeep RAM",
+    "timestamp": "2025-09-15T10:19:22.800835",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Spirit Lexus",
+    "timestamp": "2025-09-15T10:19:22.804306",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "CAO processing failed: unhashable type: 'list'"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Suntrup Buick GMC",
+    "timestamp": "2025-09-15T10:19:22.805311",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "CAO processing failed: unhashable type: 'list'"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Suntrup Ford Kirkwood",
+    "timestamp": "2025-09-15T10:19:22.807318",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "CAO processing failed: unhashable type: 'list'"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Suntrup Ford Westport",
+    "timestamp": "2025-09-15T10:19:22.809857",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "CAO processing failed: unhashable type: 'list'"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Suntrup Kia South",
+    "timestamp": "2025-09-15T10:19:22.812244",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "CAO processing failed: unhashable type: 'list'"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Thoroughbred Ford",
+    "timestamp": "2025-09-15T10:19:22.813423",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "CAO processing failed: unhashable type: 'list'"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Volvo Cars West County",
+    "timestamp": "2025-09-15T10:19:22.813423",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Weber Creve Coeur",
+    "timestamp": "2025-09-15T10:19:22.813423",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  }
+]

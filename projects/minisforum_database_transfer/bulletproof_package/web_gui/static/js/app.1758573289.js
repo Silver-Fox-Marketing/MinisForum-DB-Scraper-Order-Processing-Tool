@@ -10945,24 +10945,17 @@ Output folder: ${result.output_folder}`;
                 let vehicleDataToProcess = null;
                 let csvData = null;
 
-                // PRIORITY 1: Always use edited review data if available (user deletions/edits)
-                if (this.reviewVehicleData && this.reviewVehicleData.length > 0) {
-                    vehicleDataToProcess = this.reviewVehicleData;
-                    if (isPreparedList) {
-                        // LIST order: Use VDP format with user-edited data
-                        csvData = this.convertVehicleDataToCSV(this.reviewVehicleData, 'vdp', currentDealership);
-                        console.log('[ENHANCED DOWNLOAD] Using edited LIST data with VDP format for', this.reviewVehicleData.length, 'vehicles');
-                    } else {
-                        // CAO order: Use raw format with user-edited data (preserve existing functionality)
-                        csvData = this.convertVehicleDataToCSV(this.reviewVehicleData);
-                        console.log('[ENHANCED DOWNLOAD] Using edited CSV data with', this.reviewVehicleData.length, 'vehicles');
-                    }
-                }
-                // PRIORITY 2: Fallback to prepared LIST data if no user edits
-                else if (isPreparedList && currentResult.vehicles_for_review && currentResult.vehicles_for_review.length > 0) {
+                // First check for prepared LIST data (new functionality)
+                if (isPreparedList && currentResult.vehicles_for_review && currentResult.vehicles_for_review.length > 0) {
                     vehicleDataToProcess = currentResult.vehicles_for_review;
                     csvData = this.convertVehicleDataToCSV(vehicleDataToProcess, 'vdp', currentDealership);
                     console.log('[ENHANCED DOWNLOAD] Using prepared LIST data with VDP format for', vehicleDataToProcess.length, 'vehicles');
+                }
+                // Then check for existing review data (preserve existing functionality)
+                else if (this.reviewVehicleData && this.reviewVehicleData.length > 0) {
+                    vehicleDataToProcess = this.reviewVehicleData;
+                    csvData = this.convertVehicleDataToCSV(this.reviewVehicleData);
+                    console.log('[ENHANCED DOWNLOAD] Using edited CSV data with', this.reviewVehicleData.length, 'vehicles');
                 }
                 // No data available (preserve existing error handling)
                 else {

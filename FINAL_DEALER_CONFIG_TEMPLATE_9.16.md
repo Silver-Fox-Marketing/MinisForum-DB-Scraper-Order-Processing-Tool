@@ -10,7 +10,8 @@ This document provides the standardized dealership configuration template for th
 {
     "notes": "Standardized configuration based on South County DCJR template",
     "order_type": "cao",
-    "days_on_lot": {
+    "days_on
+    _lot": {
         "max": 999,
         "min": 0
     },

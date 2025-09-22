@@ -10309,111 +10309,33 @@ Example:
         }
     }
     
-    convertVehicleDataToCSV(vehicleData, format = 'raw', dealership = '') {
+    convertVehicleDataToCSV(vehicleData) {
         if (!vehicleData || vehicleData.length === 0) {
             return '';
         }
-
-        // NEW: Support both raw (CAO) and VDP (LIST) formats
-        if (format === 'vdp') {
-            return this.convertVehicleDataToVDPFormat(vehicleData, dealership);
-        }
-
-        // EXISTING: Raw database format for CAO orders (preserve all existing functionality)
+        
         // Get headers from first vehicle object, exclude raw_status from CSV output
         const allHeaders = Object.keys(vehicleData[0]);
-        const headers = allHeaders.filter(header =>
+        const headers = allHeaders.filter(header => 
             !['raw_status', 'RAW_STATUS'].includes(header)
         );
-
+        
         console.log('CSV export headers (raw_status excluded):', headers);
-
+        
         // Create CSV content
         const csvRows = [headers.join(',')];
-
+        
         vehicleData.forEach(vehicle => {
             const row = headers.map(header => {
                 const value = vehicle[header] || '';
                 // Escape commas and quotes in values
-                return typeof value === 'string' && (value.includes(',') || value.includes('"'))
-                    ? `"${value.replace(/"/g, '""')}"`
+                return typeof value === 'string' && (value.includes(',') || value.includes('"')) 
+                    ? `"${value.replace(/"/g, '""')}"` 
                     : value;
             });
             csvRows.push(row.join(','));
         });
-
-        return csvRows.join('\n');
-    }
-
-    convertVehicleDataToVDPFormat(vehicleData, dealership = '') {
-        // VDP CSV format specifically for LIST orders and Adobe processing
-        console.log('Converting vehicle data to VDP CSV format for Adobe...');
-
-        // VDP CSV Header - Standard Shortcut Pack format
-        const csvRows = ['YEARMAKE,MODEL,TRIM,STOCK,VIN,@QR,QRYEARMODEL,QRSTOCK,@QR2,MISC'];
-
-        vehicleData.forEach((vehicle, index) => {
-            // Extract normalized vehicle data fields
-            const year = vehicle.year || '';
-            const make = vehicle.make || '';
-            const model = vehicle.model || '';
-            const trim = vehicle.trim || '';
-            const stock = vehicle.stock || '';
-            const vin = vehicle.vin || '';
-            const vehicleCondition = vehicle.vehicle_condition || '';
-
-            // Determine vehicle type prefix (NEW or USED) - check multiple possible fields
-            const isNewVehicle = vehicleCondition?.toLowerCase() === 'new' ||
-                                vehicle.vehicle_type?.toLowerCase() === 'new' ||
-                                vehicle.type?.toLowerCase() === 'new';
-            const typePrefix = isNewVehicle ? 'NEW' : 'USED';
-
-            // Generate Nick's specific QR code filepaths for Adobe processing
-            const dealershipName = dealership.replace(/\s+/g, '_'); // Replace spaces with underscores
-            const qrIndex = index + 1; // 1-based index for QR codes
-            const qrFilepath = `C:\\Users\\Nick_Workstation\\Documents\\QRS\\${dealershipName}_QR_Code_${qrIndex}.png`;
-
-            // Build VDP CSV fields following exact Adobe format
-            const yearmake = isNewVehicle ? `NEW ${year} ${make}` : `${year} ${make}`;
-            const modelField = model;
-            const trimField = trim;
-            const stockField = `${year} ${model} - ${stock}`;
-            const vinField = `${typePrefix} - ${vin}`;
-            const qrField = qrFilepath; // Nick's specific QR filepath for Adobe
-            const qryearmodel = `${year} ${model} - ${stock}`;
-            const qrstock = `${typePrefix} - ${vin}`;
-            const qr2Field = qrFilepath; // Duplicate QR filepath for @QR2 field
-            // Fix MISC field casing to match reference format
-            const miscField = `${year} ${model} - ${vin} - ${stock}`;
-
-            // Escape CSV values that contain commas or quotes
-            const escapeCSVValue = (value) => {
-                const strValue = String(value || '');
-                return strValue.includes(',') || strValue.includes('"')
-                    ? `"${strValue.replace(/"/g, '""')}"`
-                    : strValue;
-            };
-
-            // Create CSV row with proper VDP format
-            const row = [
-                escapeCSVValue(yearmake),
-                escapeCSVValue(modelField),
-                escapeCSVValue(trimField),
-                escapeCSVValue(stockField),
-                escapeCSVValue(vinField),
-                escapeCSVValue(qrField),
-                escapeCSVValue(qryearmodel),
-                escapeCSVValue(qrstock),
-                escapeCSVValue(qr2Field),
-                escapeCSVValue(miscField)
-            ];
-
-            csvRows.push(row.join(','));
-
-            console.log(`[VDP CSV] Row ${index + 1}: ${yearmake} | ${modelField} | ${trimField} | ${stockField} | ${vinField} | QR: ${qrFilepath}`);
-        });
-
-        console.log(`Generated VDP CSV with ${vehicleData.length} vehicles in Adobe format for ${dealership}`);
+        
         return csvRows.join('\n');
     }
     
@@ -10896,9 +10818,8 @@ Output folder: ${result.output_folder}`;
         }
 
         // Find the result for this dealership from processedOrders
-        let dealershipOrder = null;
         if (currentDealership && this.processedOrders) {
-            dealershipOrder = this.processedOrders.find(order =>
+            const dealershipOrder = this.processedOrders.find(order =>
                 order.dealership === currentDealership
             );
             if (dealershipOrder) {
@@ -10945,24 +10866,17 @@ Output folder: ${result.output_folder}`;
                 let vehicleDataToProcess = null;
                 let csvData = null;
 
-                // PRIORITY 1: Always use edited review data if available (user deletions/edits)
-                if (this.reviewVehicleData && this.reviewVehicleData.length > 0) {
-                    vehicleDataToProcess = this.reviewVehicleData;
-                    if (isPreparedList) {
-                        // LIST order: Use VDP format with user-edited data
-                        csvData = this.convertVehicleDataToCSV(this.reviewVehicleData, 'vdp', currentDealership);
-                        console.log('[ENHANCED DOWNLOAD] Using edited LIST data with VDP format for', this.reviewVehicleData.length, 'vehicles');
-                    } else {
-                        // CAO order: Use raw format with user-edited data (preserve existing functionality)
-                        csvData = this.convertVehicleDataToCSV(this.reviewVehicleData);
-                        console.log('[ENHANCED DOWNLOAD] Using edited CSV data with', this.reviewVehicleData.length, 'vehicles');
-                    }
-                }
-                // PRIORITY 2: Fallback to prepared LIST data if no user edits
-                else if (isPreparedList && currentResult.vehicles_for_review && currentResult.vehicles_for_review.length > 0) {
+                // First check for prepared LIST data (new functionality)
+                if (isPreparedList && currentResult.vehicles_for_review && currentResult.vehicles_for_review.length > 0) {
                     vehicleDataToProcess = currentResult.vehicles_for_review;
-                    csvData = this.convertVehicleDataToCSV(vehicleDataToProcess, 'vdp', currentDealership);
-                    console.log('[ENHANCED DOWNLOAD] Using prepared LIST data with VDP format for', vehicleDataToProcess.length, 'vehicles');
+                    csvData = this.convertVehicleDataToCSV(vehicleDataToProcess);
+                    console.log('[ENHANCED DOWNLOAD] Using prepared LIST data with', vehicleDataToProcess.length, 'vehicles');
+                }
+                // Then check for existing review data (preserve existing functionality)
+                else if (this.reviewVehicleData && this.reviewVehicleData.length > 0) {
+                    vehicleDataToProcess = this.reviewVehicleData;
+                    csvData = this.convertVehicleDataToCSV(this.reviewVehicleData);
+                    console.log('[ENHANCED DOWNLOAD] Using edited CSV data with', this.reviewVehicleData.length, 'vehicles');
                 }
                 // No data available (preserve existing error handling)
                 else {
@@ -11258,24 +11172,13 @@ Output folder: ${result.output_folder}`;
 
                 const hasPhase1Data = order.result && order.result.phase1_data &&
                                     order.result.phase1_data.ready_for_review;
-
-                // Check for prepared LIST data (new functionality)
-                const isPreparedList = order.type === 'list' &&
-                                     order.result?.phase === 'prepared_for_review' &&
-                                     order.result?.vehicles_for_review;
-
-                // Get vehicle count from different sources based on order type
-                const vehicleCount = order.result?.vehicle_count || // prepared LIST data
-                                   order.result?.new_vehicles ||
-                                   order.result?.vehicles_processed ||
-                                   0;
-
+                const vehicleCount = order.result?.new_vehicles || order.result?.vehicles_processed || 0;
                 const hasSuccess = order.result && order.result.success;
 
-                console.log(`[BATCH QR] ${order.dealership} - success: ${hasSuccess}, vehicleCount: ${vehicleCount}, hasPhase1Data: ${hasPhase1Data}, isPreparedList: ${isPreparedList}`);
+                console.log(`[BATCH QR] ${order.dealership} - success: ${hasSuccess}, vehicleCount: ${vehicleCount}, hasPhase1Data: ${hasPhase1Data}`);
 
                 // For batch processing, include dealerships that have successful results with vehicles > 0
-                // Include both CSV orders with phase1_data AND prepared LIST orders
+                // Don't require phase1_data since we want to process all successful dealerships
                 // BUT exclude dealerships that have already been completed via individual processing
                 const isAlreadyCompleted = this.completedDealerships && this.completedDealerships.has(order.dealership);
 
@@ -11285,11 +11188,11 @@ Output folder: ${result.output_folder}`;
                     dealerships.push({
                         name: order.dealership,
                         count: vehicleCount,
-                        type: isPreparedList ? 'list' : 'cao', // Set correct type for LIST orders
+                        type: 'cao',
                         data: order,
                         phase1Data: order.result.phase1_data
                     });
-                    console.log(`[BATCH QR] Added dealership: ${order.dealership} (${vehicleCount} vehicles, type: ${isPreparedList ? 'list' : 'cao'})`);
+                    console.log(`[BATCH QR] Added dealership: ${order.dealership} (${vehicleCount} vehicles)`);
                 } else if (isAlreadyCompleted) {
                     console.log(`[BATCH QR] Skipped ${order.dealership} - already completed via individual processing`);
                 }

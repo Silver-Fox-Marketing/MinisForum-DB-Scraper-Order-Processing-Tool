@@ -1310,6 +1310,33 @@ def prepare_cao_data():
         logger.error(f"Error preparing CAO data: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/orders/prepare-list', methods=['POST'])
+def prepare_list_data():
+    """PHASE 1: Prepare LIST data for review with VIN validation"""
+    try:
+        data = request.get_json()
+        dealership = data.get('dealership')
+        vins = data.get('vins', [])
+
+        if not dealership:
+            return jsonify({'error': 'Dealership name required'}), 400
+        if not vins:
+            return jsonify({'error': 'VIN list required'}), 400
+
+        logger.info(f"[LIST PREPARE] Preparing LIST data for {dealership} with {len(vins)} VINs")
+
+        # Call the new prepare_list_data method (with VIN validation)
+        result = order_processor.prepare_list_data(dealership, vins)
+
+        logger.info(f"[LIST PREPARE] Data preparation result for {dealership}: success={result.get('success')}, valid_vins={result.get('valid_vins')}, invalid_vins={result.get('invalid_vins')}")
+
+        # Convert all Path objects to strings for JSON serialization
+        result = _convert_paths_to_strings(result)
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error preparing LIST data: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/orders/generate-final-files', methods=['POST'])
 def generate_final_files():
     """PHASE 2: Generate final files from prepared data + order number"""
@@ -1336,6 +1363,9 @@ def generate_final_files():
                 logger.info(f"[PHASE 2] Extracted {len(vehicles_data)} vehicles from edited CSV")
                 if len(vehicles_data) == 0:
                     logger.warning(f"[PHASE 2] No vehicles extracted from CSV file {csv_filename}")
+                else:
+                    # Log sample vehicle to verify edits are present
+                    logger.info(f"[PHASE 2] Sample extracted vehicle: {vehicles_data[0]}")
             except Exception as e:
                 logger.error(f"[PHASE 2] Failed to read CSV file {csv_filename}: {e}")
                 import traceback
@@ -1483,6 +1513,12 @@ def extract_vins_from_csv_for_phase2(csv_filename, return_full_data=True):
 
         # Read CSV file
         df = pd.read_csv(csv_file_path)
+        logger.info(f"[PHASE2 CSV] Successfully read CSV file: {csv_file_path}")
+        logger.info(f"[PHASE2 CSV] CSV has {len(df)} rows and columns: {list(df.columns)}")
+
+        # Log first few rows to verify we're reading edited data
+        if len(df) > 0:
+            logger.info(f"[PHASE2 CSV] First row data: {dict(df.iloc[0])}")
 
         # Look for VIN column (try different common names)
         vin_column = None
@@ -1537,6 +1573,22 @@ def extract_vins_from_csv_for_phase2(csv_filename, return_full_data=True):
                 vehicle_data.append(vehicle_dict)
 
             logger.info(f"[PHASE2 CSV] Found {len(vehicle_data)} valid vehicles with full data in CSV file {csv_file_path}")
+
+            # CRITICAL FIX: Add comprehensive CSV column preservation for all vehicles
+            # This ensures ALL direct CSV edits are preserved in Phase 2 processing
+            for i, (_, row) in enumerate(valid_df.iterrows()):
+                if i < len(vehicle_data):
+                    # Add all original CSV columns in uppercase for the generation code
+                    for col in df.columns:
+                        vehicle_data[i][col.upper()] = str(row[col])
+                    # Also fix the stock field mapping issue
+                    if 'STOCK' in row:
+                        vehicle_data[i]['stock'] = str(row['STOCK'])
+
+            # Log sample of first vehicle to verify data structure
+            if vehicle_data:
+                logger.info(f"[PHASE2 CSV] Sample vehicle data structure: {list(vehicle_data[0].keys())}")
+                logger.info(f"[PHASE2 CSV] Sample vehicle data: {vehicle_data[0]}")
             return vehicle_data
         else:
             # Return just VINs
@@ -4288,6 +4340,337 @@ def generate_qr_codes_from_csv():
     except Exception as e:
         logger.error(f"[QR GENERATION] Error generating QR codes: {e}")
         return jsonify({'error': f'QR code generation failed: {str(e)}'}), 500
+
+def _convert_qr_path_for_nicks_computer(local_qr_path: str, dealership_name: str, qr_index: int) -> str:
+    """Convert local QR path to Nick's computer path for Illustrator compatibility"""
+    if not local_qr_path:
+        return ''
+
+    # Clean dealership name for filename
+    clean_dealership = dealership_name.replace(' ', '_').replace("'", "").replace('.', '')
+
+    # Generate Nick's computer path with naming system: Dealership_Name_QR_Code_1.png
+    nicks_qr_filename = f"{clean_dealership}_QR_Code_{qr_index + 1}.png"
+    nicks_qr_path = f"C:\\Users\\Nick_Workstation\\Documents\\QRS\\{nicks_qr_filename}"
+
+    return nicks_qr_path
+
+@app.route('/api/csv/enhanced-download', methods=['POST'])
+def enhanced_csv_download():
+    """Enhanced download CSV with QR generation, billing sheet, and order number processing"""
+    try:
+        logger.info("[ENHANCED DOWNLOAD] Starting enhanced CSV download process")
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Invalid JSON data'}), 400
+
+        dealership_name = data.get('dealership_name')
+        order_number = data.get('order_number')
+        csv_data = data.get('csv_data')
+
+        if not dealership_name or not csv_data:
+            return jsonify({'error': 'Missing dealership_name or csv_data'}), 400
+
+        logger.info(f"[ENHANCED DOWNLOAD] Processing {dealership_name} with order number: {order_number}")
+
+        # Step 1: Create a new output folder with order number and timestamp
+        from datetime import datetime
+        timestamp = datetime.now()
+        folder_suffix = order_number if order_number else timestamp.strftime("%Y%m%d_%H%M%S")
+        dealership_folder_name = dealership_name.replace(' ', '_').replace("'", "")
+
+        # Create output directory
+        orders_dir = Path(__file__).parent.parent / "orders"
+        output_folder = orders_dir / f"{dealership_folder_name}_{folder_suffix}_{timestamp.strftime('%Y%m%d_%H%M%S')}"
+        output_folder.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"[ENHANCED DOWNLOAD] Created output folder: {output_folder}")
+
+        # Initialize status variables
+        billing_csv_generated = False
+        vin_log_updated = False
+
+        # Step 2: Get correct template type and save CSV with proper filename
+        # Get template type from dealership configuration
+        template_type = order_processor._get_dealership_template_config(dealership_name)
+        logger.info(f"[ENHANCED DOWNLOAD] Template type for {dealership_name}: {template_type}")
+
+        # Determine filename abbreviation based on template type (matching backend logic)
+        if template_type == "shortcut_pack":
+            abbr = "SCP"
+        elif template_type == "shortcut":
+            abbr = "SC"
+        else:
+            abbr = template_type.upper()[:3]
+
+        # Generate filename with correct abbreviation
+        clean_name_upper = dealership_name.upper().replace(' ', '_').replace("'", '')
+        csv_filename = f"{clean_name_upper}_{abbr}_{timestamp.strftime('%m.%d')} - CSV.csv"
+        csv_file_path = output_folder / csv_filename
+
+        logger.info(f"[ENHANCED DOWNLOAD] Template type '{template_type}' -> abbreviation '{abbr}' -> filename: {csv_filename}")
+
+        # Step 2b: Convert CSV format based on template type
+        import csv
+        import io
+
+        if template_type == "shortcut":
+            # Convert to shortcut format: STOCK,MODEL,@QR (3-column format)
+            logger.info(f"[ENHANCED DOWNLOAD] Converting to shortcut format for {dealership_name}")
+
+            csv_reader = csv.DictReader(io.StringIO(csv_data))
+            shortcut_rows = []
+
+            for idx, row in enumerate(csv_reader):
+                # Extract data for shortcut format
+                stock = row.get('STOCK', '')
+                # For MODEL, use YEARMODEL if available, otherwise combine year/make/model
+                model = row.get('YEARMODEL', row.get('MODEL', ''))
+                qr_path = row.get('@QR', '')
+
+                # Convert QR path for Nick's computer compatibility
+                nicks_qr_path = _convert_qr_path_for_nicks_computer(qr_path, dealership_name, idx)
+
+                shortcut_rows.append([stock, model, nicks_qr_path])
+
+            # Write shortcut format CSV
+            with open(csv_file_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(['STOCK', 'MODEL', '@QR'])  # Header
+                writer.writerows(shortcut_rows)
+
+            logger.info(f"[ENHANCED DOWNLOAD] Generated shortcut format CSV with {len(shortcut_rows)} vehicles")
+
+        else:
+            # Other template types: parse and convert QR paths for Nick's computer
+            logger.info(f"[ENHANCED DOWNLOAD] Converting QR paths for {template_type} format for {dealership_name}")
+
+            csv_reader = csv.DictReader(io.StringIO(csv_data))
+            converted_rows = []
+
+            for idx, row in enumerate(csv_reader):
+                # Convert QR paths to Nick's computer format
+                row_copy = dict(row)
+
+                # Convert @QR field if it exists
+                if '@QR' in row_copy:
+                    row_copy['@QR'] = _convert_qr_path_for_nicks_computer(row_copy['@QR'], dealership_name, idx)
+
+                # Convert @QR2 field if it exists (used in some templates)
+                if '@QR2' in row_copy:
+                    row_copy['@QR2'] = _convert_qr_path_for_nicks_computer(row_copy['@QR2'], dealership_name, idx)
+
+                converted_rows.append(row_copy)
+
+            # Write converted CSV with proper headers
+            if converted_rows:
+                fieldnames = converted_rows[0].keys()
+                with open(csv_file_path, 'w', newline='', encoding='utf-8') as f:
+                    writer = csv.DictWriter(f, fieldnames=fieldnames)
+                    writer.writeheader()
+                    writer.writerows(converted_rows)
+
+                logger.info(f"[ENHANCED DOWNLOAD] Generated {template_type} format CSV with converted QR paths for {len(converted_rows)} vehicles")
+            else:
+                # Fallback: write original data if no rows found
+                with open(csv_file_path, 'w', newline='', encoding='utf-8') as f:
+                    f.write(csv_data)
+                logger.info(f"[ENHANCED DOWNLOAD] Generated {template_type} format CSV with original data (no conversion)")
+
+            logger.info(f"[ENHANCED DOWNLOAD] Generated {template_type} format CSV with converted QR paths")
+
+        logger.info(f"[ENHANCED DOWNLOAD] Saved edited CSV: {csv_file_path}")
+
+        # Step 3: Generate QR codes from the edited CSV
+        qr_folder = output_folder / "qr_codes"
+        qr_folder.mkdir(exist_ok=True)
+
+        # Parse CSV to extract vehicle data for QR generation
+        import csv
+        import io
+        qr_codes_generated = 0
+
+        csv_reader = csv.DictReader(io.StringIO(csv_data))
+        vehicles_for_qr = []
+
+        for i, row in enumerate(csv_reader, 1):
+            # Extract key vehicle data for QR generation
+            vehicle_data = {
+                'yearmake': row.get('YEARMAKE', ''),
+                'model': row.get('MODEL', ''),
+                'trim': row.get('TRIM', ''),
+                'stock': row.get('STOCK', ''),
+                'vin': row.get('VIN', ''),
+                'misc': row.get('MISC', ''),
+                'index': i
+            }
+            vehicles_for_qr.append(vehicle_data)
+
+        # Generate QR codes
+        import qrcode
+        from PIL import Image
+
+        qr_files = []
+        for vehicle in vehicles_for_qr:
+            try:
+                # Create QR data string (using MISC field or combine vehicle info)
+                qr_data = vehicle['misc'] if vehicle['misc'] else f"{vehicle['yearmake']} {vehicle['model']} - {vehicle['vin']}"
+
+                # Generate QR code with exact API specifications to match backend
+                qr = qrcode.QRCode(
+                    version=1,  # Automatically determines version based on data
+                    error_correction=qrcode.constants.ERROR_CORRECT_L,  # Same as backend
+                    box_size=10,  # Same as backend
+                    border=0,  # No border to match backend output
+                )
+                qr.add_data(qr_data)
+                qr.make(fit=True)
+
+                # Create QR image with exact color specification: #323232 (50, 50, 50 in RGB)
+                qr_img = qr.make_image(fill_color=(50, 50, 50), back_color="white")
+
+                # Resize to exact 388x388 pixels to match backend output
+                qr_img = qr_img.resize((388, 388), Image.Resampling.LANCZOS)
+
+                # Save QR code
+                qr_filename = f"{dealership_folder_name}_QR_Code_{vehicle['index']}.png"
+                qr_path = qr_folder / qr_filename
+                qr_img.save(qr_path)
+
+                qr_files.append(str(qr_path))
+                qr_codes_generated += 1
+
+                logger.info(f"[ENHANCED DOWNLOAD] Generated QR code {vehicle['index']}: {qr_filename}")
+
+            except Exception as qr_error:
+                logger.error(f"[ENHANCED DOWNLOAD] Error generating QR code for vehicle {vehicle['index']}: {qr_error}")
+
+        # Step 4: Generate billing CSV
+        billing_csv_filename = f"{dealership_name.replace(' ', '').upper()}_SCP_{timestamp.strftime('%m.%d')} - BILLING2.csv"
+        billing_csv_path = output_folder / billing_csv_filename
+
+        try:
+            # Import the order processor for billing CSV generation
+            scripts_path = Path(__file__).parent.parent / "scripts"
+            import sys
+            if str(scripts_path) not in sys.path:
+                sys.path.insert(0, str(scripts_path))
+            from correct_order_processing import CorrectOrderProcessor
+
+            processor = CorrectOrderProcessor()
+
+            # Convert vehicles to format expected by billing CSV generator
+            ordered_vehicles = []
+            vin_list = []  # Extract VINs for billing CSV
+            for vehicle in vehicles_for_qr:
+                vin = vehicle['vin']
+                vin_list.append(vin)
+                ordered_vehicles.append({
+                    'vin': vin,
+                    'year': vehicle['yearmake'].split()[0] if vehicle['yearmake'] else '',
+                    'make': ' '.join(vehicle['yearmake'].split()[1:]) if vehicle['yearmake'] else '',
+                    'model': vehicle['model'],
+                    'stock': vehicle['stock']
+                })
+
+            # For LIST orders, both original and filtered VIN lists are the same
+            # (all VINs provided are processed since they were pre-validated)
+            original_vin_list = vin_list.copy()
+            filtered_vin_list = vin_list.copy()
+
+            # Generate billing CSV using the correct method with VIN lists
+            timestamp_str = timestamp.strftime('%Y%m%d_%H%M%S')
+            billing_csv_path = processor._generate_billing_sheet_csv(
+                vehicles=ordered_vehicles,
+                dealership_name=dealership_name,
+                output_folder=output_folder,
+                timestamp=timestamp_str,
+                original_vin_list=original_vin_list,
+                filtered_vin_list=filtered_vin_list
+            )
+
+            if billing_csv_path and billing_csv_path.exists():
+                logger.info(f"[ENHANCED DOWNLOAD] Generated billing CSV: {billing_csv_path}")
+                billing_csv_generated = True
+            else:
+                logger.warning(f"[ENHANCED DOWNLOAD] Billing CSV generation failed or file not created")
+                billing_csv_generated = False
+                billing_csv_path = None
+
+        except Exception as billing_error:
+            logger.error(f"[ENHANCED DOWNLOAD] Error generating billing CSV: {billing_error}")
+            billing_csv_generated = False
+            billing_csv_path = None
+
+        # Step 5: Update VIN log with order number (if provided)
+        if order_number:
+            try:
+                logger.info(f"[ENHANCED DOWNLOAD] Updating VIN log for {dealership_name} with order number: {order_number}")
+
+                # Apply order number to VIN log using existing VIN log update logic
+                from scripts.database_connection import get_database_connection
+
+                # Create VIN log table name
+                vin_log_table = dealership_name.lower().replace(' ', '_').replace("'", '') + '_vin_log'
+
+                # Extract VINs from vehicles for VIN log update
+                vehicle_vins = [vehicle['vin'] for vehicle in vehicles_for_qr if vehicle['vin']]
+
+                if vehicle_vins:
+                    # Update VIN log entries with order number
+                    with get_database_connection() as conn:
+                        with conn.cursor() as cursor:
+                            # Update the most recent entries for these VINs with the order number
+                            for vin in vehicle_vins:
+                                cursor.execute(f"""
+                                    UPDATE {vin_log_table}
+                                    SET order_number = %s, updated_at = CURRENT_TIMESTAMP
+                                    WHERE vin = %s AND order_number IS NULL
+                                    ORDER BY processed_date DESC, id DESC
+                                    LIMIT 1
+                                """, (order_number, vin))
+
+                        conn.commit()
+                        vin_log_updated = True
+                        logger.info(f"[ENHANCED DOWNLOAD] Updated VIN log for {len(vehicle_vins)} vehicles with order number: {order_number}")
+
+            except Exception as vin_log_error:
+                logger.error(f"[ENHANCED DOWNLOAD] Error updating VIN log: {vin_log_error}")
+                vin_log_updated = False
+
+        # Step 6: Return comprehensive response
+        response_data = {
+            'success': True,
+            'message': 'Enhanced CSV download completed successfully',
+            'dealership_name': dealership_name,
+            'order_number': order_number,
+            'output_folder': str(output_folder),
+            'csv_file': str(csv_file_path),
+            'csv_filename': csv_filename,
+            'billing_csv_file': str(billing_csv_path) if billing_csv_path else None,
+            'billing_csv_filename': billing_csv_filename if billing_csv_path else None,
+            'qr_folder': str(qr_folder),
+            'qr_codes_generated': qr_codes_generated,
+            'total_vehicles': len(vehicles_for_qr),
+            'qr_files': qr_files,
+            'timestamp': timestamp.isoformat(),
+            'billing_csv_generated': billing_csv_generated,
+            'vin_log_updated': vin_log_updated,
+            'vehicles_processed': len(vehicles_for_qr),
+            'csv_download_url': f"/download_csv/{csv_filename}",
+            'billing_download_url': f"/download_csv/{billing_csv_filename}" if billing_csv_path else None
+        }
+
+        logger.info(f"[ENHANCED DOWNLOAD] Successfully completed enhanced download for {dealership_name}")
+        logger.info(f"[ENHANCED DOWNLOAD] Generated {qr_codes_generated} QR codes")
+        logger.info(f"[ENHANCED DOWNLOAD] Output folder: {output_folder}")
+
+        return jsonify(response_data)
+
+    except Exception as e:
+        logger.error(f"[ENHANCED DOWNLOAD] Error in enhanced CSV download: {e}")
+        return jsonify({'error': f'Enhanced download failed: {str(e)}'}), 500
 
 # =============================================================================
 # REAL-TIME SCRAPER MANAGEMENT ENDPOINTS

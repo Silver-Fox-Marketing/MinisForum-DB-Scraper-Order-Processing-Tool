@@ -1,0 +1,392 @@
+[
+  {
+    "dealership": "Auffenberg Hyundai",
+    "timestamp": "2025-09-15T10:18:28.345879",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "Test setup error: the JSON object must be str, bytes or bytearray, not dict"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "BMW of Columbia",
+    "timestamp": "2025-09-15T10:18:28.354851",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "Test setup error: the JSON object must be str, bytes or bytearray, not dict"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "BMW of West St Louis",
+    "timestamp": "2025-09-15T10:18:28.355855",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Bommarito Cadillac",
+    "timestamp": "2025-09-15T10:18:28.355855",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "Test setup error: the JSON object must be str, bytes or bytearray, not dict"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Bommarito West County",
+    "timestamp": "2025-09-15T10:18:28.355855",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "Test setup error: the JSON object must be str, bytes or bytearray, not dict"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Columbia Honda",
+    "timestamp": "2025-09-15T10:18:28.357347",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "Test setup error: the JSON object must be str, bytes or bytearray, not dict"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Dave Sinclair Lincoln",
+    "timestamp": "2025-09-15T10:18:28.357347",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "Test setup error: the JSON object must be str, bytes or bytearray, not dict"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Dave Sinclair Lincoln St. Peters",
+    "timestamp": "2025-09-15T10:18:28.357347",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "Test setup error: the JSON object must be str, bytes or bytearray, not dict"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Frank Leta Honda",
+    "timestamp": "2025-09-15T10:18:28.358350",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "Test setup error: the JSON object must be str, bytes or bytearray, not dict"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Glendale Chrysler Jeep Dodge Ram",
+    "timestamp": "2025-09-15T10:18:28.358350",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Honda of Frontenac",
+    "timestamp": "2025-09-15T10:18:28.359426",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "Test setup error: the JSON object must be str, bytes or bytearray, not dict"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "HW Kia of West County",
+    "timestamp": "2025-09-15T10:18:28.360474",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "Test setup error: the JSON object must be str, bytes or bytearray, not dict"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Joe Machens Chrysler Dodge Jeep Ram",
+    "timestamp": "2025-09-15T10:18:28.361765",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Joe Machens Nissan",
+    "timestamp": "2025-09-15T10:18:28.361765",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "Test setup error: the JSON object must be str, bytes or bytearray, not dict"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Kia of Columbia",
+    "timestamp": "2025-09-15T10:18:28.362943",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "MINI OF ST. LOUIS",
+    "timestamp": "2025-09-15T10:18:28.362943",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Pappas Toyota",
+    "timestamp": "2025-09-15T10:18:28.363962",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "Test setup error: the JSON object must be str, bytes or bytearray, not dict"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Porsche St. Louis",
+    "timestamp": "2025-09-15T10:18:28.364963",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "Test setup error: the JSON object must be str, bytes or bytearray, not dict"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Pundmann Ford",
+    "timestamp": "2025-09-15T10:18:28.364963",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "Test setup error: the JSON object must be str, bytes or bytearray, not dict"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Rusty Drewing Cadillac",
+    "timestamp": "2025-09-15T10:18:28.365963",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "Test setup error: the JSON object must be str, bytes or bytearray, not dict"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Rusty Drewing Chevrolet Buick GMC",
+    "timestamp": "2025-09-15T10:18:28.365963",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Serra Honda O'Fallon",
+    "timestamp": "2025-09-15T10:18:28.366968",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "Test setup error: the JSON object must be str, bytes or bytearray, not dict"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "South County Dodge Chrysler Jeep RAM",
+    "timestamp": "2025-09-15T10:18:28.366968",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Spirit Lexus",
+    "timestamp": "2025-09-15T10:18:28.368245",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "Test setup error: the JSON object must be str, bytes or bytearray, not dict"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Suntrup Buick GMC",
+    "timestamp": "2025-09-15T10:18:28.369269",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "Test setup error: the JSON object must be str, bytes or bytearray, not dict"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Suntrup Ford Kirkwood",
+    "timestamp": "2025-09-15T10:18:28.369269",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "Test setup error: the JSON object must be str, bytes or bytearray, not dict"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Suntrup Ford Westport",
+    "timestamp": "2025-09-15T10:18:28.370259",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "Test setup error: the JSON object must be str, bytes or bytearray, not dict"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Suntrup Kia South",
+    "timestamp": "2025-09-15T10:18:28.370259",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "Test setup error: the JSON object must be str, bytes or bytearray, not dict"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Thoroughbred Ford",
+    "timestamp": "2025-09-15T10:18:28.371260",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [
+      "Test setup error: the JSON object must be str, bytes or bytearray, not dict"
+    ],
+    "warnings": [],
+    "config_issues": []
+  },
+  {
+    "dealership": "Volvo Cars West County",
+    "timestamp": "2025-09-15T10:18:28.371260",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Weber Creve Coeur",
+    "timestamp": "2025-09-15T10:18:28.371260",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  }
+]

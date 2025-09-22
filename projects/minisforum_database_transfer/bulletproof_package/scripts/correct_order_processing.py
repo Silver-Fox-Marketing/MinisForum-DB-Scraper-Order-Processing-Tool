@@ -272,12 +272,148 @@ class CorrectOrderProcessor:
             logger.error(f"Error preparing CAO data: {e}")
             return {'success': False, 'error': str(e)}
 
+    def prepare_list_data(self, dealership_name: str, vin_list: List[str], template_type: str = None) -> Dict[str, Any]:
+        """
+        PHASE 1: Prepare LIST data for review (with VIN validation)
+
+        Validates VINs against scraper data and returns only valid vehicles for review.
+        Invalid VINs are filtered out before the review stage.
+        """
+
+        # Get template type from config if not specified
+        if template_type is None:
+            template_type = self._get_dealership_template_config(dealership_name)
+
+        logger.info(f"[LIST PREPARE] Preparing LIST data for {dealership_name} with {len(vin_list)} VINs - Template: {template_type}")
+
+        try:
+            # LIST orders: Validate VINs against scraper data - only include VINs that exist in inventory
+            # CRITICAL: Filter out VINs not found in scraper data to prevent "Unknown" records in review stage
+            valid_vehicles = []
+            valid_vins = []
+            invalid_vins = []
+
+            for vin in vin_list:
+                # Try to get vehicle data from active scraper data only
+                vehicle_data = db_manager.execute_query("""
+                    SELECT nvd.* FROM normalized_vehicle_data nvd
+                    JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
+                    JOIN scraper_imports si ON rvd.import_id = si.import_id
+                    WHERE nvd.vin = %s AND nvd.location = %s AND si.status = 'active'
+                    ORDER BY rvd.import_timestamp DESC
+                    LIMIT 1
+                """, (vin, dealership_name))
+
+                if vehicle_data:
+                    # VIN found in active scraper data - include it
+                    valid_vehicles.append(vehicle_data[0])
+                    valid_vins.append(vin)
+                    logger.info(f"[LIST PREPARE] VIN found in scraper data: {vin}")
+                else:
+                    # VIN NOT found in scraper data - exclude from review stage
+                    invalid_vins.append(vin)
+                    logger.warning(f"[LIST PREPARE] VIN not found in scraper data, excluding: {vin}")
+
+            # Log validation results
+            logger.info(f"[LIST PREPARE] Valid VINs (found in scraper data): {len(valid_vins)}")
+            logger.info(f"[LIST PREPARE] Invalid VINs (not in scraper data): {len(invalid_vins)}")
+            if invalid_vins:
+                logger.info(f"[LIST PREPARE] Excluded VINs: {invalid_vins}")
+
+            if not valid_vehicles:
+                return {
+                    'success': False,
+                    'error': f'No valid VINs found in scraper data. Excluded VINs: {invalid_vins}'
+                }
+
+            # Return prepared data for review - only valid vehicles
+            result = {
+                'success': True,
+                'dealership': dealership_name,
+                'template_type': template_type,
+                'total_vins_requested': len(vin_list),
+                'valid_vins': len(valid_vins),
+                'invalid_vins': len(invalid_vins),
+                'excluded_vins': invalid_vins,
+                'vehicle_count': len(valid_vehicles),
+                'vehicles_data': valid_vehicles,  # Only valid vehicle data for review
+                'vehicles_for_review': valid_vehicles,  # Alias for clarity
+                'original_vin_list': vin_list,  # Keep original list for billing
+                'filtered_vin_list': valid_vins,  # Valid VINs only
+                'phase': 'data_prepared',
+                'ready_for_review': True
+            }
+
+            logger.info(f"[LIST PREPARE] Successfully prepared {len(valid_vehicles)} vehicles for review (excluded {len(invalid_vins)} invalid VINs)")
+            return result
+
+        except Exception as e:
+            logger.error(f"Error preparing LIST data: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def _convert_qr_path_for_nicks_computer(self, local_qr_path: str, dealership_name: str, qr_index: int) -> str:
+        """
+        Convert local QR file path to Nick's computer path for VDP CSV compatibility.
+
+        Args:
+            local_qr_path: Local path like 'C:\\...\\Dealership_Name_QR_Code_1.png'
+            dealership_name: Name of dealership for consistent naming
+            qr_index: QR code index (1, 2, 3, etc.)
+
+        Returns:
+            Nick's computer path: 'C:\\Users\\Nick_Workstation\\Documents\\QRS\\Dealership_Name_QR_Code_1.PNG'
+        """
+        if not local_qr_path:
+            return ''
+
+        # Clean dealership name for consistent filename
+        clean_dealership = dealership_name.replace(' ', '_').replace("'", "")
+
+        # Generate filename using the standard naming system
+        qr_filename = f"{clean_dealership}_QR_Code_{qr_index}.PNG"
+
+        # Construct Nick's computer path
+        nicks_qr_path = f"C:\\Users\\Nick_Workstation\\Documents\\QRS\\{qr_filename}"
+
+        logger.debug(f"[QR PATH] Converted {local_qr_path} -> {nicks_qr_path}")
+        return nicks_qr_path
+
+    def _detect_data_format(self, vehicles_data: List[Dict]) -> str:
+        """
+        Detect if data is raw DB records or template-formatted data.
+
+        Returns:
+            'template_formatted': Data from review stage with template fields
+            'raw_database': Raw database records needing normalization
+            'unknown': Cannot determine format
+        """
+        if not vehicles_data:
+            return 'unknown'
+
+        sample = vehicles_data[0]
+
+        # Template-formatted data has these key indicators
+        if 'YEARMODEL' in sample or '@QR' in sample or 'QRYEARMODEL' in sample:
+            logger.info(f"[DATA FORMAT] Detected template-formatted data - sample keys: {list(sample.keys())}")
+            return 'template_formatted'
+
+        # Raw DB data has these fields
+        elif 'year' in sample and 'make' in sample and 'model' in sample:
+            logger.info(f"[DATA FORMAT] Detected raw database data - sample keys: {list(sample.keys())}")
+            return 'raw_database'
+
+        else:
+            logger.warning(f"[DATA FORMAT] Unknown data format - sample keys: {list(sample.keys())}")
+            return 'unknown'
+
     def generate_final_files(self, dealership_name: str, vehicles_data: List[Dict], order_number: str, template_type: str = None, skip_vin_logging: bool = False) -> Dict[str, Any]:
         """
         PHASE 2: Generate final files from prepared data + order number
 
         Takes the prepared vehicle data from phase 1, applies any edits from review,
         and generates the final CSV files, QR codes, and applies order number to VIN log.
+
+        ENHANCED: Now handles both raw database records and template-formatted data
         """
 
         # Get template type from config if not specified
@@ -285,6 +421,28 @@ class CorrectOrderProcessor:
             template_type = self._get_dealership_template_config(dealership_name)
 
         logger.info(f"[CAO GENERATE] Generating final files for {dealership_name} - Order: {order_number}")
+        logger.info(f"[CAO GENERATE] Received {len(vehicles_data)} vehicles for processing")
+
+        # Detect data format and route processing accordingly
+        data_format = self._detect_data_format(vehicles_data)
+
+        if data_format == 'template_formatted':
+            # Data is already normalized - use direct template processing
+            logger.info(f"[CAO GENERATE] Using template-formatted data processing path")
+            return self._generate_from_template_data(dealership_name, vehicles_data, order_number, template_type, skip_vin_logging)
+        else:
+            # Raw data or unknown - continue with existing normalization process
+            logger.info(f"[CAO GENERATE] Using raw database processing path (format: {data_format})")
+            return self._generate_from_raw_data(dealership_name, vehicles_data, order_number, template_type, skip_vin_logging)
+
+    def _generate_from_raw_data(self, dealership_name: str, vehicles_data: List[Dict], order_number: str, template_type: str, skip_vin_logging: bool) -> Dict[str, Any]:
+        """
+        Handle raw database records - existing processing logic preserved
+        """
+        # Log sample vehicle data to verify edits are present
+        if vehicles_data:
+            logger.info(f"[CAO GENERATE] Sample vehicle data keys: {list(vehicles_data[0].keys())}")
+            logger.info(f"[CAO GENERATE] Sample vehicle data: {vehicles_data[0]}")
 
         try:
             if not vehicles_data:
@@ -371,6 +529,272 @@ class CorrectOrderProcessor:
             logger.error(f"Error generating final files: {e}")
             return {'success': False, 'error': str(e)}
 
+    def _generate_from_template_data(self, dealership_name: str, vehicles_data: List[Dict], order_number: str, template_type: str, skip_vin_logging: bool) -> Dict[str, Any]:
+        """
+        Handle already-normalized template data from review stage.
+        Data is already in correct template format with fields like YEARMODEL, TRIM, PRICE.
+        """
+        logger.info(f"[CAO TEMPLATE] Processing template-formatted data for {dealership_name}")
+
+        # Log sample vehicle data for debugging
+        if vehicles_data:
+            logger.info(f"[CAO TEMPLATE] Sample keys: {list(vehicles_data[0].keys())}")
+            logger.info(f"[CAO TEMPLATE] Sample data: {vehicles_data[0]}")
+
+        try:
+            if not vehicles_data:
+                return {'success': False, 'error': 'No vehicle data provided for file generation'}
+
+            # Step 1: Create output folders with order number in timestamp
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            folder_name = f"{dealership_name.replace(' ', '_')}_{order_number}_{timestamp}"
+            order_folder = self.output_base / folder_name
+            qr_folder = order_folder / "qr_codes"
+
+            order_folder.mkdir(parents=True, exist_ok=True)
+            qr_folder.mkdir(exist_ok=True)
+
+            # Step 2: Generate QR codes if missing (template data may already have @QR paths)
+            qr_paths = self._generate_qr_codes_for_template_data(vehicles_data, dealership_name, qr_folder)
+
+            # Step 3: Generate CSV files directly from template data
+            csv_files = {}
+            csv_path = self._generate_csv_from_template_data(vehicles_data, dealership_name, template_type, order_folder, qr_paths)
+
+            # Step 4: Generate billing sheet CSV
+            billing_csv_path = self._generate_billing_sheet_csv(vehicles_data, dealership_name, order_folder, timestamp)
+
+            # Step 5: Extract VINs from template data for logging
+            if skip_vin_logging:
+                logger.info("Skipping VIN logging - test data processing")
+                vin_logging_result = {'success': True, 'vins_logged': 0, 'duplicates_skipped': 0, 'errors': []}
+            else:
+                # Extract VINs from template data - they may be in VIN field or embedded in other fields
+                vin_logging_result = self._log_template_vins_to_history(vehicles_data, dealership_name, 'CAO_ORDER', order_number)
+
+            # Build return result
+            result = {
+                'success': True,
+                'dealership': dealership_name,
+                'order_number': order_number,
+                'template_type': template_type,
+                'vehicle_count': len(vehicles_data),
+                'qr_codes_generated': len(qr_paths),
+                'qr_folder': str(qr_folder),
+                'csv_file': str(csv_path),
+                'export_file': str(csv_path),
+                'download_csv': f"/download_csv/{csv_path.name}",
+                'billing_csv_file': str(billing_csv_path),
+                'download_billing_csv': f"/download_csv/{billing_csv_path.name}",
+                'timestamp': timestamp,
+                'vins_logged_to_history': vin_logging_result['vins_logged'],
+                'duplicate_vins_skipped': vin_logging_result['duplicates_skipped'],
+                'vin_logging_success': vin_logging_result['success'],
+                'phase': 'files_generated'
+            }
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Error generating files from template data: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def _generate_qr_codes_for_template_data(self, vehicles: List[Dict], dealership_name: str, output_folder: Path) -> List[str]:
+        """
+        Generate QR codes for template-formatted vehicle data.
+        Template data may already have @QR paths, but we need to generate actual QR files.
+        """
+        qr_paths = []
+        clean_name = dealership_name.replace(' ', '_')
+
+        for idx, vehicle in enumerate(vehicles, 1):
+            try:
+                # Extract VIN from template data - may be in VIN field or embedded in other fields
+                vin = self._extract_vin_from_template_data(vehicle)
+                if not vin:
+                    logger.warning(f"Cannot extract VIN from template data for vehicle {idx}")
+                    continue
+
+                # Use existing QR content logic but adapt for template data
+                qr_content = self._get_qr_content_from_template_data(vehicle, dealership_name)
+
+                if not qr_content:
+                    logger.warning(f"No valid QR content for template vehicle {idx} (VIN: {vin})")
+                    continue
+
+                # Generate QR code using same specs as raw data
+                qr = qrcode.QRCode(
+                    version=1,
+                    error_correction=qrcode.constants.ERROR_CORRECT_L,
+                    box_size=10,
+                    border=0,
+                )
+                qr.add_data(qr_content)
+                qr.make(fit=True)
+
+                # Create QR image with exact color specification
+                img = qr.make_image(fill_color=(50, 50, 50), back_color="white")
+                img = img.resize((388, 388), Image.Resampling.LANCZOS)
+
+                # Save QR code
+                filename = f"{clean_name}_QR_Code_{idx}.png"
+                filepath = output_folder / filename
+                img.save(filepath, format='PNG')
+
+                qr_paths.append(str(filepath))
+                logger.debug(f"Generated QR for template vehicle {idx}: {qr_content}")
+
+            except Exception as e:
+                logger.error(f"Error generating QR for template vehicle {idx}: {e}")
+
+        logger.info(f"Generated {len(qr_paths)} QR codes for template data")
+        return qr_paths
+
+    def _extract_vin_from_template_data(self, vehicle: Dict) -> str:
+        """Extract VIN from template-formatted vehicle data."""
+        # Try direct VIN field first
+        vin = vehicle.get('VIN', '').strip()
+        if vin and vin not in ['', 'USED -', 'NEW -']:
+            # Remove prefix if present
+            if vin.startswith('USED - '):
+                vin = vin[7:]
+            elif vin.startswith('NEW - '):
+                vin = vin[6:]
+            return vin
+
+        # Try other potential VIN fields
+        for field in ['vin', 'Vin', 'vehicle_vin']:
+            vin = vehicle.get(field, '').strip()
+            if vin and len(vin) == 17:  # Standard VIN length
+                return vin
+
+        return ''
+
+    def _get_qr_content_from_template_data(self, vehicle: Dict, dealership_name: str) -> str:
+        """Get QR content from template-formatted vehicle data."""
+        # Try to extract usable information for QR generation
+        vin = self._extract_vin_from_template_data(vehicle)
+
+        # Extract stock number from template data
+        stock = vehicle.get('STOCK', '').strip()
+        if not stock:
+            stock = vehicle.get('stock', '').strip()
+
+        # For template data, fallback to VIN or stock if no specific URL
+        if vin:
+            return vin
+        elif stock:
+            return stock
+        else:
+            logger.warning(f"No VIN or stock found in template data: {list(vehicle.keys())}")
+            return f"Vehicle_{dealership_name.replace(' ', '_')}"
+
+    def _generate_csv_from_template_data(self, vehicles: List[Dict], dealership_name: str, template_type: str, output_folder: Path, qr_paths: List[str]) -> Path:
+        """
+        Generate CSV directly from template-formatted data with correct template type formatting.
+        """
+        logger.info(f"[CSV TEMPLATE] Generating CSV from template data for {dealership_name} with template type: {template_type}")
+
+        # Determine filename abbreviation based on template type (matching original logic)
+        if template_type == "shortcut_pack":
+            abbr = "SCP"
+        elif template_type == "shortcut":
+            abbr = "SC"
+        else:
+            abbr = template_type.upper()[:3]
+
+        # Generate filename with correct abbreviation
+        clean_name_upper = dealership_name.upper().replace(' ', '_').replace("'", '')
+        date_str = datetime.now().strftime('%m.%d')
+        filename = f"{clean_name_upper}_{abbr}_{date_str} - CSV.csv"
+        csv_path = output_folder / filename
+
+        logger.info(f"[CSV TEMPLATE] Template type '{template_type}' -> abbreviation '{abbr}' -> filename: {filename}")
+
+        if not vehicles:
+            raise ValueError("No vehicles provided for CSV generation")
+
+        # Write CSV with correct format based on template type
+        with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
+
+            if template_type == "shortcut":
+                # Shortcut format: STOCK,MODEL,@QR (simplified 3-column format)
+                writer = csv.writer(csvfile)
+                writer.writerow(['STOCK', 'MODEL', '@QR'])
+
+                for idx, vehicle in enumerate(vehicles, 1):
+                    # Extract data for shortcut format from template data
+                    stock = vehicle.get('STOCK', '')
+                    # For MODEL, use YEARMODEL if available, otherwise combine year/make/model
+                    model = vehicle.get('YEARMODEL', vehicle.get('MODEL', ''))
+                    local_qr_path = vehicle.get('@QR', '')
+
+                    # Convert local QR path to Nick's computer path for VDP compatibility
+                    nicks_qr_path = self._convert_qr_path_for_nicks_computer(local_qr_path, dealership_name, idx)
+
+                    writer.writerow([stock, model, nicks_qr_path])
+
+                logger.info(f"[CSV TEMPLATE] Generated shortcut format CSV with {len(vehicles)} vehicles")
+
+            elif template_type == "shortcut_pack":
+                # Shortcut Pack format: Full template data with converted QR paths
+                fieldnames = list(vehicles[0].keys())
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+
+                for idx, vehicle in enumerate(vehicles, 1):
+                    # Convert QR paths to Nick's computer paths
+                    vehicle_copy = vehicle.copy()
+                    if '@QR' in vehicle_copy:
+                        local_qr_path = vehicle_copy.get('@QR', '')
+                        vehicle_copy['@QR'] = self._convert_qr_path_for_nicks_computer(local_qr_path, dealership_name, idx)
+
+                    # Handle @QR2 field if present (used in some formats)
+                    if '@QR2' in vehicle_copy:
+                        local_qr_path2 = vehicle_copy.get('@QR2', '')
+                        vehicle_copy['@QR2'] = self._convert_qr_path_for_nicks_computer(local_qr_path2, dealership_name, idx)
+
+                    writer.writerow(vehicle_copy)
+
+                logger.info(f"[CSV TEMPLATE] Generated shortcut_pack format CSV with {len(vehicles)} vehicles")
+
+            else:
+                # Other template types: Use full template data
+                fieldnames = list(vehicles[0].keys())
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+
+                for vehicle in vehicles:
+                    writer.writerow(vehicle)
+
+                logger.info(f"[CSV TEMPLATE] Generated {template_type} format CSV with {len(vehicles)} vehicles")
+
+        logger.info(f"[CSV TEMPLATE] Successfully generated CSV: {csv_path}")
+        return csv_path
+
+    def _log_template_vins_to_history(self, vehicles: List[Dict], dealership_name: str, order_type: str, order_number: str) -> Dict[str, Any]:
+        """
+        Extract VINs from template data and log to history.
+        """
+        logger.info(f"[VIN LOG TEMPLATE] Logging VINs from template data for {dealership_name}")
+
+        vins_to_log = []
+        for vehicle in vehicles:
+            vin = self._extract_vin_from_template_data(vehicle)
+            if vin:
+                vins_to_log.append(vin)
+
+        if not vins_to_log:
+            logger.warning(f"[VIN LOG TEMPLATE] No VINs extracted from template data")
+            return {'success': True, 'vins_logged': 0, 'duplicates_skipped': 0, 'errors': []}
+
+        logger.info(f"[VIN LOG TEMPLATE] Extracted {len(vins_to_log)} VINs to log")
+
+        # Use existing VIN logging method with extracted VINs
+        # Create minimal vehicle records for logging
+        vin_records = [{'vin': vin} for vin in vins_to_log]
+        return self._log_processed_vins_to_history(vin_records, dealership_name, order_type, order_number)
+
     def process_list_order(self, dealership_name: str, vin_list: List[str], template_type: str = None, skip_vin_logging: bool = False) -> Dict[str, Any]:
         """
         Process List Order (transcribed VINs from installers)
@@ -383,40 +807,41 @@ class CorrectOrderProcessor:
         logger.info(f"[LIST] Processing {dealership_name} with {len(vin_list)} VINs - Template: {template_type}")
         
         try:
-            # LIST orders: Create vehicle records from user-provided VINs
-            # No inventory lookup or filtering needed - process whatever VINs user provides
+            # LIST orders: Validate VINs against scraper data - only include VINs that exist in inventory
+            # CRITICAL: Filter out VINs not found in scraper data to prevent "Unknown" records in review stage
             vehicles = []
+            valid_vins = []
+            invalid_vins = []
+
             for vin in vin_list:
-                # Try to get vehicle data from inventory first
+                # Try to get vehicle data from active scraper data only
+                # Correct table relationship: normalized_vehicle_data -> raw_vehicle_data -> scraper_imports
                 vehicle_data = db_manager.execute_query("""
-                    SELECT * FROM raw_vehicle_data
-                    WHERE vin = %s AND location = %s
-                    ORDER BY import_timestamp DESC
+                    SELECT nvd.* FROM normalized_vehicle_data nvd
+                    JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
+                    JOIN scraper_imports si ON rvd.import_id = si.import_id
+                    WHERE nvd.vin = %s AND nvd.location = %s AND si.status = 'active'
+                    ORDER BY rvd.import_timestamp DESC
                     LIMIT 1
                 """, (vin, dealership_name))
-                
+
                 if vehicle_data:
-                    # Use existing vehicle data if found
+                    # VIN found in active scraper data - include it
                     vehicles.append(vehicle_data[0])
+                    valid_vins.append(vin)
+                    logger.info(f"[LIST VALIDATION] VIN found in scraper data: {vin}")
                 else:
-                    # Create placeholder vehicle record for user-provided VIN
-                    placeholder_vehicle = {
-                        'vin': vin,
-                        'year': 'Unknown',
-                        'make': 'Unknown', 
-                        'model': 'Unknown',
-                        'trim': 'Unknown',
-                        'stock_number': f'LIST_{vin[-6:]}',  # Use last 6 chars of VIN
-                        'type': 'Used',  # Default to Used for LIST orders
-                        'mileage': 0,
-                        'price': 0,
-                        'dealership': dealership_name,
-                        'location': dealership_name
-                    }
-                    vehicles.append(placeholder_vehicle)
-                    logger.info(f"Created placeholder record for LIST VIN: {vin}")
-            
-            logger.info(f"Created {len(vehicles)} vehicle records for LIST processing")
+                    # VIN NOT found in scraper data - exclude from processing
+                    invalid_vins.append(vin)
+                    logger.warning(f"[LIST VALIDATION] VIN not found in scraper data, excluding: {vin}")
+
+            # Log validation results
+            logger.info(f"[LIST VALIDATION] Valid VINs (found in scraper data): {len(valid_vins)}")
+            logger.info(f"[LIST VALIDATION] Invalid VINs (not in scraper data): {len(invalid_vins)}")
+            if invalid_vins:
+                logger.info(f"[LIST VALIDATION] Excluded VINs: {invalid_vins}")
+
+            logger.info(f"Created {len(vehicles)} vehicle records for LIST processing (filtered)")
             
             # LIST orders: Skip dealership filtering - process all provided VINs
             filtered_vehicles = vehicles  # No filtering for LIST orders
@@ -458,8 +883,8 @@ class CorrectOrderProcessor:
                 csv_files = csv_path
                 csv_path = csv_files.get('primary_csv') or list(csv_files.values())[0]
             
-            # Generate billing sheet CSV automatically after QR codes
-            billing_csv_path = self._generate_billing_sheet_csv(filtered_vehicles, dealership_name, order_folder, timestamp)
+            # Generate billing sheet CSV automatically after QR codes with ordered/produced logic
+            billing_csv_path = self._generate_billing_sheet_csv(filtered_vehicles, dealership_name, order_folder, timestamp, original_vin_list=vin_list, filtered_vin_list=valid_vins)
             
             # CRITICAL: Log processed vehicle VINs to history database for future order accuracy - use filtered vehicles (unless testing)
             if skip_vin_logging:
@@ -473,10 +898,15 @@ class CorrectOrderProcessor:
                 'success': True,
                 'dealership': dealership_name,
                 'template_type': template_type,
-                'vehicles_requested': len(vehicles),
+                'vehicles_requested': len(vin_list),  # Original VIN count from user input
                 'vehicles_processed': len(filtered_vehicles),
                 'vehicle_count': len(filtered_vehicles),
                 'vehicles_filtered_out': len(vehicles) - len(filtered_vehicles),
+                'valid_vins': len(valid_vins),  # VINs found in scraper data
+                'invalid_vins': len(invalid_vins),  # VINs NOT found in scraper data
+                'invalid_vin_list': invalid_vins,  # List of excluded VINs for user feedback
+                'vehicles_data': filtered_vehicles,  # CRITICAL: Only valid vehicles for frontend review stage
+                'vehicles_for_review': filtered_vehicles,  # Alias for clarity - only valid vehicles
                 'qr_codes_generated': len(qr_paths),
                 'qr_folder': str(qr_folder),
                 'csv_file': str(csv_path) if not isinstance(csv_path, dict) else str(csv_path.get('primary_csv', '')),
@@ -795,6 +1225,12 @@ class CorrectOrderProcessor:
             if isinstance(output_rules, str):
                 output_rules = json.loads(output_rules)
 
+            # Debug logging for Porsche
+            if dealership_name == "Porsche St. Louis":
+                logger.info(f"[DEBUG] Porsche output_rules: {output_rules}")
+                if 'template_types' in output_rules:
+                    logger.info(f"[DEBUG] Porsche template_types: {output_rules['template_types']}")
+
             # Check for template_type settings
             if 'template_types' in output_rules:
                 template_types = output_rules['template_types']
@@ -803,14 +1239,21 @@ class CorrectOrderProcessor:
                 if vehicle_condition:
                     # Normalize condition for lookup
                     if vehicle_condition.lower() in ['new']:
-                        return template_types.get('new', 'shortcut_pack')
+                        result = template_types.get('new', 'shortcut_pack')
+                        logger.info(f"[DEBUG] {dealership_name} - Using 'new' template: {result}")
+                        return result
                     elif vehicle_condition.lower() in ['used', 'po', 'cpo', 'certified', 'pre-owned']:
-                        return template_types.get('used', 'shortcut_pack')
+                        result = template_types.get('used', 'shortcut_pack')
+                        logger.info(f"[DEBUG] {dealership_name} - Using 'used' template: {result}")
+                        return result
 
                 # Return default template type if specified
-                return template_types.get('default', 'shortcut_pack')
+                result = template_types.get('default', 'shortcut_pack')
+                logger.info(f"[DEBUG] {dealership_name} - Using 'default' template: {result} (vehicle_condition={vehicle_condition})")
+                return result
 
         # Default to shortcut_pack if no config found
+        logger.info(f"[DEBUG] {dealership_name} - No config found, using default: shortcut_pack")
         return 'shortcut_pack'
 
     def _apply_dealership_filters(self, vehicles: List[Dict], dealership_name: str) -> List[Dict]:
@@ -1283,6 +1726,12 @@ class CorrectOrderProcessor:
         filename = f"{clean_name_upper}_{abbr}_{date_str} - CSV.csv"
         csv_path = output_folder / filename
 
+        logger.info(f"[CAO CSV] About to write CSV file: {csv_path}")
+        logger.info(f"[CAO CSV] Writing {len(vehicles)} vehicles to CSV")
+        logger.info(f"[CAO CSV] Template type: {template_type}")
+        if vehicles:
+            logger.info(f"[CAO CSV] Sample vehicle data for CSV writing: {vehicles[0]}")
+
         with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
             
             if template_type == "shortcut":
@@ -1299,13 +1748,15 @@ class CorrectOrderProcessor:
                     vin = vehicle.get('vin', '')
 
                     qr_path = qr_paths[idx] if idx < len(qr_paths) else ''
+                    # Convert QR path for Nick's computer compatibility
+                    nicks_qr_path = self._convert_qr_path_for_nicks_computer(qr_path, dealership_name, idx)
 
                     # Format: "YEAR MODEL - STOCK" for stock column
                     stock_field = f"{year} {model} - {stock}"
                     # Format: "CONDITION - VIN" for model column
                     model_field = f"{type_prefix} - {vin}"
 
-                    writer.writerow([stock_field, model_field, qr_path])
+                    writer.writerow([stock_field, model_field, nicks_qr_path])
             
             elif template_type == "shortcut_pack":
                 writer = csv.writer(csvfile)
@@ -1325,6 +1776,8 @@ class CorrectOrderProcessor:
                         type_prefix = self._get_type_prefix(vehicle.get('vehicle_condition', ''))
 
                         qr_path = qr_paths[idx] if idx < len(qr_paths) else ''
+                        # Convert QR path for Nick's computer compatibility
+                        nicks_qr_path = self._convert_qr_path_for_nicks_computer(qr_path, dealership_name, idx)
 
                         # Apply price markup if configured
                         if price and price_markup:
@@ -1354,8 +1807,8 @@ class CorrectOrderProcessor:
                         misc = f"{year} {model.title()} - {vin} - {stock}"
 
                         writer.writerow([
-                            yearmodel, trim, price_str, stock_field, vin_field, qr_path,
-                            qryearmodel, qrstock, qr_path, misc
+                            yearmodel, trim, price_str, stock_field, vin_field, nicks_qr_path,
+                            qryearmodel, qrstock, nicks_qr_path, misc
                         ])
 
                 else:
@@ -1363,35 +1816,67 @@ class CorrectOrderProcessor:
                     writer.writerow(['YEARMAKE', 'MODEL', 'TRIM', 'STOCK', 'VIN', '@QR', 'QRYEARMODEL', 'QRSTOCK', '@QR2', 'MISC'])
 
                     for idx, vehicle in enumerate(vehicles):
+                        # CRITICAL FIX: Check for directly preserved CSV column values first
+                        # This preserves any direct edits made to final output columns
+                        if 'YEARMAKE' in vehicle:
+                            # Use direct CSV value if available (preserves user edits)
+                            yearmake_direct = str(vehicle.get('YEARMAKE', ''))
+                        else:
+                            yearmake_direct = None
+
+                        # Get primitive fields for reconstruction (fallback)
                         year = vehicle.get('year', '')
                         make = vehicle.get('make', '')
                         model = vehicle.get('model', '')
                         trim = vehicle.get('trim', '')
-                        stock = vehicle.get('stock', '')
+                        stock = vehicle.get('stock', vehicle.get('stock_number', ''))  # CRITICAL FIX: Check both field names
                         vin = vehicle.get('vin', '')
                         raw_status = vehicle.get('raw_status', 'N/A')  # Get raw_status from database query
                         type_prefix = self._get_type_prefix(vehicle.get('vehicle_condition', ''))
 
                         qr_path = qr_paths[idx] if idx < len(qr_paths) else ''
+                        # Convert QR path for Nick's computer compatibility
+                        nicks_qr_path = self._convert_qr_path_for_nicks_computer(qr_path, dealership_name, idx)
 
-                        # Format fields based on NEW/USED status
-                        if type_prefix == "NEW":
-                            # New vehicles get "NEW" prefix in YEARMAKE field
-                            yearmake = f"NEW {year} {make}"
+                        # CRITICAL FIX: Use directly preserved CSV values when available, otherwise reconstruct
+                        # This preserves any direct edits made to final output columns
+
+                        # YEARMAKE field
+                        if yearmake_direct:
+                            yearmake = yearmake_direct  # Use direct edit
+                            logger.info(f"[CAO CSV PRESERVE] Using direct YEARMAKE edit: {yearmake}")
+                        elif type_prefix == "NEW":
+                            yearmake = f"NEW {year} {make}"  # Reconstruct for new vehicles
+                            logger.info(f"[CAO CSV PRESERVE] Reconstructed NEW YEARMAKE: {yearmake}")
                         else:
-                            # Used vehicles have no prefix in YEARMAKE field
-                            yearmake = f"{year} {make}"
+                            yearmake = f"{year} {make}"  # Reconstruct for used vehicles
+                            logger.info(f"[CAO CSV PRESERVE] Reconstructed USED YEARMAKE: {yearmake}")
 
-                        # Common fields for both new and used
-                        stock_field = f"{year} {model} - {stock}"
-                        vin_field = f"{type_prefix} - {vin}"
+                        # MODEL field
+                        model_final = str(vehicle.get('MODEL', model))  # Use direct edit or fallback
+                        logger.info(f"[CAO CSV PRESERVE] MODEL: {model_final} (from edit: {vehicle.get('MODEL')}, fallback: {model})")
+
+                        # TRIM field
+                        trim_final = str(vehicle.get('TRIM', trim))  # Use direct edit or fallback
+                        logger.info(f"[CAO CSV PRESERVE] TRIM: {trim_final} (from edit: {vehicle.get('TRIM')}, fallback: {trim})")
+
+                        # STOCK field
+                        stock_final = str(vehicle.get('STOCK', f"{year} {model} - {stock}"))  # Use direct edit or fallback
+                        logger.info(f"[CAO CSV PRESERVE] STOCK: {stock_final} (from edit: {vehicle.get('STOCK')}, fallback: {year} {model} - {stock})")
+
+                        # VIN field
+                        vin_final = str(vehicle.get('VIN', f"{type_prefix} - {vin}"))  # Use direct edit or fallback
+                        logger.info(f"[CAO CSV PRESERVE] VIN: {vin_final} (from edit: {vehicle.get('VIN')}, fallback: {type_prefix} - {vin})")
+
+                        # Other fields (reconstructed for QR generation)
                         qryearmodel = f"{year} {model} - {stock}"
                         qrstock = f"{type_prefix} - {vin}"
-                        misc = f"{year} {model.title()} - {vin} - {stock}"
+                        misc_final = str(vehicle.get('MISC', f"{year} {model.title()} - {vin} - {stock}"))  # Use direct edit or fallback
+                        logger.info(f"[CAO CSV PRESERVE] MISC: {misc_final} (from edit: {vehicle.get('MISC')}, fallback: {year} {model.title()} - {vin} - {stock})")
 
                         writer.writerow([
-                            yearmake, model, trim, stock_field, vin_field, qr_path,
-                            qryearmodel, qrstock, qr_path, misc
+                            yearmake, model_final, trim_final, stock_final, vin_final, nicks_qr_path,
+                            qryearmodel, qrstock, nicks_qr_path, misc_final
                         ])
         
         logger.info(f"Generated Adobe CSV: {csv_path}")
@@ -1467,7 +1952,7 @@ class CorrectOrderProcessor:
         default_template = self._get_dealership_template_config(dealership_name)
         return self._generate_adobe_csv(vehicles, dealership_name, default_template, order_folder, qr_paths)
 
-    def _generate_billing_sheet_csv(self, vehicles: List[Dict], dealership_name: str, output_folder: Path, timestamp: str) -> Path:
+    def _generate_billing_sheet_csv(self, vehicles: List[Dict], dealership_name: str, output_folder: Path, timestamp: str, original_vin_list: List[str] = None, filtered_vin_list: List[str] = None) -> Path:
         """Generate billing sheet CSV - matches EXACT format from current system"""
 
         # File naming pattern: SOCODCJR_SCP_9.18 - BILLING2.csv pattern
@@ -1482,10 +1967,8 @@ class CorrectOrderProcessor:
         # Count vehicle types (ONLY NEW or USED)
         new_count = 0
         used_count = 0
-        vin_list = []
 
         for vehicle in vehicles:
-            vin = vehicle.get('vin', '')
             vtype = vehicle.get('vehicle_condition', '').lower()
 
             # Simple NEW/USED determination
@@ -1495,7 +1978,15 @@ class CorrectOrderProcessor:
                 # Everything else (including cpo, certified, po, pre-owned) is USED
                 used_count += 1
 
-            vin_list.append(vin)
+        # Prepare ORDERED and PRODUCED VIN lists for billing CSV
+        ordered_vins = original_vin_list if original_vin_list else []  # VINs user originally entered
+        produced_vins = filtered_vin_list if filtered_vin_list else []  # VINs actually found and processed
+
+        # DEBUG: Log what we received
+        logger.info(f"[BILLING DEBUG] original_vin_list: {original_vin_list}")
+        logger.info(f"[BILLING DEBUG] filtered_vin_list: {filtered_vin_list}")
+        logger.info(f"[BILLING DEBUG] ordered_vins: {ordered_vins}")
+        logger.info(f"[BILLING DEBUG] produced_vins: {produced_vins}")
 
         total_vehicles = len(vehicles)
 
@@ -1506,42 +1997,45 @@ class CorrectOrderProcessor:
             # Header row - EXACT format
             writer.writerow(['Totals:', '', '', 'DUPLICATES', '', '', '', 'ORDERED', 'PRODUCED'])
 
-            # Summary rows
-            writer.writerow(['Total Ordered', total_vehicles, '', '', '', '', '',
-                           vin_list[0] if len(vin_list) > 0 else '',
-                           vin_list[0] if len(vin_list) > 0 else ''])
+            # Summary rows with proper ORDERED/PRODUCED logic
+            writer.writerow(['Total Ordered', len(ordered_vins), '', '', '', '', '',
+                           ordered_vins[0] if len(ordered_vins) > 0 else '',
+                           produced_vins[0] if len(produced_vins) > 0 else ''])
 
-            writer.writerow(['Total Produced:', total_vehicles, '', '', '', '', '',
-                           vin_list[1] if len(vin_list) > 1 else '',
-                           vin_list[1] if len(vin_list) > 1 else ''])
+            writer.writerow(['Total Produced:', len(produced_vins), '', '', '', '', '',
+                           ordered_vins[1] if len(ordered_vins) > 1 else '',
+                           produced_vins[1] if len(produced_vins) > 1 else ''])
 
             writer.writerow(['Total New:', new_count, '', '', '', '', '',
-                           vin_list[2] if len(vin_list) > 2 else '',
-                           vin_list[2] if len(vin_list) > 2 else ''])
+                           ordered_vins[2] if len(ordered_vins) > 2 else '',
+                           produced_vins[2] if len(produced_vins) > 2 else ''])
 
             writer.writerow(['Total Used:', used_count, '', '', '', '', '',
-                           vin_list[3] if len(vin_list) > 3 else '',
-                           vin_list[3] if len(vin_list) > 3 else ''])
+                           ordered_vins[3] if len(ordered_vins) > 3 else '',
+                           produced_vins[3] if len(produced_vins) > 3 else ''])
 
             writer.writerow(['', '', '', '', '', '', '',
-                           vin_list[4] if len(vin_list) > 4 else '',
-                           vin_list[4] if len(vin_list) > 4 else ''])
+                           ordered_vins[4] if len(ordered_vins) > 4 else '',
+                           produced_vins[4] if len(produced_vins) > 4 else ''])
 
             writer.writerow(['Used Duplicates:', 0, '', '', '', '', '',
-                           vin_list[5] if len(vin_list) > 5 else '',
-                           vin_list[5] if len(vin_list) > 5 else ''])
+                           ordered_vins[5] if len(ordered_vins) > 5 else '',
+                           produced_vins[5] if len(produced_vins) > 5 else ''])
 
             writer.writerow(['New Duplicates', 0, '', '', '', '', '',
-                           vin_list[6] if len(vin_list) > 6 else '',
-                           vin_list[6] if len(vin_list) > 6 else ''])
+                           ordered_vins[6] if len(ordered_vins) > 6 else '',
+                           produced_vins[6] if len(produced_vins) > 6 else ''])
 
             writer.writerow(['Duplicates:', 0, '', '', '', '', '',
-                           vin_list[7] if len(vin_list) > 7 else '',
-                           vin_list[7] if len(vin_list) > 7 else ''])
+                           ordered_vins[7] if len(ordered_vins) > 7 else '',
+                           produced_vins[7] if len(produced_vins) > 7 else ''])
 
-            # Fill in remaining VINs if there are more than 8
-            for i in range(8, len(vin_list)):
-                writer.writerow(['', '', '', '', '', '', '', vin_list[i], vin_list[i]])
+            # Fill in remaining VINs if there are more than 8 - populate both ORDERED and PRODUCED columns
+            max_vins = max(len(ordered_vins), len(produced_vins))
+            for i in range(8, max_vins):
+                writer.writerow(['', '', '', '', '', '', '',
+                               ordered_vins[i] if i < len(ordered_vins) else '',
+                               produced_vins[i] if i < len(produced_vins) else ''])
 
         logger.info(f"Generated billing sheet CSV: {billing_path}")
         return billing_path

@@ -1,0 +1,436 @@
+[
+  {
+    "dealership": "Auffenberg Hyundai",
+    "timestamp": "2025-09-15T10:16:17.973901",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "BMW of Columbia",
+    "timestamp": "2025-09-15T10:16:17.977557",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "BMW of West St Louis",
+    "timestamp": "2025-09-15T10:16:17.978576",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Bommarito Cadillac",
+    "timestamp": "2025-09-15T10:16:17.978576",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Bommarito West County",
+    "timestamp": "2025-09-15T10:16:17.979934",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Columbia Honda",
+    "timestamp": "2025-09-15T10:16:17.979934",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Dave Sinclair Lincoln",
+    "timestamp": "2025-09-15T10:16:17.980956",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Dave Sinclair Lincoln St. Peters",
+    "timestamp": "2025-09-15T10:16:17.982060",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Frank Leta Honda",
+    "timestamp": "2025-09-15T10:16:17.982060",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Glendale Chrysler Jeep Dodge Ram",
+    "timestamp": "2025-09-15T10:16:17.982060",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Honda of Frontenac",
+    "timestamp": "2025-09-15T10:16:17.983472",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "HW Kia of West County",
+    "timestamp": "2025-09-15T10:16:17.983472",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Joe Machens Chrysler Dodge Jeep Ram",
+    "timestamp": "2025-09-15T10:16:17.983472",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Joe Machens Nissan",
+    "timestamp": "2025-09-15T10:16:17.984770",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Kia of Columbia",
+    "timestamp": "2025-09-15T10:16:17.984770",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "MINI OF ST. LOUIS",
+    "timestamp": "2025-09-15T10:16:17.985795",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Pappas Toyota",
+    "timestamp": "2025-09-15T10:16:17.985795",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Porsche St. Louis",
+    "timestamp": "2025-09-15T10:16:17.986796",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Pundmann Ford",
+    "timestamp": "2025-09-15T10:16:17.986796",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Rusty Drewing Cadillac",
+    "timestamp": "2025-09-15T10:16:17.987868",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Rusty Drewing Chevrolet Buick GMC",
+    "timestamp": "2025-09-15T10:16:17.987868",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Serra Honda O'Fallon",
+    "timestamp": "2025-09-15T10:16:17.987868",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "South County Dodge Chrysler Jeep RAM",
+    "timestamp": "2025-09-15T10:16:17.989005",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Spirit Lexus",
+    "timestamp": "2025-09-15T10:16:17.989005",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Suntrup Buick GMC",
+    "timestamp": "2025-09-15T10:16:17.989005",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Suntrup Ford Kirkwood",
+    "timestamp": "2025-09-15T10:16:17.990336",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Suntrup Ford Westport",
+    "timestamp": "2025-09-15T10:16:17.990336",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Suntrup Kia South",
+    "timestamp": "2025-09-15T10:16:17.990336",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Thoroughbred Ford",
+    "timestamp": "2025-09-15T10:16:17.991420",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Volvo Cars West County",
+    "timestamp": "2025-09-15T10:16:17.991420",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  },
+  {
+    "dealership": "Weber Creve Coeur",
+    "timestamp": "2025-09-15T10:16:17.992490",
+    "success": false,
+    "vehicle_count": 0,
+    "new_vehicles": 0,
+    "errors": [],
+    "warnings": [
+      "Dealership not configured for CAO processing"
+    ],
+    "config_issues": [
+      "No dealership configuration found"
+    ]
+  }
+]
