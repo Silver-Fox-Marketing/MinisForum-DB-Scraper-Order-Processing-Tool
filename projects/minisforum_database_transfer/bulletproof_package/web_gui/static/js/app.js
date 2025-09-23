@@ -8720,6 +8720,13 @@ class ModalOrderWizard {
 
         console.log(`[PHASE 2] Generating final files for ${dealershipName} with order number: ${orderNumber}`);
         console.log(`[PHASE 2] Processing ${vehiclesData.length} vehicles`);
+        console.log(`[JS QR TRACE 1] generateFinalFiles() called with:`);
+        console.log(`[JS QR TRACE 1]   - Dealership: ${dealershipName}`);
+        console.log(`[JS QR TRACE 1]   - Order Number: ${orderNumber}`);
+        console.log(`[JS QR TRACE 1]   - Template Type: ${templateType}`);
+        console.log(`[JS QR TRACE 1]   - Vehicle Count: ${vehiclesData.length}`);
+        console.log(`[JS QR TRACE 1]   - Testing Mode: ${testingMode}`);
+        console.log(`[JS QR TRACE 1]   - Sample Vehicle Data:`, vehiclesData.slice(0, 2));
 
         const response = await fetch('/api/orders/generate-final-files', {
             method: 'POST',
@@ -8735,12 +8742,24 @@ class ModalOrderWizard {
             })
         });
 
+        console.log(`[JS QR TRACE 2] API request sent to /api/orders/generate-final-files`);
+        console.log(`[JS QR TRACE 2] Request payload:`, {
+            dealership_name: dealershipName,
+            vehicles_data: vehiclesData.slice(0, 2), // Show first 2 for brevity
+            order_number: orderNumber,
+            template_type: templateType,
+            skip_vin_logging: testingMode
+        });
+
         if (!response.ok) {
             throw new Error(`Failed to generate final files: ${response.statusText}`);
         }
 
         const result = await response.json();
         console.log('[PHASE 2] Final file generation result:', result);
+        console.log(`[JS QR TRACE 3] generateFinalFiles() API response received`);
+        console.log(`[JS QR TRACE 3] Response status: ${response.status}`);
+        console.log(`[JS QR TRACE 3] Response result:`, result);
 
         // Map backend fields to frontend expected fields for PHASE 2 (file generation)
         const mappedResult = {
@@ -8988,14 +9007,22 @@ class ModalOrderWizard {
     
     async processSingleCaoOrder(order) {
         console.log('Processing single CAO order for:', order.name);
-        
+
         try {
-            const response = await fetch('/api/orders/process-cao', {
+            // Check if this is a maintenance order and use appropriate endpoint
+            const isMaintenance = this.maintenanceOrders && this.maintenanceOrders.some(m => m.name === order.name);
+            const endpoint = isMaintenance ? '/api/orders/process-maintenance' : '/api/orders/process-cao';
+
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
+                body: JSON.stringify(isMaintenance ? {
+                    dealership: order.name,  // Maintenance endpoint expects single dealership
+                    vins: [],  // Empty VIN list for CAO-only processing
+                    skip_vin_logging: document.getElementById('orderWizardTestingMode')?.checked || false
+                } : {
                     dealerships: [order.name],  // Backend expects array, just like regular CAO
                     vehicle_types: null,  // Use dealership-specific filtering rules from database
                     skip_vin_logging: document.getElementById('orderWizardTestingMode')?.checked || false
@@ -9003,19 +9030,29 @@ class ModalOrderWizard {
             });
             
             const result = await response.json();
-            
-            // Backend returns array of results, get the first one
-            if (Array.isArray(result) && result.length > 0) {
-                const firstResult = result[0];
-                if (firstResult.success) {
-                    return await this.mapCaoResultForFrontend(firstResult);
+
+            // Handle different response formats
+            if (isMaintenance) {
+                // Maintenance endpoint returns single result
+                if (result.success) {
+                    return await this.mapCaoResultForFrontend(result);
                 } else {
-                    throw new Error(firstResult.message || 'CAO processing failed');
+                    throw new Error(result.message || 'Maintenance processing failed');
                 }
-            } else if (result.success) {
-                return await this.mapCaoResultForFrontend(result);
             } else {
-                throw new Error(result.message || 'CAO processing failed');
+                // CAO endpoint returns array of results, get the first one
+                if (Array.isArray(result) && result.length > 0) {
+                    const firstResult = result[0];
+                    if (firstResult.success) {
+                        return await this.mapCaoResultForFrontend(firstResult);
+                    } else {
+                        throw new Error(firstResult.message || 'CAO processing failed');
+                    }
+                } else if (result.success) {
+                    return await this.mapCaoResultForFrontend(result);
+                } else {
+                    throw new Error(result.message || 'CAO processing failed');
+                }
             }
         } catch (error) {
             console.error('Error in processSingleCaoOrder:', error);
@@ -9955,16 +9992,42 @@ Example:
                         const vehicles = order.result.phase1_data.vehicles_data;
 
                         // Generate table-ready vehicle data from database records
-                        const formattedVehicles = vehicles.map(vehicle => ({
-                            YEARMAKE: `${vehicle.year || ''} ${vehicle.make || ''}`.trim(),
-                            MODEL: vehicle.model || '',
-                            TRIM: vehicle.trim || '',
-                            STOCK: vehicle.stock || '',
-                            VIN: vehicle.vin || '',
-                            PRICE: vehicle.price || '',
-                            RAW_STATUS: vehicle.raw_status || vehicle.status || 'N/A',
-                            DATA_TYPE: 'N'
-                        }));
+                        // FORMAT FIXED: Use VDP Shortcut Pack structure instead of wrong PRICE/DATA_TYPE format
+                        const formattedVehicles = vehicles.map((vehicle, index) => {
+                            const year = vehicle.year || '';
+                            const make = vehicle.make || '';
+                            const model = vehicle.model || '';
+                            const trim = vehicle.trim || '';
+                            const stock = vehicle.stock || '';
+                            const vin = vehicle.vin || '';
+                            const vehicleCondition = vehicle.vehicle_condition || '';
+
+                            // Determine vehicle type prefix (NEW or USED)
+                            const isNewVehicle = vehicleCondition?.toLowerCase() === 'new' ||
+                                                vehicle.vehicle_type?.toLowerCase() === 'new' ||
+                                                vehicle.type?.toLowerCase() === 'new';
+                            const typePrefix = isNewVehicle ? 'NEW' : 'USED';
+
+                            // Generate QR filepath for Adobe processing
+                            const dealershipName = order.dealership.replace(/\s+/g, '_');
+                            const qrIndex = index + 1;
+                            const qrFilepath = `C:\\Users\\Nick_Workstation\\Documents\\QRS\\${dealershipName}_QR_Code_${qrIndex}.png`;
+
+                            // VDP Shortcut Pack format structure
+                            return {
+                                YEARMAKE: isNewVehicle ? `NEW ${year} ${make}` : `${year} ${make}`,
+                                MODEL: model,
+                                TRIM: trim,
+                                STOCK: `${year} ${model} - ${stock}`,
+                                VIN: `${typePrefix} - ${vin}`,
+                                '@QR': qrFilepath,
+                                QRYEARMODEL: `${year} ${model} - ${stock}`,
+                                QRSTOCK: `${typePrefix} - ${vin}`,
+                                '@QR2': qrFilepath,
+                                MISC: `${year} ${model} - ${vin} - ${stock}`,
+                                RAW_STATUS: vehicle.raw_status || vehicle.status || 'N/A'
+                            };
+                        });
 
                         // Display the vehicles immediately using NEW method data
                         const tableBody = document.getElementById('modalVehicleDataBody') ||
@@ -10357,11 +10420,13 @@ Example:
         }
 
         // NEW: Support both raw (CAO) and VDP (LIST) formats
-        if (format === 'vdp') {
+        // CRITICAL FIX: Default to VDP format for NEW method consistency with OLD method
+        // Always use VDP Shortcut Pack format unless explicitly requesting raw format
+        if (format !== 'raw') {
             return this.convertVehicleDataToVDPFormat(vehicleData, dealership);
         }
 
-        // EXISTING: Raw database format for CAO orders (preserve all existing functionality)
+        // FALLBACK: Raw database format for CAO orders (preserve all existing functionality)
         // Get headers from first vehicle object, exclude raw_status from CSV output
         const allHeaders = Object.keys(vehicleData[0]);
         const headers = allHeaders.filter(header =>
@@ -10390,6 +10455,10 @@ Example:
     convertVehicleDataToVDPFormat(vehicleData, dealership = '') {
         // VDP CSV format specifically for LIST orders and Adobe processing
         console.log('Converting vehicle data to VDP CSV format for Adobe...');
+        console.log(`[JS QR TRACE 4] convertVehicleDataToVDPFormat() called with:`);
+        console.log(`[JS QR TRACE 4]   - Dealership: ${dealership}`);
+        console.log(`[JS QR TRACE 4]   - Vehicle Count: ${vehicleData.length}`);
+        console.log(`[JS QR TRACE 4]   - Sample Vehicle Structure:`, vehicleData.slice(0, 1));
 
         // VDP CSV Header - Standard Shortcut Pack format
         const csvRows = ['YEARMAKE,MODEL,TRIM,STOCK,VIN,@QR,QRYEARMODEL,QRSTOCK,@QR2,MISC'];

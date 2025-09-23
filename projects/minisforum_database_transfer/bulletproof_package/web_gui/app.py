@@ -1340,6 +1340,9 @@ def prepare_list_data():
 @app.route('/api/orders/generate-final-files', methods=['POST'])
 def generate_final_files():
     """PHASE 2: Generate final files from prepared data + order number"""
+    import traceback
+    logger.info(f"[API TRACE] /api/orders/generate-final-files CALLED")
+    logger.info(f"[API TRACE] Call stack: {' -> '.join([frame.filename.split('/')[-1] + ':' + str(frame.lineno) for frame in traceback.extract_stack()[-5:]])}")
     try:
         data = request.get_json()
         dealership_name = data.get('dealership_name')
@@ -1353,6 +1356,16 @@ def generate_final_files():
             return jsonify({'error': 'Missing dealership_name'}), 400
         if not order_number:
             return jsonify({'error': 'Missing order_number'}), 400
+
+        logger.info(f"[API TRACE] Request parameters received:")
+        logger.info(f"[API TRACE]   - dealership_name: {dealership_name}")
+        logger.info(f"[API TRACE]   - order_number: {order_number}")
+        logger.info(f"[API TRACE]   - template_type: {template_type}")
+        logger.info(f"[API TRACE]   - skip_vin_logging: {skip_vin_logging}")
+        logger.info(f"[API TRACE]   - vehicles_data count: {len(vehicles_data)}")
+        if len(vehicles_data) > 0:
+            logger.info(f"[API TRACE]   - sample vehicle data: {vehicles_data[0]}")
+        logger.info(f"[API TRACE]   - csv_filename: {csv_filename}")
 
         # If csv_filename is provided, read edited data from CSV file
         if csv_filename:
@@ -1449,6 +1462,30 @@ def process_list_order():
         return jsonify(result)
     except Exception as e:
         logger.error(f"Error processing list order: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/orders/process-maintenance', methods=['POST'])
+def process_maintenance_order():
+    """Process maintenance-based order (CAO + LIST combination)"""
+    try:
+        data = request.get_json()
+        dealership = data.get('dealership')
+        vins = data.get('vins', [])
+        skip_vin_logging = data.get('skip_vin_logging', False)
+
+        if not dealership:
+            return jsonify({'error': 'Dealership required'}), 400
+
+        if not vins:
+            return jsonify({'error': 'VIN list required'}), 400
+
+        logger.info(f"Processing MAINTENANCE order for {dealership} with {len(vins)} VINs (skip_vin_logging: {skip_vin_logging})")
+
+        # Process maintenance order - combines CAO (apply vinlog) + LIST (ignore vinlog)
+        result = order_processor.process_maintenance_order(dealership, vins, skip_vin_logging=skip_vin_logging)
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error processing maintenance order: {e}")
         return jsonify({'error': str(e)}), 500
 
 def find_csv_file_like_download_route(filename):
@@ -3834,6 +3871,10 @@ def process_csv_import():
                 # Use CorrectOrderProcessor with dealership-specific filtering
                 # Template type will be determined from dealership config
                 result = order_processor.process_cao_order(dealership_name, skip_vin_logging=skip_vin_logging)
+            elif order_type == 'maintenance':
+                # MAINTENANCE processing - CAO + LIST combination (CAO applies vinlog, LIST ignores vinlog)
+                logger.info(f"Processing MAINTENANCE order for {dealership_name} with {len(imported_vins)} VINs (skip_vin_logging: {skip_vin_logging})")
+                result = order_processor.process_maintenance_order(dealership_name, imported_vins, skip_vin_logging=skip_vin_logging)
             else:
                 # LIST processing - process specific VIN list
                 logger.info(f"Processing LIST order for {dealership_name} with {len(imported_vins)} VINs (skip_vin_logging: {skip_vin_logging})")
@@ -4095,6 +4136,9 @@ def regenerate_qr_codes_with_urls():
 @app.route('/api/qr/generate-from-csv', methods=['POST'])
 def generate_qr_codes_from_csv():
     """Generate QR codes from CSV file for the Order Processing Wizard"""
+    import traceback
+    logger.info(f"[QR TRACE 3] generate_qr_codes_from_csv() CALLED")
+    logger.info(f"[QR TRACE 3] Call stack: {' -> '.join([frame.filename.split('/')[-1] + ':' + str(frame.lineno) for frame in traceback.extract_stack()[-5:]])}")
     try:
         data = request.get_json()
         csv_filename = data.get('csv_filename')
@@ -4149,15 +4193,60 @@ def generate_qr_codes_from_csv():
             with open(csv_file_path, 'r', newline='', encoding='utf-8') as csvfile:
                 reader = csv.DictReader(csvfile)
                 for row in reader:
-                    if row.get('Vin'):  # Only require VIN, not URL
+                    # Try multiple VIN column formats
+                    vin = row.get('VIN') or row.get('Vin') or ''
+                    if vin:  # Only require VIN, not URL
                         total_vehicles += 1
+
+                        # For NEW method: Since CSV doesn't have vehicle URLs, we need to look them up from database
+                        # Get original vehicle data from database using VIN to get the vehicle_url
+                        from database_connection import db_manager
+
+                        # Map dealership names to match database entries
+                        def map_dealership_name(name):
+                            name_mapping = {
+                                'South County DCJR': 'South County Dodge Chrysler Jeep RAM',
+                                'Glendale Subaru': 'Glendale Chrysler Jeep Dodge Ram',
+                                'CDJR of Columbia': 'CDJR of Columbia'
+                            }
+                            return name_mapping.get(name, name)
+
+                        db_dealership_name = map_dealership_name(dealership_name)
+
+                        # Look up vehicle URL from database using VIN
+                        vehicle_url = ''
+                        try:
+                            original_vehicle_data = db_manager.execute_query("""
+                                SELECT nvd.vehicle_url FROM normalized_vehicle_data nvd
+                                JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
+                                JOIN scraper_imports si ON rvd.import_id = si.import_id
+                                WHERE nvd.vin = %s AND nvd.location = %s AND si.status = 'active'
+                                ORDER BY rvd.import_timestamp DESC
+                                LIMIT 1
+                            """, (vin, db_dealership_name))
+
+                            if original_vehicle_data and original_vehicle_data[0]['vehicle_url']:
+                                vehicle_url = original_vehicle_data[0]['vehicle_url']
+                                # Add Silver Fox UTM parameters
+                                if '?' in vehicle_url:
+                                    vehicle_url += "&utm_source=SilverFox&utm_medium=VDP_ShortCut"
+                                else:
+                                    vehicle_url += "?utm_source=SilverFox&utm_medium=VDP_ShortCut"
+                                logger.info(f"[QR GENERATION FIX] Found URL for VIN {vin}: {vehicle_url[:50]}...")
+                            else:
+                                logger.warning(f"[QR GENERATION FIX] No URL found for VIN {vin}, will use VIN as fallback")
+                                vehicle_url = vin  # Fallback to VIN if no URL found
+                        except Exception as e:
+                            logger.error(f"[QR GENERATION FIX] Error looking up URL for VIN {vin}: {e}")
+                            vehicle_url = vin  # Fallback to VIN on error
+
                         vehicle_data = {
-                            'vin': row.get('Vin', ''),
-                            'vehicle_url': row.get('Vehicle URL', ''),
-                            'year': row.get('Year', ''),
-                            'make': row.get('Make', ''),
-                            'model': row.get('Model', ''),
-                            'stock': row.get('Stock', '')
+                            'vin': vin,
+                            'vehicle_url': vehicle_url,
+                            'year': row.get('Year') or row.get('YEAR') or '',
+                            'make': row.get('Make') or row.get('MAKE') or '',
+                            'model': row.get('Model') or row.get('MODEL') or '',
+                            'stock': row.get('Stock') or row.get('STOCK') or ''
                         }
                         
                         if vehicle_data['vehicle_url']:
@@ -4511,11 +4600,49 @@ def enhanced_csv_download():
         import qrcode
         from PIL import Image
 
+        logger.info(f"[ENHANCED DOWNLOAD QR FIX] Starting QR generation for {len(vehicles_for_qr)} vehicles")
+        logger.info(f"[ENHANCED DOWNLOAD QR FIX] Dealership: {dealership_name}")
+
         qr_files = []
         for vehicle in vehicles_for_qr:
             try:
-                # Create QR data string (using MISC field or combine vehicle info)
-                qr_data = vehicle['misc'] if vehicle['misc'] else f"{vehicle['yearmake']} {vehicle['model']} - {vehicle['vin']}"
+                # CRITICAL FIX: Look up vehicle URL from database instead of using VIN text
+                raw_vin = vehicle['vin']
+                # Strip prefixes like "NEW - " or "USED - " from VIN for database lookup
+                vin = raw_vin.replace('NEW - ', '').replace('USED - ', '').strip()
+                logger.info(f"[ENHANCED DOWNLOAD QR FIX] Processing VIN: {raw_vin} -> cleaned: {vin}")
+
+                # Map dealership name to database name (same logic as OLD workflow)
+                dealership_name_mapping = {
+                    'South County DCJR': 'South County Dodge Chrysler Jeep RAM',
+                    'CDJR of Columbia': 'Chrysler Dodge Jeep Ram of Columbia',
+                    'Glendale CDJR': 'Glendale Chrysler Dodge Jeep RAM',
+                    'BMW of Columbia': 'BMW of Columbia'
+                }
+                db_dealership_name = dealership_name_mapping.get(dealership_name, dealership_name)
+
+                # Look up vehicle URL from database using VIN (same query as generate_qr_codes_from_csv)
+                vehicle_url_data = db_manager.execute_query("""
+                    SELECT nvd.vehicle_url FROM normalized_vehicle_data nvd
+                    JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
+                    JOIN scraper_imports si ON rvd.import_id = si.import_id
+                    WHERE nvd.vin = %s AND nvd.location = %s AND si.status = 'active'
+                    ORDER BY rvd.import_timestamp DESC
+                    LIMIT 1
+                """, (vin, db_dealership_name))
+
+                if vehicle_url_data and vehicle_url_data[0]['vehicle_url']:
+                    vehicle_url = vehicle_url_data[0]['vehicle_url']
+                    # Add UTM parameters for tracking
+                    if '?' in vehicle_url:
+                        qr_data = f"{vehicle_url}&utm_source=silverfox&utm_medium=qr&utm_campaign=vehiclelist"
+                    else:
+                        qr_data = f"{vehicle_url}?utm_source=silverfox&utm_medium=qr&utm_campaign=vehiclelist"
+                    logger.info(f"[ENHANCED DOWNLOAD QR FIX] Found URL for {vin}: {vehicle_url}")
+                else:
+                    # Fallback to MISC field or VIN text if no URL found
+                    qr_data = vehicle['misc'] if vehicle['misc'] else f"{vehicle['yearmake']} {vehicle['model']} - {vehicle['vin']}"
+                    logger.warning(f"[ENHANCED DOWNLOAD QR FIX] No URL found for {vin}, using fallback: {qr_data}")
 
                 # Generate QR code with exact API specifications to match backend
                 qr = qrcode.QRCode(

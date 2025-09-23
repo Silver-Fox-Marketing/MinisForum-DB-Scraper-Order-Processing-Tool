@@ -45,12 +45,15 @@ class QRCodeGenerator:
             return result['qr_output_path']
         return None
     
-    def generate_qr_code(self, vin: str, stock: str, dealership_name: str, 
+    def generate_qr_code(self, vin: str, stock: str, dealership_name: str,
                         output_path: Optional[str] = None) -> Dict[str, Any]:
         """
         Generate QR code for a vehicle
         Matches Google Apps Script format: VIN with stock number filename
         """
+        import traceback
+        logger.info(f"[QR TRACE 4] QRCodeGenerator.generate_qr_code() CALLED for VIN {vin}, stock {stock}, dealership {dealership_name}")
+        logger.info(f"[QR TRACE 4] Call stack: {' -> '.join([frame.filename.split('/')[-1] + ':' + str(frame.lineno) for frame in traceback.extract_stack()[-5:]])}")
         # Check if requests library is available
         if not HAS_REQUESTS:
             logger.error("Cannot generate QR code - requests library not installed")
@@ -93,8 +96,37 @@ class QRCodeGenerator:
                     'existed': True
                 }
             
-            # Generate QR code via API (matching Apps Script endpoint)
-            qr_data = vin  # QR contains VIN
+            # Generate QR code via API - get vehicle URL from database
+            # Map dealership names to match database entries
+            def map_dealership_name(name):
+                name_mapping = {
+                    'South County DCJR': 'South County Dodge Chrysler Jeep RAM',
+                    'Glendale Subaru': 'Glendale Chrysler Jeep Dodge Ram',
+                    'CDJR of Columbia': 'CDJR of Columbia'
+                }
+                return name_mapping.get(name, name)
+
+            db_dealership_name = map_dealership_name(dealership_name)
+            vehicle_data = self.db.execute_query("""
+                SELECT nvd.vehicle_url FROM normalized_vehicle_data nvd
+                JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
+                JOIN scraper_imports si ON rvd.import_id = si.import_id
+                WHERE nvd.vin = %s AND nvd.location = %s AND si.status = 'active'
+                ORDER BY rvd.import_timestamp DESC
+                LIMIT 1
+            """, (vin, db_dealership_name))
+
+            if vehicle_data and vehicle_data[0]['vehicle_url']:
+                # Use vehicle URL with UTM parameters
+                vehicle_url = vehicle_data[0]['vehicle_url']
+                # Add Silver Fox UTM parameters
+                utm_params = "?utm_source=silverfox&utm_medium=qr&utm_campaign=vehicle_graphics"
+                qr_data = vehicle_url + utm_params
+                logger.info(f"Using vehicle URL for QR: {qr_data}")
+            else:
+                # Fallback to VIN if no URL found
+                qr_data = vin
+                logger.warning(f"No vehicle URL found for VIN {vin}, using VIN as fallback")
             params = {
                 'size': self.default_size,
                 'data': qr_data
