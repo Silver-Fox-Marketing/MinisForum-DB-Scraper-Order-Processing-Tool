@@ -9038,7 +9038,7 @@ class ModalOrderWizard {
             const csvUrl = result.download_csv || result.csv_file;
             console.log('🔍 DEBUGGING: No vehicles in response, attempting to fetch CSV data from:', csvUrl);
             try {
-                vehiclesArray = await this.fetchVehiclesFromCsv(csvUrl);
+                vehiclesArray = await this.fetchVehiclesFromCsv(csvUrl, result.dealership);
                 console.log('🔍 DEBUGGING: Successfully parsed', vehiclesArray.length, 'vehicles from CSV');
             } catch (error) {
                 console.error('❌ ERROR: Failed to fetch vehicles from CSV:', error);
@@ -9057,7 +9057,7 @@ class ModalOrderWizard {
         };
     }
     
-    async fetchVehiclesFromCsv(csvPath) {
+    async fetchVehiclesFromCsv(csvPath, dealershipName) {
         // Fetch CSV file and parse vehicle data for maintenance order display
         console.log('📄 FETCHING CSV data from:', csvPath);
         
@@ -9071,9 +9071,9 @@ class ModalOrderWizard {
             const vehicles = this.parseCsvToVehicles(csvText);
             
             // Fetch raw_status data for review stage display
-            console.log(`🔍 ATTEMPTING to fetch raw_status for: ${dealership}`);
+            console.log(`🔍 ATTEMPTING to fetch raw_status for: ${dealershipName}`);
             try {
-                const rawStatusUrl = `/api/vehicles/raw-status/${encodeURIComponent(dealership)}`;
+                const rawStatusUrl = `/api/vehicles/raw-status/${encodeURIComponent(dealershipName)}`;
                 console.log(`📡 Making API call to: ${rawStatusUrl}`);
                 
                 const rawStatusResponse = await fetch(rawStatusUrl, {
@@ -9084,7 +9084,7 @@ class ModalOrderWizard {
                 
                 if (rawStatusResponse.ok) {
                     const rawStatusData = await rawStatusResponse.json();
-                    console.log(`✅ Retrieved raw_status for ${Object.keys(rawStatusData).length} vehicles from ${dealership}`);
+                    console.log(`✅ Retrieved raw_status for ${Object.keys(rawStatusData).length} vehicles from ${dealershipName}`);
                     console.log(`🎯 Raw status sample data:`, Object.keys(rawStatusData).slice(0, 3).map(vin => `${vin}: ${rawStatusData[vin]}`));
                     
                     // Merge raw_status data into vehicles for UI display (not for CSV export)
@@ -9342,8 +9342,18 @@ Example:
             return;
         }
         
-        // Get current dealership
-        const currentOrder = this.listOrders[this.currentListIndex];
+        // Get current dealership - check if we're in maintenance processing first
+        let currentOrder;
+        if (this.currentMaintenanceIndex < this.maintenanceOrders.length) {
+            // We're in maintenance processing, use maintenance order
+            currentOrder = this.maintenanceOrders[this.currentMaintenanceIndex];
+            console.log('Using maintenance order context for LIST processing:', currentOrder?.name);
+        } else {
+            // Regular LIST processing
+            currentOrder = this.listOrders[this.currentListIndex];
+            console.log('Using regular LIST order context:', currentOrder?.name);
+        }
+
         if (!currentOrder) {
             alert('No current dealership found');
             return;
@@ -9439,7 +9449,16 @@ Example:
 
     async processListReviewComplete() {
         // PHASE 2: Process the reviewed data (equivalent to old direct processing)
-        const currentOrder = this.listOrders[this.currentListIndex];
+        // Get current dealership - check if we're in maintenance processing first
+        let currentOrder;
+        if (this.currentMaintenanceIndex < this.maintenanceOrders.length) {
+            // We're in maintenance processing, use maintenance order
+            currentOrder = this.maintenanceOrders[this.currentMaintenanceIndex];
+        } else {
+            // Regular LIST processing
+            currentOrder = this.listOrders[this.currentListIndex];
+        }
+
         const skipVinLogging = document.getElementById('skipVinLogging')?.checked || false;
 
         try {
@@ -9857,18 +9876,18 @@ Example:
                     }
                 }
 
-                if (maintenanceResult && maintenanceResult.caoResults && maintenanceResult.caoResults.vehicles) {
+                // Prioritize CAO results over manual VINs for maintenance processing
+                if (maintenanceResult && maintenanceResult.caoResults && maintenanceResult.caoResults.vehicles && maintenanceResult.caoResults.vehicles.length > 0) {
                     console.log(`Found ${maintenanceResult.caoResults.vehicles.length} vehicles from maintenance CAO results for ${maintenanceResult.order.name}`);
-                    // Add dealership info to vehicles
+                    // Add dealership info to vehicles (these are already formatted from CSV)
                     const vehiclesWithDealership = maintenanceResult.caoResults.vehicles.map(vehicle => ({
                         ...vehicle,
                         dealership: maintenanceResult.order.name
                     }));
                     allVehicles.push(...vehiclesWithDealership);
-                }
-                // Also include manual VINs if any
-                if (maintenanceResult && maintenanceResult.manualVins && maintenanceResult.manualVins.length > 0) {
-                    console.log(`Found ${maintenanceResult.manualVins.length} manual VINs for ${maintenanceResult.order.name}`);
+                } else if (maintenanceResult && maintenanceResult.manualVins && maintenanceResult.manualVins.length > 0) {
+                    // Only use manual VINs if no CAO results are available
+                    console.log(`No CAO results found, using ${maintenanceResult.manualVins.length} manual VINs for ${maintenanceResult.order.name}`);
                     // Convert manual VINs to vehicle objects
                     const manualVehicles = maintenanceResult.manualVins.map(vin => ({
                         vin: vin,
@@ -9903,6 +9922,12 @@ Example:
                     console.log(`Using prepared vehicle data for ${order.dealership}: ${order.result.vehicles_for_review.length} vehicles`);
                     const vehicles = order.result.vehicles_for_review;
 
+                    // DEBUG: Log the actual vehicle data structure to verify formatted fields
+                    console.log('[LIST PREVIEW DEBUG] First vehicle data:', vehicles[0]);
+                    console.log('[LIST PREVIEW DEBUG] Has YEARMAKE?', vehicles[0]?.YEARMAKE);
+                    console.log('[LIST PREVIEW DEBUG] Has STOCK?', vehicles[0]?.STOCK);
+                    console.log('[LIST PREVIEW DEBUG] Has VIN?', vehicles[0]?.VIN);
+
                     // Display the vehicles immediately
                     const tableBody = document.getElementById('modalVehicleDataBody') ||
                                     document.getElementById('modalVehicleTableBody') ||
@@ -9921,57 +9946,74 @@ Example:
                     // Add to allVehicles for display
                     allVehicles.push(...vehicles);
 
-                } else if (order.result.download_csv) {
-                    // This is processed data with CSV file
-                    console.log(`Fetching vehicle data from CSV: ${order.result.download_csv}`);
-                    // We'll fetch CSV data asynchronously - for now show loading message
-                    this.fetchVehicleDataFromCSV(order.result.download_csv, order.dealership).then(vehicles => {
-                        if (vehicles && vehicles.length > 0) {
-                            // DEBUG: Find actual table element IDs
-                            console.log('DEBUG: Looking for modal table elements...');
-                            console.log('modalVehicleTableBody:', document.getElementById('modalVehicleTableBody'));
-                            console.log('modalNoDataPlaceholder:', document.getElementById('modalNoDataPlaceholder'));  
-                            console.log('modalVehicleCount:', document.getElementById('modalVehicleCount'));
-                            
-                            // FIXED: Use correct element ID from HTML template
-                            let tableBody = document.getElementById('modalVehicleDataBody') || 
-                                          document.getElementById('modalVehicleTableBody') || 
-                                          document.getElementById('vehicleTableBody') ||
-                                          document.querySelector('.modal tbody') ||
-                                          document.querySelector('#modalVehicleDataTable tbody');
-                            
-                            let noDataPlaceholder = document.getElementById('modalNoDataPlaceholder') ||
-                                                   document.getElementById('noDataPlaceholder') ||
-                                                   document.querySelector('.no-data-placeholder');
-                                                   
-                            let vehicleCountEl = document.getElementById('modalVehicleCount') ||
-                                               document.getElementById('vehicleCount') ||
-                                               document.querySelector('.vehicle-count');
-                            
-                            console.log('DEBUG: Found elements:', {tableBody, noDataPlaceholder, vehicleCountEl});
-                            
-                            if (tableBody) {
-                                // Check if raw data mode is enabled
-                                if (this.showRawData) {
-                                    // Extract VINs and fetch raw data
-                                    const vins = vehicles.map(v => v.VIN || v.vin).filter(vin => vin);
-                                    this.fetchRawDataForVins(vins, order.dealership).then(rawData => {
-                                        this.renderVehicleTableWithRawData(vehicles, tableBody, rawData);
-                                    });
-                                } else {
-                                    this.renderVehicleTable(vehicles, tableBody);
-                                }
-                                console.log(`Populated table with ${vehicles.length} REAL vehicles for ${order.dealership}`);
-                            } else {
-                                console.error('Could not find modal table body element');
-                            }
-                            
-                            if (noDataPlaceholder) noDataPlaceholder.style.display = 'none';
-                            if (vehicleCountEl) vehicleCountEl.textContent = vehicles.length.toString();
+                } else if (order.result.phase1_data?.vehicles_data || order.result.download_csv) {
+                    // CRITICAL FIX: Use vehicles_data from NEW method's phase1_data (which contains actual vehicle records)
+                    // This ensures we show detailed vehicle data while keeping the count consistent with tab badges
+                    if (order.result.phase1_data?.vehicles_data && Array.isArray(order.result.phase1_data.vehicles_data)) {
+                        console.log(`Using NEW method vehicle data for ${order.dealership}: ${order.result.phase1_data.vehicles_data.length} vehicles`);
+                        console.log(`Tab badge count from OLD method: ${order.result.vehicles_processed} vehicles`);
+                        const vehicles = order.result.phase1_data.vehicles_data;
+
+                        // Generate table-ready vehicle data from database records
+                        const formattedVehicles = vehicles.map(vehicle => ({
+                            YEARMAKE: `${vehicle.year || ''} ${vehicle.make || ''}`.trim(),
+                            MODEL: vehicle.model || '',
+                            TRIM: vehicle.trim || '',
+                            STOCK: vehicle.stock || '',
+                            VIN: vehicle.vin || '',
+                            PRICE: vehicle.price || '',
+                            RAW_STATUS: vehicle.raw_status || vehicle.status || 'N/A',
+                            DATA_TYPE: 'N'
+                        }));
+
+                        // Display the vehicles immediately using NEW method data
+                        const tableBody = document.getElementById('modalVehicleDataBody') ||
+                                        document.getElementById('modalVehicleTableBody') ||
+                                        document.getElementById('vehicleTableBody');
+                        const noDataPlaceholder = document.getElementById('modalNoDataPlaceholder');
+                        const vehicleCountEl = document.getElementById('modalVehicleCount');
+
+                        if (tableBody && formattedVehicles.length > 0) {
+                            this.renderVehicleTable(formattedVehicles, tableBody);
+                            console.log(`Populated table with ${formattedVehicles.length} vehicles from NEW method data for ${order.dealership}`);
                         }
-                    }).catch(error => {
-                        console.error(`Failed to fetch CSV data for ${order.dealership}:`, error);
-                    });
+
+                        if (noDataPlaceholder) noDataPlaceholder.style.display = 'none';
+                        if (vehicleCountEl) vehicleCountEl.textContent = formattedVehicles.length.toString();
+
+                        // Add to allVehicles for display
+                        allVehicles.push(...formattedVehicles);
+
+                    } else if (order.result.download_csv) {
+                        // Fallback: Fetch from CSV only if direct vehicle data is not available
+                        console.log(`Falling back to CSV fetch for ${order.dealership}: ${order.result.download_csv}`);
+                        this.fetchVehicleDataFromCSV(order.result.download_csv, order.dealership).then(vehicles => {
+                            if (vehicles && vehicles.length > 0) {
+                                const tableBody = document.getElementById('modalVehicleDataBody') ||
+                                              document.getElementById('modalVehicleTableBody') ||
+                                              document.getElementById('vehicleTableBody');
+                                const noDataPlaceholder = document.getElementById('modalNoDataPlaceholder');
+                                const vehicleCountEl = document.getElementById('modalVehicleCount');
+
+                                if (tableBody) {
+                                    if (this.showRawData) {
+                                        const vins = vehicles.map(v => v.VIN || v.vin).filter(vin => vin);
+                                        this.fetchRawDataForVins(vins, order.dealership).then(rawData => {
+                                            this.renderVehicleTableWithRawData(vehicles, tableBody, rawData);
+                                        });
+                                    } else {
+                                        this.renderVehicleTable(vehicles, tableBody);
+                                    }
+                                    console.log(`Populated table with ${vehicles.length} vehicles from CSV fallback for ${order.dealership}`);
+                                }
+
+                                if (noDataPlaceholder) noDataPlaceholder.style.display = 'none';
+                                if (vehicleCountEl) vehicleCountEl.textContent = vehicles.length.toString();
+                            }
+                        }).catch(error => {
+                            console.error(`Failed to fetch CSV data for ${order.dealership}:`, error);
+                        });
+                    }
                 } else {
                     console.error(`No CSV file available for ${order.dealership}`);
                 }

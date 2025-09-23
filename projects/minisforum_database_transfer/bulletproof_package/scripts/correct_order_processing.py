@@ -326,7 +326,12 @@ class CorrectOrderProcessor:
                     'error': f'No valid VINs found in scraper data. Excluded VINs: {invalid_vins}'
                 }
 
-            # Return prepared data for review - only valid vehicles
+            # CRITICAL FIX: Format vehicles for preview to match CSV template output format
+            # This ensures the review stage shows the same formatted data that appears in the final CSV
+            formatted_vehicles_for_preview = self._format_vehicles_for_preview(valid_vehicles, dealership_name)
+            logger.info(f"[LIST PREPARE] Formatted {len(formatted_vehicles_for_preview)} vehicles for review stage")
+
+            # Return prepared data for review - with formatted vehicles for preview
             result = {
                 'success': True,
                 'dealership': dealership_name,
@@ -336,8 +341,8 @@ class CorrectOrderProcessor:
                 'invalid_vins': len(invalid_vins),
                 'excluded_vins': invalid_vins,
                 'vehicle_count': len(valid_vehicles),
-                'vehicles_data': valid_vehicles,  # Only valid vehicle data for review
-                'vehicles_for_review': valid_vehicles,  # Alias for clarity
+                'vehicles_data': valid_vehicles,  # Raw valid vehicle data for processing
+                'vehicles_for_review': formatted_vehicles_for_preview,  # FORMATTED vehicles for preview
                 'original_vin_list': vin_list,  # Keep original list for billing
                 'filtered_vin_list': valid_vins,  # Valid VINs only
                 'phase': 'data_prepared',
@@ -892,7 +897,12 @@ class CorrectOrderProcessor:
                 vin_logging_result = {'success': True, 'vins_logged': 0, 'duplicates_skipped': 0, 'errors': []}
             else:
                 vin_logging_result = self._log_processed_vins_to_history(filtered_vehicles, dealership_name, 'LIST_ORDER')
-            
+
+            # CRITICAL FIX: Format vehicles for preview to match CSV template output format
+            # This ensures the review stage shows the same formatted data that appears in the final CSV
+            formatted_vehicles_for_preview = self._format_vehicles_for_preview(filtered_vehicles, dealership_name)
+            logger.info(f"[LIST PREVIEW] Formatted {len(formatted_vehicles_for_preview)} vehicles for review stage")
+
             # Build return result
             result = {
                 'success': True,
@@ -905,8 +915,8 @@ class CorrectOrderProcessor:
                 'valid_vins': len(valid_vins),  # VINs found in scraper data
                 'invalid_vins': len(invalid_vins),  # VINs NOT found in scraper data
                 'invalid_vin_list': invalid_vins,  # List of excluded VINs for user feedback
-                'vehicles_data': filtered_vehicles,  # CRITICAL: Only valid vehicles for frontend review stage
-                'vehicles_for_review': filtered_vehicles,  # Alias for clarity - only valid vehicles
+                'vehicles_data': filtered_vehicles,  # Raw vehicles for CSV generation
+                'vehicles_for_review': formatted_vehicles_for_preview,  # CRITICAL FIX: Formatted vehicles for preview stage
                 'qr_codes_generated': len(qr_paths),
                 'qr_folder': str(qr_folder),
                 'csv_file': str(csv_path) if not isinstance(csv_path, dict) else str(csv_path.get('primary_csv', '')),
@@ -932,11 +942,70 @@ class CorrectOrderProcessor:
                     result['download_new_csv'] = f"/download_csv/{Path(csv_files['new_csv']).name}"
                     
             return result
-            
+
         except Exception as e:
             logger.error(f"Error processing list order: {e}")
             return {'success': False, 'error': str(e)}
-    
+
+    def _format_vehicles_for_preview(self, vehicles: List[Dict], dealership_name: str) -> List[Dict]:
+        """
+        Format vehicle data for preview stage to match CSV template output format.
+        This ensures the review stage shows the same formatted data that appears in the final CSV.
+        """
+        formatted_vehicles = []
+
+        for vehicle in vehicles:
+            # Extract raw database fields
+            year = vehicle.get('year', '')
+            make = vehicle.get('make', '')
+            model = vehicle.get('model', '')
+            trim = vehicle.get('trim', '')
+            stock = vehicle.get('stock', vehicle.get('stock_number', ''))
+            vin = vehicle.get('vin', '')
+            vehicle_condition = vehicle.get('vehicle_condition', '')
+
+            # Apply same formatting logic as CSV template
+            type_prefix = self._get_type_prefix(vehicle_condition)
+
+            # Format YEARMAKE field (same as line 1849-1853 in CSV generation)
+            if type_prefix == "NEW":
+                yearmake = f"NEW {year} {make}"
+            else:
+                yearmake = f"{year} {make}"
+
+            # Format STOCK field (same as line 1864 in CSV generation)
+            stock_formatted = f"{year} {model} - {stock}"
+
+            # Format VIN field (same as line 1868 in CSV generation)
+            vin_formatted = f"{type_prefix} - {vin}"
+
+            # Create formatted vehicle record for preview
+            formatted_vehicle = {
+                'YEARMAKE': yearmake,
+                'MODEL': model,
+                'TRIM': trim,
+                'STOCK': stock_formatted,
+                'VIN': vin_formatted,
+                # Preserve original fields for CSV generation
+                'year': year,
+                'make': make,
+                'model': model,
+                'trim': trim,
+                'stock': stock,
+                'vin': vin,
+                'vehicle_condition': vehicle_condition,
+                'raw_status': vehicle.get('raw_status', ''),
+                # Preserve other necessary fields
+                **{k: v for k, v in vehicle.items() if k not in ['year', 'make', 'model', 'trim', 'stock', 'vin', 'vehicle_condition', 'raw_status']}
+            }
+
+            formatted_vehicles.append(formatted_vehicle)
+
+            logger.info(f"[LIST PREVIEW FORMAT] {vin}: {yearmake} | {model} | {trim} | {stock_formatted} | {vin_formatted}")
+
+        logger.info(f"[LIST PREVIEW FORMAT] Formatted {len(formatted_vehicles)} vehicles for preview")
+        return formatted_vehicles
+
     def _log_processed_vins_to_history(self, vehicles: List[Dict], dealership_name: str, order_type: str, order_number: str = None) -> Dict[str, Any]:
         """
         Log VINs of vehicles that were actually processed in the order output.
