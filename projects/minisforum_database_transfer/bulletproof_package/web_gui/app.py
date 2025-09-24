@@ -2255,14 +2255,14 @@ def manual_vin_import():
             logger.info(f"Table doesn't exist, creating VIN log table: {table_name}")
             create_table_sql = f"""
             CREATE TABLE {table_name} (
+                id SERIAL PRIMARY KEY,
                 vin VARCHAR(17) NOT NULL,
                 order_number VARCHAR(100),
                 processed_date DATE NOT NULL,
                 order_type VARCHAR(50),
                 template_type VARCHAR(50),
                 created_at TIMESTAMP DEFAULT NOW(),
-                imported_at TIMESTAMP DEFAULT NOW(),
-                PRIMARY KEY (vin, processed_date)
+                imported_at TIMESTAMP DEFAULT NOW()
             );
             """
             db_manager.execute_query(create_table_sql)
@@ -2295,17 +2295,8 @@ def manual_vin_import():
                     logger.warning(error_msg)
                     continue
                 
-                # Check if VIN already exists (prevent duplicates)
-                logger.info(f"Checking if VIN {vin} already exists in {table_name}...")
-                existing_check = db_manager.execute_query(f"""
-                    SELECT vin FROM {table_name} WHERE vin = %s
-                """, (vin,))
-                
-                logger.info(f"Duplicate check result: {existing_check}")
-                
-                if existing_check:
-                    logger.info(f"VIN {vin} already exists in {table_name}, skipping")
-                    continue
+                # Allow duplicate VINs - remove duplicate check as requested
+                logger.info(f"Processing VIN {vin} for insertion (duplicates allowed)")
                 
                 # Insert VIN into dealership-specific VIN log
                 logger.info(f"Inserting VIN {vin} into {table_name}...")
@@ -4635,9 +4626,9 @@ def enhanced_csv_download():
                     vehicle_url = vehicle_url_data[0]['vehicle_url']
                     # Add UTM parameters for tracking
                     if '?' in vehicle_url:
-                        qr_data = f"{vehicle_url}&utm_source=silverfox&utm_medium=qr&utm_campaign=vehiclelist"
+                        qr_data = f"{vehicle_url}&utm_source=SilverFox&utm_medium=VDP_ShortCut"
                     else:
-                        qr_data = f"{vehicle_url}?utm_source=silverfox&utm_medium=qr&utm_campaign=vehiclelist"
+                        qr_data = f"{vehicle_url}?utm_source=SilverFox&utm_medium=VDP_ShortCut"
                     logger.info(f"[ENHANCED DOWNLOAD QR FIX] Found URL for {vin}: {vehicle_url}")
                 else:
                     # Fallback to MISC field or VIN text if no URL found
@@ -6059,6 +6050,419 @@ def get_raw_scraper_data():
 
     except Exception as e:
         logger.error(f"[RAW DATA API] Error fetching raw data: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# TEMPLATE MANAGEMENT ENDPOINTS
+# =============================================================================
+
+@app.route('/api/templates/fields', methods=['GET'])
+def get_template_fields():
+    """Get all available template field definitions"""
+    try:
+        fields = db_manager.execute_query("""
+            SELECT * FROM template_field_definitions
+            WHERE is_available = true
+            ORDER BY field_label
+        """)
+
+        return jsonify({
+            'success': True,
+            'fields': fields
+        })
+    except Exception as e:
+        logger.error(f"Error fetching template fields: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates', methods=['GET'])
+def get_templates():
+    """Get all templates or filtered by dealership"""
+    try:
+        dealership = request.args.get('dealership')
+
+        if dealership:
+            # Get templates mapped to specific dealership
+            query = """
+                SELECT tc.*, dtm.vehicle_condition, dtm.priority
+                FROM template_configs tc
+                LEFT JOIN dealership_template_mapping dtm ON tc.id = dtm.template_id
+                WHERE dtm.dealership_name = %s OR tc.is_system_default = true
+                ORDER BY dtm.priority DESC, tc.template_name
+            """
+            templates = db_manager.execute_query(query, (dealership,))
+        else:
+            # Get all templates
+            templates = db_manager.execute_query("""
+                SELECT * FROM template_configs
+                WHERE is_active = true
+                ORDER BY template_name
+            """)
+
+        return jsonify({
+            'success': True,
+            'templates': templates
+        })
+    except Exception as e:
+        logger.error(f"Error fetching templates: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates/<int:template_id>', methods=['GET'])
+def get_template(template_id):
+    """Get a specific template by ID"""
+    try:
+        template = db_manager.execute_query("""
+            SELECT * FROM template_configs
+            WHERE id = %s
+        """, (template_id,))
+
+        if not template:
+            return jsonify({'error': 'Template not found'}), 404
+
+        return jsonify({
+            'success': True,
+            'template': template[0]
+        })
+    except Exception as e:
+        logger.error(f"Error fetching template: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates', methods=['POST'])
+def create_template():
+    """Create a new template"""
+    try:
+        data = request.get_json()
+
+        if not data.get('template_name') or not data.get('fields'):
+            return jsonify({'error': 'Template name and fields are required'}), 400
+
+        import json
+
+        result = db_manager.execute_query("""
+            INSERT INTO template_configs
+            (template_name, description, template_type, fields, created_by)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            data['template_name'],
+            data.get('description', ''),
+            data.get('template_type', 'shortcut_pack'),
+            json.dumps(data['fields']),
+            data.get('created_by', 'user')
+        ))
+
+        return jsonify({
+            'success': True,
+            'template_id': result[0]['id'],
+            'message': 'Template created successfully'
+        })
+    except Exception as e:
+        logger.error(f"Error creating template: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates/<int:template_id>', methods=['PUT'])
+def update_template(template_id):
+    """Update an existing template"""
+    try:
+        data = request.get_json()
+        import json
+
+        # Build dynamic update query
+        update_fields = []
+        params = []
+
+        if 'template_name' in data:
+            update_fields.append("template_name = %s")
+            params.append(data['template_name'])
+
+        if 'description' in data:
+            update_fields.append("description = %s")
+            params.append(data['description'])
+
+        if 'fields' in data:
+            update_fields.append("fields = %s")
+            params.append(json.dumps(data['fields']))
+
+        if 'is_active' in data:
+            update_fields.append("is_active = %s")
+            params.append(data['is_active'])
+
+        if not update_fields:
+            return jsonify({'error': 'No fields to update'}), 400
+
+        # Add updated_at and template_id
+        update_fields.append("updated_at = CURRENT_TIMESTAMP")
+        params.append(template_id)
+
+        query = f"""
+            UPDATE template_configs
+            SET {', '.join(update_fields)}
+            WHERE id = %s
+        """
+
+        db_manager.execute_query(query, params)
+
+        return jsonify({
+            'success': True,
+            'message': 'Template updated successfully'
+        })
+    except Exception as e:
+        logger.error(f"Error updating template: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates/<int:template_id>', methods=['DELETE'])
+def delete_template(template_id):
+    """Delete a template (soft delete by setting is_active = false)"""
+    try:
+        # Check if it's a system default
+        check_default = db_manager.execute_query("""
+            SELECT is_system_default FROM template_configs WHERE id = %s
+        """, (template_id,))
+
+        if check_default and check_default[0]['is_system_default']:
+            return jsonify({'error': 'Cannot delete system default template'}), 400
+
+        # Soft delete
+        db_manager.execute_query("""
+            UPDATE template_configs
+            SET is_active = false, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        """, (template_id,))
+
+        return jsonify({
+            'success': True,
+            'message': 'Template deleted successfully'
+        })
+    except Exception as e:
+        logger.error(f"Error deleting template: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates/mapping', methods=['POST'])
+def map_template_to_dealership():
+    """Map a template to a dealership"""
+    try:
+        data = request.get_json()
+
+        if not data.get('dealership_name') or not data.get('template_id'):
+            return jsonify({'error': 'Dealership name and template ID are required'}), 400
+
+        db_manager.execute_query("""
+            INSERT INTO dealership_template_mapping
+            (dealership_name, template_id, vehicle_condition, priority)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (dealership_name, vehicle_condition, template_id)
+            DO UPDATE SET priority = EXCLUDED.priority
+        """, (
+            data['dealership_name'],
+            data['template_id'],
+            data.get('vehicle_condition'),
+            data.get('priority', 0)
+        ))
+
+        return jsonify({
+            'success': True,
+            'message': 'Template mapped to dealership successfully'
+        })
+    except Exception as e:
+        logger.error(f"Error mapping template: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates/preview', methods=['POST'])
+def preview_template():
+    """Preview how a template would render with sample data"""
+    try:
+        data = request.get_json()
+        template_fields = data.get('fields', {})
+        sample_vin = data.get('sample_vin')
+        dealership = data.get('dealership')
+
+        # Get sample vehicle data if VIN provided
+        sample_data = None
+        if sample_vin and dealership:
+            sample_data = db_manager.execute_query("""
+                SELECT nvd.* FROM normalized_vehicle_data nvd
+                JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
+                JOIN scraper_imports si ON rvd.import_id = si.import_id
+                WHERE nvd.vin = %s AND nvd.location = %s AND si.status = 'active'
+                LIMIT 1
+            """, (sample_vin, dealership))
+
+            if sample_data:
+                sample_data = sample_data[0]
+
+        # If no sample data, use mock data
+        if not sample_data:
+            sample_data = {
+                'vin': '1HGCM82633A123456',
+                'stock': 'STK12345',
+                'year': 2024,
+                'make': 'Honda',
+                'model': 'Accord',
+                'trim': 'EX-L',
+                'price': 35000,
+                'msrp': 38000,
+                'vehicle_condition': 'new',
+                'status': 'onlot',
+                'date_in_stock': '2024-01-15',
+                'location': dealership or 'Sample Dealership',
+                'vehicle_url': 'https://example.com/vehicle/123456'
+            }
+
+        # Render template with sample data
+        rendered_fields = []
+        for field in template_fields.get('columns', []):
+            rendered = {
+                'key': field['key'],
+                'label': field.get('label', field['key']),
+                'value': None
+            }
+
+            if field['type'] == 'concatenated' and 'format' in field:
+                # Handle concatenated fields
+                import re
+                format_str = field['format']
+                for key, value in sample_data.items():
+                    format_str = format_str.replace(f'{{{key}}}', str(value))
+                rendered['value'] = format_str
+            elif field['type'] == 'calculated':
+                # Handle calculated fields like days_on_lot
+                if field['key'] == 'days_on_lot' and sample_data.get('date_in_stock'):
+                    from datetime import datetime
+                    try:
+                        if isinstance(sample_data['date_in_stock'], str):
+                            stock_date = datetime.strptime(sample_data['date_in_stock'], '%Y-%m-%d')
+                        else:
+                            stock_date = sample_data['date_in_stock']
+                        days = (datetime.now() - stock_date).days
+                        rendered['value'] = f"{days} days"
+                    except:
+                        rendered['value'] = "N/A"
+            elif field['type'] == 'special':
+                # Handle special fields like QR code
+                if field['key'] == 'qr_code':
+                    rendered['value'] = "[QR CODE IMAGE]"
+            else:
+                # Regular field mapping
+                source = field.get('source', field['key'])
+                rendered['value'] = sample_data.get(source, 'N/A')
+
+                # Apply formatting if specified
+                if field.get('format') and rendered['value'] != 'N/A':
+                    if field['type'] == 'number' and '$' in field.get('format', ''):
+                        rendered['value'] = f"${rendered['value']:,.0f}"
+
+            rendered_fields.append(rendered)
+
+        return jsonify({
+            'success': True,
+            'preview': rendered_fields,
+            'sample_data': sample_data
+        })
+    except Exception as e:
+        logger.error(f"Error previewing template: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# CUSTOM TEMPLATE PROCESSING ENDPOINTS (SEPARATE FROM EXISTING ORDER PROCESSING)
+# =============================================================================
+
+@app.route('/api/custom-templates/test/<dealership_name>', methods=['POST'])
+def test_custom_template_processing(dealership_name):
+    """Test custom template processing for a dealership (SAFE - doesn't affect existing system)"""
+    try:
+        from custom_template_processor import custom_template_processor
+
+        data = request.get_json() or {}
+        vehicle_condition = data.get('vehicle_condition')
+
+        # This is completely separate from existing order processing
+        result = custom_template_processor.process_custom_template_order(
+            dealership_name,
+            vehicle_condition
+        )
+
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error testing custom template: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/custom-templates/preview/<dealership_name>/<int:template_id>', methods=['GET'])
+def preview_custom_template_output(dealership_name, template_id):
+    """Preview custom template output with real data (SAFE - read-only)"""
+    try:
+        from custom_template_processor import custom_template_processor
+
+        sample_vin = request.args.get('sample_vin')
+
+        # This only reads data, doesn't modify anything
+        result = custom_template_processor.test_custom_template_preview(
+            dealership_name,
+            template_id,
+            sample_vin
+        )
+
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error previewing custom template: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/custom-templates/check/<dealership_name>', methods=['GET'])
+def check_custom_template_availability(dealership_name):
+    """Check if dealership has custom templates configured (SAFE - read-only)"""
+    try:
+        from template_resolver import template_resolver
+
+        vehicle_condition = request.args.get('vehicle_condition')
+
+        template_result = template_resolver.get_template(dealership_name, vehicle_condition)
+
+        return jsonify({
+            'success': True,
+            'has_custom_template': template_result['type'] == 'custom',
+            'template_info': template_result
+        })
+    except Exception as e:
+        logger.error(f"Error checking custom template: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates/list', methods=['GET'])
+def get_templates_list():
+    """Get templates list for Template Builder UI"""
+    try:
+        # Get all active templates
+        templates = db_manager.execute_query("""
+            SELECT * FROM template_configs
+            WHERE is_active = true
+            ORDER BY template_name
+        """)
+
+        return jsonify({
+            'success': True,
+            'templates': templates or []
+        })
+    except Exception as e:
+        logger.error(f"Error fetching templates list: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/dealership-configs', methods=['GET'])
+def get_dealership_configs():
+    """Get dealership configurations for Template Builder UI"""
+    try:
+        # Get dealership configs
+        configs = db_manager.execute_query("""
+            SELECT name, is_active FROM dealership_configs
+            WHERE is_active = true
+            ORDER BY name
+        """)
+
+        # Format for Template Builder
+        dealerships = [{'name': config['name']} for config in (configs or [])]
+
+        return jsonify({
+            'success': True,
+            'dealerships': dealerships
+        })
+    except Exception as e:
+        logger.error(f"Error fetching dealership configs: {e}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

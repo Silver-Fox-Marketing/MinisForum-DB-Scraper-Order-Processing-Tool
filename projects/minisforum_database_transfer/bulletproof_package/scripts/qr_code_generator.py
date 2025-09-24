@@ -120,8 +120,10 @@ class QRCodeGenerator:
                 # Use vehicle URL with UTM parameters
                 vehicle_url = vehicle_data[0]['vehicle_url']
                 # Add Silver Fox UTM parameters
-                utm_params = "?utm_source=silverfox&utm_medium=qr&utm_campaign=vehicle_graphics"
-                qr_data = vehicle_url + utm_params
+                if '?' in vehicle_url:
+                    qr_data = f"{vehicle_url}&utm_source=SilverFox&utm_medium=VDP_ShortCut"
+                else:
+                    qr_data = f"{vehicle_url}?utm_source=SilverFox&utm_medium=VDP_ShortCut"
                 logger.info(f"Using vehicle URL for QR: {qr_data}")
             else:
                 # Fallback to VIN if no URL found

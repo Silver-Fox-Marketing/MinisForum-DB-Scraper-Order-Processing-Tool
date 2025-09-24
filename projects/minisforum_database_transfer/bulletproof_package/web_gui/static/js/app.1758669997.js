@@ -9007,14 +9007,22 @@ class ModalOrderWizard {
     
     async processSingleCaoOrder(order) {
         console.log('Processing single CAO order for:', order.name);
-        
+
         try {
-            const response = await fetch('/api/orders/process-cao', {
+            // Check if this is a maintenance order and use appropriate endpoint
+            const isMaintenance = this.maintenanceOrders && this.maintenanceOrders.some(m => m.name === order.name);
+            const endpoint = isMaintenance ? '/api/orders/process-maintenance' : '/api/orders/process-cao';
+
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
+                body: JSON.stringify(isMaintenance ? {
+                    dealership: order.name,  // Maintenance endpoint expects single dealership
+                    vins: [],  // Empty VIN list for CAO-only processing
+                    skip_vin_logging: document.getElementById('orderWizardTestingMode')?.checked || false
+                } : {
                     dealerships: [order.name],  // Backend expects array, just like regular CAO
                     vehicle_types: null,  // Use dealership-specific filtering rules from database
                     skip_vin_logging: document.getElementById('orderWizardTestingMode')?.checked || false
@@ -9022,19 +9030,29 @@ class ModalOrderWizard {
             });
             
             const result = await response.json();
-            
-            // Backend returns array of results, get the first one
-            if (Array.isArray(result) && result.length > 0) {
-                const firstResult = result[0];
-                if (firstResult.success) {
-                    return await this.mapCaoResultForFrontend(firstResult);
+
+            // Handle different response formats
+            if (isMaintenance) {
+                // Maintenance endpoint returns single result
+                if (result.success) {
+                    return await this.mapCaoResultForFrontend(result);
                 } else {
-                    throw new Error(firstResult.message || 'CAO processing failed');
+                    throw new Error(result.message || 'Maintenance processing failed');
                 }
-            } else if (result.success) {
-                return await this.mapCaoResultForFrontend(result);
             } else {
-                throw new Error(result.message || 'CAO processing failed');
+                // CAO endpoint returns array of results, get the first one
+                if (Array.isArray(result) && result.length > 0) {
+                    const firstResult = result[0];
+                    if (firstResult.success) {
+                        return await this.mapCaoResultForFrontend(firstResult);
+                    } else {
+                        throw new Error(firstResult.message || 'CAO processing failed');
+                    }
+                } else if (result.success) {
+                    return await this.mapCaoResultForFrontend(result);
+                } else {
+                    throw new Error(result.message || 'CAO processing failed');
+                }
             }
         } catch (error) {
             console.error('Error in processSingleCaoOrder:', error);

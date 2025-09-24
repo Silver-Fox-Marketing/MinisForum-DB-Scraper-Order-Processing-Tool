@@ -1486,7 +1486,29 @@ class CorrectOrderProcessor:
             query += " AND nvd.price IS NOT NULL AND nvd.price > 0"
             # Also check raw price data for valid numeric values only
             query += " AND rvd.price IS NOT NULL AND rvd.price > 0"
-        
+
+        # Apply brand filter - CRITICAL FIX for required_brands
+        required_brands = filtering_rules.get('required_brands', [])
+        if required_brands:
+            brand_conditions = []
+            for brand in required_brands:
+                brand_conditions.append("LOWER(nvd.make) = LOWER(%s)")
+                params.append(brand)
+            query += f" AND ({' OR '.join(brand_conditions)})"
+
+        # Apply seasoning filter at SQL level for better performance
+        # Support both modern days_on_lot and legacy seasoning_days formats
+        days_on_lot_config = filtering_rules.get('days_on_lot', {})
+        legacy_seasoning = filtering_rules.get('seasoning_days', 0)
+
+        if days_on_lot_config and days_on_lot_config.get('min', 0) > 0:
+            min_days = days_on_lot_config['min']
+            query += " AND nvd.date_in_stock IS NOT NULL AND nvd.date_in_stock <= CURRENT_DATE - INTERVAL '%s days'"
+            params.append(min_days)
+        elif legacy_seasoning > 0:
+            query += " AND nvd.date_in_stock IS NOT NULL AND nvd.date_in_stock <= CURRENT_DATE - INTERVAL '%s days'"
+            params.append(legacy_seasoning)
+
         query += " ORDER BY created_at DESC"
         
         logger.info(f"[CAO DEBUG] Final Query: {query}")
@@ -1696,119 +1718,33 @@ class CorrectOrderProcessor:
                 if max_price and vehicle_price > max_price:
                     continue
                 
-                # Days on lot filter (seasoning) - Updated to use standardized template structure
+                # Minimum seasoning filter now applied at SQL level for better performance
+                # Only check maximum days on lot here (post-query) since SQL handles minimum
                 days_on_lot_config = filtering_rules.get('days_on_lot', {})
-                if days_on_lot_config:
-                    min_days = days_on_lot_config.get('min', 0)
-                    max_days = days_on_lot_config.get('max', 999)
-
+                if days_on_lot_config and days_on_lot_config.get('max', 999) < 999:
+                    max_days = days_on_lot_config['max']
                     date_in_stock = vehicle.get('date_in_stock')
-                    created_at = vehicle.get('created_at')
-
-                    logger.info(f"[DAYS_ON_LOT DEBUG] VIN {vehicle.get('vin')} - date_in_stock: {date_in_stock} (type: {type(date_in_stock)}), created_at: {created_at}")
-
-                    # Determine which date to use for seasoning calculation
-                    reference_date = None
-                    date_source = None
 
                     if date_in_stock:
-                        # Check if date_in_stock looks like a scrape date (today or yesterday)
-                        if isinstance(date_in_stock, str):
-                            try:
-                                stock_date = datetime.strptime(date_in_stock, '%Y-%m-%d')
-                                days_since_stock_date = (datetime.now() - stock_date).days
-
-                                # If date_in_stock is very recent (0-2 days), it's likely a scrape date, use created_at instead
-                                if days_since_stock_date <= 2 and created_at:
-                                    reference_date = created_at
-                                    date_source = "created_at (date_in_stock too recent)"
-                                else:
-                                    reference_date = stock_date
-                                    date_source = "date_in_stock"
-                            except ValueError:
-                                # If date parsing fails, fall back to created_at
-                                reference_date = created_at
-                                date_source = "created_at (date_in_stock parse failed)"
-                        elif hasattr(date_in_stock, 'days'):  # datetime.date object
-                            days_since_stock_date = (datetime.now().date() - date_in_stock).days
-
-                            # If date_in_stock is very recent (0-2 days), it's likely a scrape date, use created_at instead
-                            if days_since_stock_date <= 2 and created_at:
-                                reference_date = created_at
-                                date_source = "created_at (date_in_stock too recent)"
-                            else:
-                                reference_date = date_in_stock
-                                date_source = "date_in_stock"
-                    else:
-                        # No date_in_stock, use created_at
-                        reference_date = created_at
-                        date_source = "created_at (no date_in_stock)"
-
-                    if reference_date:
-                        # Calculate actual days on lot
-                        if isinstance(reference_date, str):
-                            try:
-                                ref_date = datetime.strptime(reference_date, '%Y-%m-%d %H:%M:%S.%f')
-                                actual_days_on_lot = (datetime.now() - ref_date).days
-                            except ValueError:
-                                try:
-                                    ref_date = datetime.strptime(reference_date, '%Y-%m-%d')
-                                    actual_days_on_lot = (datetime.now() - ref_date).days
-                                except ValueError:
-                                    logger.warning(f"[DAYS_ON_LOT] Could not parse reference date for VIN {vehicle.get('vin')}: {reference_date}")
-                                    continue
-                        elif hasattr(reference_date, 'days'):  # date object
-                            actual_days_on_lot = (datetime.now().date() - reference_date).days
-                        else:  # datetime object
-                            actual_days_on_lot = (datetime.now() - reference_date).days
-
-                        logger.info(f"[DAYS_ON_LOT] VIN {vehicle.get('vin')} - Using {date_source}, calculated {actual_days_on_lot} days on lot")
-
-                        # Apply min/max days filter
-                        if actual_days_on_lot < min_days:
-                            logger.info(f"[DAYS_ON_LOT] Skipping VIN {vehicle.get('vin')} - only {actual_days_on_lot} days on lot (requires min {min_days})")
-                            continue
-                        if actual_days_on_lot > max_days:
-                            logger.info(f"[DAYS_ON_LOT] Skipping VIN {vehicle.get('vin')} - {actual_days_on_lot} days on lot (exceeds max {max_days})")
-                            continue
-
-                        logger.info(f"[DAYS_ON_LOT] VIN {vehicle.get('vin')} passed filter - {actual_days_on_lot} days (min: {min_days}, max: {max_days})")
-                    else:
-                        logger.warning(f"[DAYS_ON_LOT] No usable date found for VIN {vehicle.get('vin')}, allowing through filter")
-
-                # LEGACY SUPPORT: Fall back to old seasoning_days format for backwards compatibility
-                elif 'seasoning_days' in filtering_rules:
-                    seasoning_days = filtering_rules.get('seasoning_days', 0)
-                    if seasoning_days > 0:
-                        date_in_stock = vehicle.get('date_in_stock')
-                        logger.info(f"[LEGACY SEASONING] VIN {vehicle.get('vin')} - using legacy seasoning_days: {seasoning_days}")
-                        if date_in_stock:
+                        try:
                             if isinstance(date_in_stock, str):
-                                try:
-                                    stock_date = datetime.strptime(date_in_stock, '%Y-%m-%d')
-                                    actual_days_on_lot = (datetime.now() - stock_date).days
-
-                                    if actual_days_on_lot < seasoning_days:
-                                        logger.info(f"[LEGACY SEASONING] Skipping VIN {vehicle.get('vin')} - only {actual_days_on_lot} days on lot (requires {seasoning_days})")
-                                        continue
-                                except ValueError:
-                                    logger.warning(f"[LEGACY SEASONING] Could not parse date_in_stock for VIN {vehicle.get('vin')}: {date_in_stock}")
-                            elif hasattr(date_in_stock, 'days'):
+                                stock_date = datetime.strptime(date_in_stock, '%Y-%m-%d')
+                                actual_days_on_lot = (datetime.now() - stock_date).days
+                            elif hasattr(date_in_stock, 'days'):  # date object
+                                actual_days_on_lot = (datetime.now().date() - date_in_stock).days
+                            else:  # datetime object
                                 actual_days_on_lot = (datetime.now() - date_in_stock).days
-                                if actual_days_on_lot < seasoning_days:
-                                    logger.info(f"[LEGACY SEASONING] Skipping VIN {vehicle.get('vin')} - only {actual_days_on_lot} days on lot (requires {seasoning_days})")
-                                    continue
-                
-                # Brand filter (e.g., Pappas Toyota only wants Toyota vehicles)
-                required_brands = filtering_rules.get('required_brands', [])
-                if required_brands:
-                    vehicle_make = vehicle.get('make', '').lower()
-                    # Check if vehicle make matches any required brands
-                    brand_matches = any(brand.lower() in vehicle_make or vehicle_make in brand.lower()
-                                      for brand in required_brands)
-                    if not brand_matches:
-                        logger.info(f"[BRAND FILTER] Skipping VIN {vehicle.get('vin')} - make '{vehicle.get('make')}' not in required brands {required_brands}")
-                        continue
+
+                            if actual_days_on_lot > max_days:
+                                logger.info(f"[DAYS_ON_LOT] Skipping VIN {vehicle.get('vin')} - {actual_days_on_lot} days on lot exceeds maximum: {max_days}")
+                                continue
+                        except (ValueError, AttributeError) as e:
+                            logger.warning(f"[DAYS_ON_LOT] Could not calculate days for VIN {vehicle.get('vin')}: {e}")
+
+                # Legacy seasoning_days minimum filter is now handled at SQL level
+
+                # Brand filter is now applied at SQL level for better performance
+                # No need for post-query brand filtering
 
                 # If all filters pass, include the vehicle
                 filtered_vehicles.append(vehicle)
@@ -1912,51 +1848,29 @@ class CorrectOrderProcessor:
     def _get_vehicle_qr_content(self, vehicle: Dict, dealership_name: str) -> str:
         """
         Determine the best QR content for a vehicle.
-        Priority: Vehicle-specific URL > Stock-based URL > VIN > Stock number
+        Only appends UTM parameters to actual URLs.
         """
 
         vin = vehicle.get('vin', '').strip()
         stock = vehicle.get('stock', '').strip()
         url = vehicle.get('vehicle_url', '').strip()
-        year = vehicle.get('year', '')
-        make = vehicle.get('make', '')
-        model = vehicle.get('model', '')
 
-        logger.info(f"[QR CONTENT DEBUG] VIN: {vin}, URL: {url[:50] if url else '[EMPTY]'}...")
-        logger.info(f"[QR CONTENT DEBUG] ALL VEHICLE KEYS: {list(vehicle.keys())}")
-        logger.info(f"[QR CONTENT DEBUG] FULL VEHICLE_URL VALUE: '{vehicle.get('vehicle_url', '[NOT FOUND]')}'")
-        logger.info(f"[QR CONTENT DEBUG] URL AFTER STRIP: '{url}'")
-
-        # Priority 1: Check if URL is vehicle-specific (contains VIN, stock, or inventory path)
+        # If we have a URL, use it with UTM parameters
         if url:
-            # FORCE USE URL - Skip the _is_vehicle_specific_url check for debugging
             url_with_utm = self._add_utm_parameters(url)
-            logger.info(f"[QR CONTENT] FORCED - Using vehicle URL: {url_with_utm}")
+            logger.info(f"[QR CONTENT] Using vehicle URL: {url_with_utm}")
             return url_with_utm
 
-        # Priority 2: Try to construct a vehicle-specific URL based on dealership patterns
-        specific_url = self._construct_vehicle_url(dealership_name, vehicle)
-        if specific_url:
-            specific_url_with_utm = self._add_utm_parameters(specific_url)
-            logger.info(f"[QR CONTENT] Constructed vehicle URL: {specific_url_with_utm}")
-            return specific_url_with_utm
-
-        # Priority 3: Use VIN if available (most unique identifier)
+        # Otherwise, use VIN (no UTM - it's not a URL)
         if vin:
-            logger.info(f"[QR CONTENT] FALLBACK - Using VIN as QR content: {vin}")
+            logger.info(f"[QR CONTENT] Using VIN: {vin}")
             return vin
-            
-        # Priority 4: Use stock number if available
+
+        # Fallback to stock number (no UTM - it's not a URL)
         if stock:
-            logger.debug(f"Using stock number as QR content: {stock}")
+            logger.debug(f"Using stock number: {stock}")
             return stock
-            
-        # Priority 5: Fallback to vehicle description
-        if year and make and model:
-            description = f"{year} {make} {model}"
-            logger.debug(f"Using vehicle description as QR content: {description}")
-            return description
-            
+
         logger.warning("No suitable QR content found for vehicle")
         return ""
 
@@ -2350,9 +2264,23 @@ class CorrectOrderProcessor:
                 # Everything else (including cpo, certified, po, pre-owned) is USED
                 used_count += 1
 
-        # Prepare ORDERED and PRODUCED VIN lists for billing CSV
-        ordered_vins = original_vin_list if original_vin_list else []  # VINs user originally entered
-        produced_vins = filtered_vin_list if filtered_vin_list else []  # VINs actually found and processed
+        # Prepare ORDERED and PRODUCED VIN lists for billing CSV - strip "NEW" prefixes and " - " separators
+        def strip_new_prefix(vin: str) -> str:
+            """Strip 'NEW' prefix and ' - ' separator from VIN if present"""
+            if not isinstance(vin, str):
+                return vin
+
+            # Strip patterns like "NEW - 1GTUUCED3RZ262350" or "USED - 1GTUUCED3RZ262350"
+            if vin.upper().startswith('NEW - '):
+                return vin[6:].strip()  # Remove "NEW - " and any whitespace
+            elif vin.upper().startswith('USED - '):
+                return vin[7:].strip()  # Remove "USED - " and any whitespace
+            elif vin.upper().startswith('NEW'):
+                return vin[3:].strip()  # Remove just "NEW" and any whitespace
+            return vin
+
+        ordered_vins = [strip_new_prefix(vin) for vin in (original_vin_list if original_vin_list else [])]
+        produced_vins = [strip_new_prefix(vin) for vin in (filtered_vin_list if filtered_vin_list else [])]
 
         # DEBUG: Log what we received
         logger.info(f"[BILLING DEBUG] original_vin_list: {original_vin_list}")
