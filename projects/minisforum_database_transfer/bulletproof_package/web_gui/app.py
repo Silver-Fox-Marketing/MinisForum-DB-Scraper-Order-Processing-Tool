@@ -513,7 +513,7 @@ def generate_unique_js_files():
             js_files['app.js'] = unique_app_js
             print(f"OK Created cache-busting file: {unique_app_js}")
         
-        # Generate unique filename for order_wizard.js  
+        # Generate unique filename for order_wizard.js
         original_wizard_js = static_js_path / 'order_wizard.js'
         if original_wizard_js.exists():
             unique_wizard_js = f'order_wizard.{timestamp}.js'
@@ -521,6 +521,15 @@ def generate_unique_js_files():
             shutil.copy2(original_wizard_js, unique_wizard_path)
             js_files['order_wizard.js'] = unique_wizard_js
             print(f"OK Created cache-busting file: {unique_wizard_js}")
+
+        # Generate unique filename for template_builder.js
+        original_template_js = static_js_path / 'template_builder.js'
+        if original_template_js.exists():
+            unique_template_js = f'template_builder.{timestamp}.js'
+            unique_template_path = static_js_path / unique_template_js
+            shutil.copy2(original_template_js, unique_template_path)
+            js_files['template_builder.js'] = unique_template_js
+            print(f"OK Created cache-busting file: {unique_template_js}")
             
         # Clean up old timestamped files (keep only latest 3)
         cleanup_old_js_files(static_js_path)
@@ -529,7 +538,7 @@ def generate_unique_js_files():
     except Exception as e:
         print(f"ERROR generating unique JS files: {e}")
         # Return original filenames as fallback
-        return {'app.js': 'app.js', 'order_wizard.js': 'order_wizard.js'}
+        return {'app.js': 'app.js', 'order_wizard.js': 'order_wizard.js', 'template_builder.js': 'template_builder.js'}
 
 def cleanup_old_js_files(js_dir):
     """Remove old timestamped JavaScript files to prevent accumulation"""
@@ -1095,9 +1104,10 @@ def fresh_app():
     import time
     from flask import make_response
     cache_buster = int(time.time())
-    # Use unique JavaScript filenames instead of query parameters  
+    # Use unique JavaScript filenames instead of query parameters
     unique_app_js = UNIQUE_JS_FILES.get('app.js', 'app.js')
-    response = make_response(render_template('index.html', v=cache_buster, unique_app_js=unique_app_js))
+    unique_template_builder_js = UNIQUE_JS_FILES.get('template_builder.js', 'template_builder.js')
+    response = make_response(render_template('index.html', v=cache_buster, unique_app_js=unique_app_js, unique_template_builder_js=unique_template_builder_js))
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
     response.headers['Pragma'] = 'no-cache' 
     response.headers['Expires'] = '-1'
@@ -1244,7 +1254,10 @@ def process_cao_orders():
         vehicle_types = data.get('vehicle_types', ['new', 'cpo', 'used'])
         # Get skip_vin_logging from request or default to False
         skip_vin_logging = data.get('skip_vin_logging', False)
-        
+
+        # DEBUG: Log what we're receiving for skip_vin_logging
+        logger.info(f"[CAO PROCESS DEBUG] Received skip_vin_logging={skip_vin_logging} from request data={data}")
+
         results = []
         for dealership in dealerships:
             # CorrectOrderProcessor uses template_type and skip_vin_logging parameters
@@ -1838,34 +1851,45 @@ def apply_order_number():
         else:
             # Update order number and date for the provided VINs
             updated_count = 0
+            inserted_count = 0
+            updated_existing_count = 0
+
             for vin in vins:
                 try:
-                    update_query = f"""
-                        UPDATE {table_name} 
-                        SET order_number = %s, order_date = CURRENT_DATE
-                        WHERE vin = %s
-                    """
-                    result = db_manager.execute_query(update_query, (order_number, vin))
-                    
-                    # Check if VIN exists in the table, if not insert it
-                    if not result:
-                        # VIN might not exist in log yet, insert it
+                    # First check if VIN exists
+                    check_query = f"SELECT 1 FROM {table_name} WHERE vin = %s"
+                    exists = db_manager.execute_query(check_query, (vin,))
+
+                    if exists:
+                        # VIN exists, update it
+                        logger.info(f"[APPLY ORDER] VIN {vin} exists in {table_name}, updating order number")
+                        update_query = f"""
+                            UPDATE {table_name}
+                            SET order_number = %s, order_date = CURRENT_DATE
+                            WHERE vin = %s
+                        """
+                        db_manager.execute_query(update_query, (order_number, vin))
+                        updated_existing_count += 1
+                    else:
+                        # VIN doesn't exist, insert it
+                        logger.info(f"[APPLY ORDER] VIN {vin} NOT found in {table_name}, inserting new record")
                         insert_query = f"""
                             INSERT INTO {table_name} (vin, processed_date, order_type, order_number, order_date, template_type)
                             VALUES (%s, CURRENT_DATE, 'CAO', %s, CURRENT_DATE, 'QR_INDIVIDUAL')
-                            ON CONFLICT (vin) DO UPDATE SET 
+                            ON CONFLICT (vin) DO UPDATE SET
                             order_number = EXCLUDED.order_number,
                             order_date = EXCLUDED.order_date
                         """
                         db_manager.execute_query(insert_query, (vin, order_number))
-                    
+                        inserted_count += 1
+
                     updated_count += 1
                     
                 except Exception as vin_error:
                     logger.warning(f"Failed to update VIN {vin}: {vin_error}")
                     continue
         
-        logger.info(f"Successfully updated {updated_count} VINs with order number {order_number}")
+        logger.info(f"[APPLY ORDER COMPLETE] Total: {updated_count} VINs | Updated existing: {updated_existing_count} | Newly inserted: {inserted_count}")
         
         return jsonify({
             'success': True,
@@ -6275,7 +6299,7 @@ def preview_template():
         sample_vin = data.get('sample_vin')
         dealership = data.get('dealership')
 
-        # Get sample vehicle data if VIN provided
+        # Get sample vehicle data - try specific VIN first, then any vehicle from dealership
         sample_data = None
         if sample_vin and dealership:
             sample_data = db_manager.execute_query("""
@@ -6288,6 +6312,22 @@ def preview_template():
 
             if sample_data:
                 sample_data = sample_data[0]
+
+        # If no specific VIN or no match found, get any vehicle from dealership for preview
+        if not sample_data and dealership:
+            logger.info(f"No specific VIN data, getting sample from {dealership}")
+            sample_data = db_manager.execute_query("""
+                SELECT nvd.* FROM normalized_vehicle_data nvd
+                JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
+                JOIN scraper_imports si ON rvd.import_id = si.import_id
+                WHERE nvd.location = %s AND si.status = 'active'
+                ORDER BY rvd.import_timestamp DESC
+                LIMIT 1
+            """, (dealership,))
+
+            if sample_data:
+                sample_data = sample_data[0]
+                logger.info(f"Found sample vehicle: {sample_data.get('year', 'N/A')} {sample_data.get('make', 'N/A')} {sample_data.get('model', 'N/A')}")
 
         # If no sample data, use mock data
         if not sample_data:
@@ -6307,55 +6347,114 @@ def preview_template():
                 'vehicle_url': 'https://example.com/vehicle/123456'
             }
 
-        # Render template with sample data
-        rendered_fields = []
-        for field in template_fields.get('columns', []):
-            rendered = {
-                'key': field['key'],
-                'label': field.get('label', field['key']),
-                'value': None
+        # DEBUG: Log received data structure
+        logger.info(f"Preview request - Dealership: {dealership}")
+        logger.info(f"Template fields received: {template_fields}")
+        logger.info(f"Columns count: {len(template_fields.get('columns', []))}")
+        logger.info(f"Sample VIN: {sample_vin}")
+        logger.info(f"Using mock data: {not sample_data or 'vin' not in sample_data or sample_data['vin'] == '1HGCM82633A123456'}")
+
+        # Create 3 rows of sample data for preview
+        sample_vehicles = [
+            {
+                'vin': '1HGCM82633A123456',
+                'stock': 'STK12345',
+                'year': 2024,
+                'make': 'Honda',
+                'model': 'Accord',
+                'trim': 'EX-L',
+                'price': 35000,
+                'msrp': 38000,
+                'vehicle_condition': 'new',
+                'status': 'onlot',
+                'date_in_stock': '2024-01-15',
+                'location': dealership or 'Sample Dealership',
+                'vehicle_url': 'https://example.com/vehicle/123456'
+            },
+            {
+                'vin': '2T1BURHE5KC987654',
+                'stock': 'STK67890',
+                'year': 2023,
+                'make': 'Toyota',
+                'model': 'Camry',
+                'trim': 'LE',
+                'price': 28500,
+                'msrp': 31000,
+                'vehicle_condition': 'used',
+                'status': 'onlot',
+                'date_in_stock': '2024-02-20',
+                'location': dealership or 'Sample Dealership',
+                'vehicle_url': 'https://example.com/vehicle/987654'
+            },
+            {
+                'vin': '3VW2B7AJ5EM456789',
+                'stock': 'STK11111',
+                'year': 2022,
+                'make': 'Volkswagen',
+                'model': 'Jetta',
+                'trim': 'S',
+                'price': 22900,
+                'msrp': 25500,
+                'vehicle_condition': 'certified',
+                'status': 'onlot',
+                'date_in_stock': '2024-03-10',
+                'location': dealership or 'Sample Dealership',
+                'vehicle_url': 'https://example.com/vehicle/456789'
             }
+        ]
 
-            if field['type'] == 'concatenated' and 'format' in field:
-                # Handle concatenated fields
-                import re
-                format_str = field['format']
-                for key, value in sample_data.items():
-                    format_str = format_str.replace(f'{{{key}}}', str(value))
-                rendered['value'] = format_str
-            elif field['type'] == 'calculated':
-                # Handle calculated fields like days_on_lot
-                if field['key'] == 'days_on_lot' and sample_data.get('date_in_stock'):
-                    from datetime import datetime
-                    try:
-                        if isinstance(sample_data['date_in_stock'], str):
-                            stock_date = datetime.strptime(sample_data['date_in_stock'], '%Y-%m-%d')
-                        else:
-                            stock_date = sample_data['date_in_stock']
-                        days = (datetime.now() - stock_date).days
-                        rendered['value'] = f"{days} days"
-                    except:
-                        rendered['value'] = "N/A"
-            elif field['type'] == 'special':
-                # Handle special fields like QR code
-                if field['key'] == 'qr_code':
-                    rendered['value'] = "[QR CODE IMAGE]"
-            else:
-                # Regular field mapping
-                source = field.get('source', field['key'])
-                rendered['value'] = sample_data.get(source, 'N/A')
+        # Render template with sample data - create multiple rows
+        preview_rows = []
+        for vehicle_data in sample_vehicles:
+            rendered_fields = []
+            for field in template_fields.get('columns', []):
+                rendered = {
+                    'key': field['key'],
+                    'label': field.get('label', field['key']),
+                    'value': None
+                }
 
-                # Apply formatting if specified
-                if field.get('format') and rendered['value'] != 'N/A':
-                    if field['type'] == 'number' and '$' in field.get('format', ''):
-                        rendered['value'] = f"${rendered['value']:,.0f}"
+                if field['type'] == 'concatenated' and 'format' in field:
+                    # Handle concatenated fields
+                    import re
+                    format_str = field['format']
+                    for key, value in vehicle_data.items():
+                        format_str = format_str.replace(f'{{{key}}}', str(value))
+                    rendered['value'] = format_str
+                elif field['type'] == 'calculated':
+                    # Handle calculated fields like days_on_lot
+                    if field['key'] == 'days_on_lot' and vehicle_data.get('date_in_stock'):
+                        from datetime import datetime
+                        try:
+                            if isinstance(vehicle_data['date_in_stock'], str):
+                                stock_date = datetime.strptime(vehicle_data['date_in_stock'], '%Y-%m-%d')
+                            else:
+                                stock_date = vehicle_data['date_in_stock']
+                            days = (datetime.now() - stock_date).days
+                            rendered['value'] = f"{days} days"
+                        except:
+                            rendered['value'] = "N/A"
+                elif field['type'] == 'special':
+                    # Handle special fields like QR code
+                    if field['key'] == 'qr_code':
+                        rendered['value'] = "[QR CODE IMAGE]"
+                else:
+                    # Regular field mapping
+                    source = field.get('source', field['key'])
+                    rendered['value'] = vehicle_data.get(source, 'N/A')
 
-            rendered_fields.append(rendered)
+                    # Apply formatting if specified
+                    if field.get('format') and rendered['value'] != 'N/A':
+                        if field['type'] == 'number' and '$' in field.get('format', ''):
+                            rendered['value'] = f"${rendered['value']:,.0f}"
+
+                rendered_fields.append(rendered)
+            preview_rows.append(rendered_fields)
 
         return jsonify({
             'success': True,
-            'preview': rendered_fields,
-            'sample_data': sample_data
+            'preview': sample_vehicles,  # Return the raw vehicle data, not processed fields
+            'sample_data': sample_vehicles[0]  # Return first vehicle as sample
         })
     except Exception as e:
         logger.error(f"Error previewing template: {e}")
@@ -6364,6 +6463,61 @@ def preview_template():
 # =============================================================================
 # CUSTOM TEMPLATE PROCESSING ENDPOINTS (SEPARATE FROM EXISTING ORDER PROCESSING)
 # =============================================================================
+
+@app.route('/api/custom-templates/preview', methods=['POST'])
+def custom_templates_preview():
+    """Redirect old endpoint to new one"""
+    return preview_template()
+
+@app.route('/api/custom-templates', methods=['POST'])
+def custom_templates_save():
+    """Redirect old save endpoint to new one"""
+    try:
+        data = request.get_json()
+        template_name = data.get('name')
+        template_description = data.get('description', '')
+        template_type = data.get('type', 'standard')
+        template_fields = data.get('fields', {})
+
+        # Use existing create_template function
+        return create_template()
+    except Exception as e:
+        logger.error(f"Error in custom templates save: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates/save', methods=['POST'])
+def templates_save():
+    """Save template with proper data mapping"""
+    try:
+        data = request.get_json()
+        logger.info(f"Template save request received: {data}")
+
+        # Map the data structure to what create_template expects
+        mapped_data = {
+            'template_name': data.get('name'),  # Map 'name' to 'template_name'
+            'description': data.get('description', ''),
+            'template_type': data.get('type', 'standard'),
+            'fields': data.get('fields', {}),
+            'created_by': 'user'
+        }
+
+        logger.info(f"Mapped data for create_template: {mapped_data}")
+
+        # Temporarily replace request data
+        from flask import g
+        original_json = request.get_json
+        request.get_json = lambda: mapped_data
+
+        try:
+            result = create_template()
+            return result
+        finally:
+            # Restore original request
+            request.get_json = original_json
+
+    except Exception as e:
+        logger.error(f"Error in templates_save: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/custom-templates/test/<dealership_name>', methods=['POST'])
 def test_custom_template_processing(dealership_name):

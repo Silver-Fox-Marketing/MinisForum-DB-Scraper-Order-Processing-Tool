@@ -7,9 +7,9 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>MinisForum Database Control - Silver Fox Marketing [TEMPLATE-FIX-FINAL]</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=template-api-ready-{{ range(200000, 999999) | random }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/vin_log_update.css') }}?v=template-api-ready-{{ range(200000, 999999) | random }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/template_builder.css') }}?v=NUCLEAR-CACHE-BUST-{{ range(100000, 999999) | random }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/vin_log_update.css') }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/template_builder.css') }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
@@ -829,8 +829,8 @@
                 
                 <div class="sidebar-footer">
                     <div class="sidebar-logo-section">
-                        <img src="{{ url_for('static', filename='images/silver_fox_logo.svg') }}?v={{ range(1000, 9999) | random }}" alt="Silver Fox Marketing" class="sidebar-sf-logo">
-                        <img src="{{ url_for('static', filename='images/car_logo_orange.png') }}?v=123" alt="LotSherpa" class="sidebar-car-logo">
+                        <img src="{{ url_for('static', filename='images/silver_fox_logo.svg') }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}" alt="Silver Fox Marketing" class="sidebar-sf-logo">
+                        <img src="{{ url_for('static', filename='images/car_logo_orange.png') }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}" alt="LotSherpa" class="sidebar-car-logo">
                     </div>
                     <div class="sidebar-status">
                         <i class="fas fa-circle status-dot"></i>
@@ -1300,8 +1300,7 @@
                     </div>
 
                     <!-- Template Builder Tab -->
-                    <div class="tab-panel" id="template-builder-panel" style="display:block !important; background:orange !important; min-height:400px !important; border:5px solid red !important;">
-                        <h1 style="color:black !important; font-size:48px !important;">TEMPLATE BUILDER IS HERE!</h1>
+                    <div class="tab-panel" id="template-builder-panel">
                         <div class="panel-header">
                             <h2>
                                 <i class="fas fa-layer-group"></i>
@@ -2751,8 +2750,118 @@ SF24002
     </div>
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?cache-bust=template-api-ready-{{ range(300000, 999999) | random }}"></script>
-    <script src="{{ url_for('static', filename='js/template_builder.js') }}?v=template-api-fixed-{{ range(500000, 999999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/template_wizard_v2.js') }}?v={{ cache_version }}"></script>
+
+    <!-- EMERGENCY CACHE OVERRIDE - Fix template builder API endpoint -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(() => {
+            if (window.templateBuilder && window.templateBuilder.loadPreviewData) {
+                console.log('[EMERGENCY FIX] Overriding template builder loadPreviewData function');
+
+                // Override the problematic function with correct API endpoint
+                window.templateBuilder.loadPreviewData = async function(dealershipName) {
+                    if (!dealershipName) {
+                        console.error('[TEMPLATE BUILDER] No dealership selected for preview');
+                        this.updatePreview([]);
+                        return;
+                    }
+
+                    const requestData = {
+                        dealership: dealershipName,
+                        fields: {
+                            columns: this.currentTemplate.fields || []
+                        },
+                        sample_vin: null
+                    };
+
+                    console.log('[TEMPLATE BUILDER DEBUG] Request data:', requestData);
+
+                    try {
+                        const response = await fetch('/api/templates/preview', {  // CORRECT ENDPOINT
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(requestData)
+                        });
+
+                        const result = await response.json();
+                        console.log('[TEMPLATE BUILDER DEBUG] API response:', result);
+
+                        if (result.success) {
+                            console.log('[TEMPLATE BUILDER DEBUG] Preview data:', result.preview);
+                            console.log('[TEMPLATE BUILDER DEBUG] Current template fields:', this.currentTemplate.fields);
+                            console.log('[TEMPLATE BUILDER DEBUG] Calling updatePreview with data:', result.preview || []);
+                            this.updatePreview(result.preview || []);
+                        } else {
+                            console.error('[TEMPLATE BUILDER] Preview error:', result.error);
+                            this.updatePreview([]);
+                        }
+                    } catch (error) {
+                        console.error('[TEMPLATE BUILDER] Preview request error:', error);
+                        this.updatePreview([]);
+                    }
+                };
+
+                // Also override updatePreview function with debugging
+                const originalUpdatePreview = window.templateBuilder.updatePreview;
+                window.templateBuilder.updatePreview = function(sampleData = []) {
+                    console.log('[DEBUG] updatePreview called with:', sampleData);
+                    console.log('[DEBUG] Current template fields:', this.currentTemplate.fields);
+                    console.log('[DEBUG] Template fields length check:', this.currentTemplate.fields ? this.currentTemplate.fields.length : 'undefined');
+
+                    const tableHead = document.getElementById('previewTableHead');
+                    const tableBody = document.getElementById('previewTableBody');
+
+                    console.log('[DEBUG] Table elements found:', {
+                        tableHead: !!tableHead,
+                        tableBody: !!tableBody
+                    });
+
+                    // Call original function
+                    return originalUpdatePreview.call(this, sampleData);
+                };
+
+                // Override save template function
+                window.templateBuilder.saveTemplate = async function() {
+                    if (!this.currentTemplate.name) {
+                        alert('Please enter a template name');
+                        return;
+                    }
+
+                    try {
+                        console.log('[SAVE FIX] Saving template to /api/templates...');
+                        const response = await fetch('/api/templates', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                name: this.currentTemplate.name,
+                                description: this.currentTemplate.description || '',
+                                type: this.currentTemplate.type || 'standard',
+                                fields: this.currentTemplate.fields
+                            })
+                        });
+
+                        const result = await response.json();
+                        console.log('[SAVE FIX] Save response:', result);
+
+                        if (result.success) {
+                            alert('Template saved successfully!');
+                            this.loadTemplates(); // Reload template list
+                        } else {
+                            alert('Error saving template: ' + (result.error || 'Unknown error'));
+                        }
+                    } catch (error) {
+                        console.error('[SAVE FIX] Save error:', error);
+                        alert('Failed to save template');
+                    }
+                };
+
+                console.log('[EMERGENCY FIX] Template builder functions overridden successfully');
+            }
+        }, 2000); // Wait for template builder to load
+    });
+    </script>
 
     <!-- Dealership Autocomplete Enhancement -->
     <script>

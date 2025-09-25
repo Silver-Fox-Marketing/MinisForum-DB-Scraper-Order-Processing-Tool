@@ -1,18 +1,32 @@
 /* Template Builder Styles - Using Correct Theme Variables */
 
-/* DEBUGGING: Force Template Builder panel visibility */
+/* Template Builder Panel - Clean Production Styles */
 #template-builder-panel {
-    min-height: 600px !important;
-    background: var(--theme-surface) !important;
-    border: 2px solid #fd410d !important;
+    min-height: 600px;
+    padding: 20px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 100%;
 }
 
-#template-builder-panel.active {
-    display: block !important;
-    opacity: 1 !important;
-    visibility: visible !important;
+/* When active, ensure it displays with flex layout */
+#template-builder-panel.tab-panel.active {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    opacity: 1;
+    visibility: visible;
 }
 
+/* Ensure it's hidden when not active (normal tab behavior) */
+#template-builder-panel.tab-panel:not(.active) {
+    display: none;
+}
+
+/* Template Builder Container - Centered Layout */
 .template-builder-container {
     display: flex;
     gap: 20px;
@@ -20,6 +34,10 @@
     padding: 20px;
     background: var(--theme-bg-secondary);
     border-radius: 10px;
+    width: 100%;
+    max-width: 1400px;
+    margin: 0 auto;  /* Center the container */
+    box-sizing: border-box;
 }
 
 /* Template Sidebar */
