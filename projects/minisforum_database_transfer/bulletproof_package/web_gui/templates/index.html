@@ -2750,7 +2750,7 @@ SF24002
     </div>
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?cache-bust=maintenance-fix-{{ range(100000000, 999999999) | random }}"></script>
     <script src="{{ url_for('static', filename='js/template_wizard_v2.js') }}?v={{ cache_version }}"></script>
 
     <!-- EMERGENCY CACHE OVERRIDE - Fix template builder API endpoint -->

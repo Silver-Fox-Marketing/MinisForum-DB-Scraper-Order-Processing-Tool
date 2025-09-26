@@ -1489,9 +1489,8 @@ def process_maintenance_order():
         if not dealership:
             return jsonify({'error': 'Dealership required'}), 400
 
-        if not vins:
-            return jsonify({'error': 'VIN list required'}), 400
-
+        # Maintenance orders can have empty VIN list (CAO-only)
+        # The 'vins' parameter defaults to empty list in get(), so no need to check
         logger.info(f"Processing MAINTENANCE order for {dealership} with {len(vins)} VINs (skip_vin_logging: {skip_vin_logging})")
 
         # Process maintenance order - combines CAO (apply vinlog) + LIST (ignore vinlog)

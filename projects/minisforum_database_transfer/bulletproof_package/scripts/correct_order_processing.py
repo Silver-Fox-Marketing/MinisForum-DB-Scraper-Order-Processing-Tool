@@ -102,13 +102,15 @@ class CorrectOrderProcessor:
     def process_cao_order(self, dealership_name: str, template_type: str = None, skip_vin_logging: bool = False) -> Dict[str, Any]:
         """
         Process CAO (Comparative Analysis Order)
-        
+
         Steps from reference:
         1. Get filtered vehicles based on dealership requirements
         2. Compare VIN lists to find NEW vehicles on lot
         3. Generate QR codes for new vehicles
         4. Output QR file paths + Adobe CSV
         """
+        # DEBUG: Log skip_vin_logging flag value
+        logger.info(f"[CAO ORDER DEBUG] Processing {dealership_name} with skip_vin_logging={skip_vin_logging}")
         
         # Get template type from config if not specified
         if template_type is None:
@@ -1029,13 +1031,21 @@ class CorrectOrderProcessor:
 
     def process_maintenance_order(self, dealership_name: str, vin_list: List[str], template_type: str = None, skip_vin_logging: bool = False) -> Dict[str, Any]:
         """
-        Process Maintenance Order (CAO + LIST combination for re-graphics)
+        Process Maintenance Order (CAO + LIST combination)
+
+        Purpose: Combine regular CAO processing with installer-provided LIST VINs
+        to catch any vehicles that need graphics.
 
         Logic:
-        1. Get CAO vehicles (filtered vehicles, APPLY vinlog exclusions - normal CAO behavior)
-        2. Get LIST vehicles (manual VINs, IGNORE vinlog exclusions - allows re-graphics)
-        3. Combine both datasets intelligently (no duplicates)
-        4. Process combined set for graphics generation
+        1. Get CAO vehicles (WITH vinlog exclusions - same as regular CAO order)
+        2. Get LIST vehicles from manual list (NO vinlog exclusions - allows re-graphics)
+        3. Combine both sets (remove duplicates)
+        4. Process combined list
+
+        This ensures:
+        - CAO portion gets same VINs as a regular CAO order (new vehicles only)
+        - LIST portion can include ANY VIN the installer sees needs graphics
+        - Combined result catches both new vehicles AND installer-identified needs
 
         Args:
             dealership_name: Name of the dealership
@@ -1052,8 +1062,8 @@ class CorrectOrderProcessor:
         logger.info(f"[MAINTENANCE] Manual VIN list provided: {len(vin_list)} VINs")
 
         try:
-            # STEP 1: Get CAO vehicles WITH vinlog exclusion (normal CAO behavior)
-            logger.info(f"[MAINTENANCE] Step 1: Getting CAO vehicles (applying vinlog exclusions)")
+            # STEP 1: Get CAO vehicles WITH vinlog exclusion (same as normal CAO)
+            logger.info(f"[MAINTENANCE] Step 1: Getting CAO vehicles (WITH vinlog exclusions - same as regular CAO)")
 
             # Get current vehicles and apply normal CAO logic (includes vinlog exclusion)
             current_vehicles = self._get_dealership_vehicles(dealership_name)
@@ -1065,7 +1075,7 @@ class CorrectOrderProcessor:
                 current_vins = [v['vin'] for v in current_vehicles]
                 new_vins = self._find_new_vehicles_enhanced(dealership_name, current_vins, current_vehicles)
                 cao_vehicles = [v for v in current_vehicles if v['vin'] in new_vins]
-                logger.info(f"[MAINTENANCE] CAO portion: {len(cao_vehicles)} vehicles after filtering (vinlog applied)")
+                logger.info(f"[MAINTENANCE] CAO portion: {len(cao_vehicles)} new vehicles (WITH vinlog filtering - same as regular CAO)")
 
             # STEP 2: Get LIST vehicles WITHOUT vinlog exclusion (allows re-graphics)
             logger.info(f"[MAINTENANCE] Step 2: Getting LIST vehicles (ignoring vinlog exclusions)")
@@ -1216,7 +1226,9 @@ class CorrectOrderProcessor:
                 'duplicate_vins_skipped': vin_logging_result['duplicates_skipped'],
                 'vin_logging_success': vin_logging_result['success'],
                 'order_type': 'MAINTENANCE',
+                'cao_vehicle_count': len(cao_vehicles),  # Added for UI compatibility
                 'cao_vehicles': len(cao_vehicles),
+                'list_vehicle_count': len(list_vehicles),  # Added for UI compatibility
                 'list_vehicles': len(list_vehicles),
                 'excluded_list_vehicles': len(excluded_list_vins)
             }
