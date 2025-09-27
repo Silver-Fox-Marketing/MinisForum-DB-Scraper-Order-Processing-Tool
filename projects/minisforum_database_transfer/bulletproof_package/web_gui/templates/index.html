@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/vin_log_update.css') }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/template_builder.css') }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/keyboard_shortcuts.css') }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
@@ -772,6 +773,7 @@
                         <button class="sidebar-tab active" data-tab="queue-management">
                             <i class="fas fa-tasks"></i>
                             <span class="tab-label">Order Queue</span>
+                            <span class="shortcut-hint">Alt+Q</span>
                             <div class="tab-indicator"></div>
                         </button>
                     </div>
@@ -787,16 +789,19 @@
                         <button class="sidebar-tab" data-tab="dealership-settings">
                             <i class="fas fa-cog"></i>
                             <span class="tab-label">Dealership Settings</span>
+                            <span class="shortcut-hint">Alt+D</span>
                             <div class="tab-indicator"></div>
                         </button>
                         <button class="sidebar-tab" data-tab="data-search">
                             <i class="fas fa-search"></i>
                             <span class="tab-label">Data Search</span>
+                            <span class="shortcut-hint">Alt+S</span>
                             <div class="tab-indicator"></div>
                         </button>
                         <button class="sidebar-tab" data-tab="template-builder">
                             <i class="fas fa-layer-group"></i>
                             <span class="tab-label">Template Builder</span>
+                            <span class="shortcut-hint">Alt+T</span>
                             <div class="tab-indicator"></div>
                         </button>
                     </div>
@@ -822,6 +827,7 @@
                         <button class="sidebar-tab" data-tab="system-status">
                             <i class="fas fa-chart-line"></i>
                             <span class="tab-label">System Status</span>
+                            <span class="shortcut-hint">Alt+Y</span>
                             <div class="tab-indicator"></div>
                         </button>
                     </div>
@@ -1111,7 +1117,7 @@
                                     </label>
                                 </div>
                                 
-                                <button class="btn btn-secondary" id="clearQueueBtn">
+                                <button class="btn btn-secondary" id="clearQueueBtn" title="Clear Queue (Alt+K)">
                                     <i class="fas fa-trash"></i>
                                 </button>
                                 <button class="btn btn-primary" id="refreshQueueBtn">
@@ -1148,22 +1154,27 @@
                                         <button class="day-btn" data-day="monday">
                                             <i class="fas fa-calendar-day"></i>
                                             MON
+                                            <span class="shortcut-hint">1</span>
                                         </button>
                                         <button class="day-btn" data-day="tuesday">
                                             <i class="fas fa-calendar-day"></i>
                                             TUES
+                                            <span class="shortcut-hint">2</span>
                                         </button>
                                         <button class="day-btn" data-day="wednesday">
                                             <i class="fas fa-calendar-day"></i>
                                             WED
+                                            <span class="shortcut-hint">3</span>
                                         </button>
                                         <button class="day-btn" data-day="thursday">
                                             <i class="fas fa-calendar-day"></i>
                                             THURS
+                                            <span class="shortcut-hint">4</span>
                                         </button>
                                         <button class="day-btn" data-day="friday">
                                             <i class="fas fa-calendar-day"></i>
                                             FRI
+                                            <span class="shortcut-hint">5</span>
                                         </button>
                                     </div>
                                 </div>
@@ -1175,7 +1186,7 @@
                                     <!-- Dealership Search -->
                                     <div class="dealership-search">
                                         <div class="dealership-search-container">
-                                            <input type="text" id="dealershipSearchInput" placeholder="Search dealerships..." class="search-input">
+                                            <input type="text" id="dealershipSearchInput" placeholder="Search dealerships... (Press / to focus)" class="search-input">
                                             <div class="dealership-autocomplete" id="dealershipAutocomplete">
                                                 <!-- Autocomplete suggestions will be populated here -->
                                             </div>
@@ -1392,6 +1403,10 @@
                                                     <i class="fas fa-hashtag"></i>
                                                     <span>Stock #</span>
                                                 </div>
+                                                <div class="field-item" data-field="type" draggable="true">
+                                                    <i class="fas fa-info-circle"></i>
+                                                    <span>Type</span>
+                                                </div>
                                                 <div class="field-item" data-field="year" draggable="true">
                                                     <i class="fas fa-calendar"></i>
                                                     <span>Year</span>
@@ -1408,6 +1423,13 @@
                                                     <i class="fas fa-star"></i>
                                                     <span>Trim</span>
                                                 </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Pricing & Status -->
+                                        <div class="field-category">
+                                            <h4>Pricing & Status</h4>
+                                            <div class="field-grid">
                                                 <div class="field-item" data-field="price" draggable="true">
                                                     <i class="fas fa-dollar-sign"></i>
                                                     <span>Price</span>
@@ -1415,6 +1437,60 @@
                                                 <div class="field-item" data-field="msrp" draggable="true">
                                                     <i class="fas fa-tag"></i>
                                                     <span>MSRP</span>
+                                                </div>
+                                                <div class="field-item" data-field="status" draggable="true">
+                                                    <i class="fas fa-check-circle"></i>
+                                                    <span>Status</span>
+                                                </div>
+                                                <div class="field-item" data-field="date_in_stock" draggable="true">
+                                                    <i class="fas fa-clock"></i>
+                                                    <span>Date in Stock</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Vehicle Details -->
+                                        <div class="field-category">
+                                            <h4>Vehicle Details</h4>
+                                            <div class="field-grid">
+                                                <div class="field-item" data-field="ext_color" draggable="true">
+                                                    <i class="fas fa-palette"></i>
+                                                    <span>Ext Color</span>
+                                                </div>
+                                                <div class="field-item" data-field="body_style" draggable="true">
+                                                    <i class="fas fa-truck"></i>
+                                                    <span>Body Style</span>
+                                                </div>
+                                                <div class="field-item" data-field="fuel_type" draggable="true">
+                                                    <i class="fas fa-gas-pump"></i>
+                                                    <span>Fuel Type</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Location Fields -->
+                                        <div class="field-category">
+                                            <h4>Location</h4>
+                                            <div class="field-grid">
+                                                <div class="field-item" data-field="location" draggable="true">
+                                                    <i class="fas fa-map-marker-alt"></i>
+                                                    <span>Location</span>
+                                                </div>
+                                                <div class="field-item" data-field="street_address" draggable="true">
+                                                    <i class="fas fa-road"></i>
+                                                    <span>Street Address</span>
+                                                </div>
+                                                <div class="field-item" data-field="locality" draggable="true">
+                                                    <i class="fas fa-city"></i>
+                                                    <span>City</span>
+                                                </div>
+                                                <div class="field-item" data-field="region" draggable="true">
+                                                    <i class="fas fa-map"></i>
+                                                    <span>State</span>
+                                                </div>
+                                                <div class="field-item" data-field="postal_code" draggable="true">
+                                                    <i class="fas fa-envelope"></i>
+                                                    <span>Zip Code</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -1436,8 +1512,13 @@
 
                                         <!-- Concatenated Fields -->
                                         <div class="field-category">
-                                            <h4>Combined Fields</h4>
-                                            <div class="field-grid">
+                                            <div class="category-header">
+                                                <h4>Combined Fields</h4>
+                                                <button class="btn btn-sm btn-success" id="createCombinedFieldBtn" title="Create custom combined field" onclick="window.openFieldConcatenationModal()" style="background-color: #28a745; border-color: #28a745;">
+                                                    <i class="fas fa-plus"></i> Field
+                                                </button>
+                                            </div>
+                                            <div class="field-grid" id="combinedFieldsGrid">
                                                 <div class="field-item combined" data-field="year_make_model" draggable="true">
                                                     <i class="fas fa-compress-alt"></i>
                                                     <span>Year Make Model</span>
@@ -2726,6 +2807,106 @@ SF24002
         </div>
     </div>
 
+    <!-- Field Concatenation Modal -->
+    <div class="modal" id="fieldConcatenationModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-compress-alt"></i> Create Combined Field</h3>
+                <button class="modal-close" id="closeConcatenationModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="concatenationForm">
+                    <div class="form-group">
+                        <label for="combinedFieldName">Field Name:</label>
+                        <input type="text" id="combinedFieldName" class="form-control" placeholder="e.g., Year Make Model">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="combinedFieldKey">Field Key:</label>
+                        <input type="text" id="combinedFieldKey" class="form-control" placeholder="e.g., year_make_model" readonly>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Fields to Combine:</label>
+                        <div class="field-selection-area">
+                            <div class="available-fields-list">
+                                <h4>Available Fields</h4>
+                                <div class="field-chips" id="availableFieldChips">
+                                    <!-- Core Vehicle Fields -->
+                                    <div class="field-chip" data-field="vin"><i class="fas fa-barcode"></i> VIN</div>
+                                    <div class="field-chip" data-field="stock"><i class="fas fa-hashtag"></i> Stock #</div>
+                                    <div class="field-chip" data-field="type"><i class="fas fa-info-circle"></i> Type</div>
+                                    <div class="field-chip" data-field="year"><i class="fas fa-calendar"></i> Year</div>
+                                    <div class="field-chip" data-field="make"><i class="fas fa-industry"></i> Make</div>
+                                    <div class="field-chip" data-field="model"><i class="fas fa-car"></i> Model</div>
+                                    <div class="field-chip" data-field="trim"><i class="fas fa-star"></i> Trim</div>
+
+                                    <!-- Pricing Fields -->
+                                    <div class="field-chip" data-field="price"><i class="fas fa-dollar-sign"></i> Price</div>
+                                    <div class="field-chip" data-field="msrp"><i class="fas fa-tag"></i> MSRP</div>
+
+                                    <!-- Vehicle Details -->
+                                    <div class="field-chip" data-field="ext_color"><i class="fas fa-palette"></i> Ext Color</div>
+                                    <div class="field-chip" data-field="body_style"><i class="fas fa-truck"></i> Body Style</div>
+                                    <div class="field-chip" data-field="fuel_type"><i class="fas fa-gas-pump"></i> Fuel Type</div>
+                                    <div class="field-chip" data-field="status"><i class="fas fa-check-circle"></i> Status</div>
+
+                                    <!-- Date Fields -->
+                                    <div class="field-chip" data-field="date_in_stock"><i class="fas fa-clock"></i> Date in Stock</div>
+
+                                    <!-- Location Fields -->
+                                    <div class="field-chip" data-field="location"><i class="fas fa-map-marker-alt"></i> Location</div>
+                                    <div class="field-chip" data-field="street_address"><i class="fas fa-road"></i> Street Address</div>
+                                    <div class="field-chip" data-field="locality"><i class="fas fa-city"></i> City</div>
+                                    <div class="field-chip" data-field="region"><i class="fas fa-map"></i> State</div>
+                                    <div class="field-chip" data-field="postal_code"><i class="fas fa-envelope"></i> Zip Code</div>
+
+                                    <!-- URL Field -->
+                                    <div class="field-chip" data-field="vehicle_url"><i class="fas fa-link"></i> Vehicle URL</div>
+                                </div>
+                            </div>
+
+                            <div class="selected-fields-list">
+                                <h4>Selected Fields</h4>
+                                <div class="field-combination-builder" id="fieldCombinationBuilder">
+                                    <div class="combination-placeholder">
+                                        <i class="fas fa-mouse-pointer"></i>
+                                        <p>Click fields from the left to add them here</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="fieldSeparator">Separator:</label>
+                        <select id="fieldSeparator" class="form-control">
+                            <option value=" ">Space</option>
+                            <option value=" - ">Dash</option>
+                            <option value=" | ">Pipe</option>
+                            <option value=", ">Comma</option>
+                            <option value="_">Underscore</option>
+                            <option value="">No separator</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Preview:</label>
+                        <div class="field-preview" id="fieldPreview">
+                            <span class="preview-text">Select fields to see preview</span>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelConcatenation">Cancel</button>
+                <button class="btn btn-primary" id="createCombinedField">Create Field</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Floating Queue Actions Panel - Moved outside main container for fixed positioning -->
     <div class="queue-actions" id="floatingQueueActions" style="display: none;">
         <!-- Modern Testing Mode Toggle Panel -->
@@ -2738,7 +2919,7 @@ SF24002
                         <div class="switch-slider"></div>
                     </div>
                 </div>
-                <p class="toggle-description">Skip VIN history logging for testing</p>
+                <p class="toggle-description">Skip VIN history logging for testing <span class="shortcut-hint">(Alt+M)</span></p>
             </div>
             <input type="checkbox" id="queueTestingMode" style="display: none;">
         </div>
@@ -2746,11 +2927,14 @@ SF24002
         <button class="btn btn-primary btn-large" id="processQueueBtn" disabled>
             <i class="fas fa-play"></i>
             Process Queue
+            <span class="shortcut-hint">Alt+P</span>
         </button>
     </div>
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/keyboard_shortcuts.js') }}?v={{ cache_version }}"></script>
     <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?cache-bust=maintenance-fix-{{ range(100000000, 999999999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/' + (unique_template_builder_js or 'template_builder.js')) }}?v={{ cache_version }}"></script>
     <script src="{{ url_for('static', filename='js/template_wizard_v2.js') }}?v={{ cache_version }}"></script>
 
     <!-- EMERGENCY CACHE OVERRIDE - Fix template builder API endpoint -->
