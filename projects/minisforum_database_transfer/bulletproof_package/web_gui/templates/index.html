@@ -1684,14 +1684,15 @@
                                         </div>
                                     </label>
                                 </div>
-                                <!-- Template Type Toggle for New Vehicles -->
-                                <div class="template-type-toggle" style="margin-top: 10px; margin-left: 30px; display: flex; align-items: center; gap: 10px;">
-                                    <span style="font-size: 12px; color: #666;">Template:</span>
-                                    <label class="switch" style="margin: 0;">
-                                        <input type="checkbox" id="newVehicleTemplate" name="new_template_type" data-vehicle-type="new">
-                                        <span class="slider round"></span>
-                                    </label>
-                                    <span id="newTemplateLabel" style="font-size: 12px; color: #666; min-width: 100px;">SHORTCUT PACK</span>
+                                <!-- Custom Template Dropdown for New Vehicles -->
+                                <div style="margin-top: 10px; margin-left: 30px;">
+                                    <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Template:</label>
+                                    <select id="newVehicleCustomTemplate" name="new_custom_template" class="modern-input" style="font-size: 11px; padding: 4px 8px; max-width: 200px;">
+                                        <option value="">Use Default Template</option>
+                                        <optgroup label="Custom Templates" id="newCustomTemplatesGroup">
+                                            <!-- Custom templates will be populated dynamically -->
+                                        </optgroup>
+                                    </select>
                                 </div>
                             </div>
                             <div class="modern-checkbox-item" style="flex-direction: column; align-items: flex-start;">
@@ -1707,14 +1708,15 @@
                                         </div>
                                     </label>
                                 </div>
-                                <!-- Template Type Toggle for Used Vehicles -->
-                                <div class="template-type-toggle" style="margin-top: 10px; margin-left: 30px; display: flex; align-items: center; gap: 10px;">
-                                    <span style="font-size: 12px; color: #666;">Template:</span>
-                                    <label class="switch" style="margin: 0;">
-                                        <input type="checkbox" id="usedVehicleTemplate" name="used_template_type" data-vehicle-type="used">
-                                        <span class="slider round"></span>
-                                    </label>
-                                    <span id="usedTemplateLabel" style="font-size: 12px; color: #666; min-width: 100px;">SHORTCUT PACK</span>
+                                <!-- Custom Template Dropdown for Used Vehicles -->
+                                <div style="margin-top: 10px; margin-left: 30px;">
+                                    <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Template:</label>
+                                    <select id="usedVehicleCustomTemplate" name="used_custom_template" class="modern-input" style="font-size: 11px; padding: 4px 8px; max-width: 200px;">
+                                        <option value="">Use Default Template</option>
+                                        <optgroup label="Custom Templates" id="usedCustomTemplatesGroup">
+                                            <!-- Custom templates will be populated dynamically -->
+                                        </optgroup>
+                                    </select>
                                 </div>
                             </div>
                         </div>
@@ -1804,6 +1806,9 @@
                                     <select id="templateVariant" name="template_variant" class="modern-input">
                                         <option value="standard">Standard Format</option>
                                         <option value="glendale_format">SCP + $</option>
+                                        <optgroup label="Custom Templates" id="customTemplatesGroup">
+                                            <!-- Custom templates will be populated dynamically -->
+                                        </optgroup>
                                     </select>
                                     <small class="help-text">Column structure for CSV output</small>
                                 </div>

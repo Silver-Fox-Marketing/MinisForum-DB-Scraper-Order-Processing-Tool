@@ -1363,6 +1363,7 @@ def generate_final_files():
         csv_filename = data.get('csv_filename')
         order_number = data.get('order_number')
         template_type = data.get('template_type')
+        custom_templates = data.get('custom_templates')
         skip_vin_logging = data.get('skip_vin_logging', False)
 
         if not dealership_name:
@@ -1374,6 +1375,7 @@ def generate_final_files():
         logger.info(f"[API TRACE]   - dealership_name: {dealership_name}")
         logger.info(f"[API TRACE]   - order_number: {order_number}")
         logger.info(f"[API TRACE]   - template_type: {template_type}")
+        logger.info(f"[API TRACE]   - custom_templates: {custom_templates}")
         logger.info(f"[API TRACE]   - skip_vin_logging: {skip_vin_logging}")
         logger.info(f"[API TRACE]   - vehicles_data count: {len(vehicles_data)}")
         if len(vehicles_data) > 0:
@@ -1410,6 +1412,7 @@ def generate_final_files():
             vehicles_data=vehicles_data,
             order_number=order_number,
             template_type=template_type,
+            custom_templates=custom_templates,
             skip_vin_logging=skip_vin_logging
         )
 
@@ -3294,6 +3297,65 @@ def get_single_vehicle_data(vin):
         logger.error(f"Error getting single vehicle data for VIN {vin}: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/data/manual-vins/<dealership_name>', methods=['POST'])
+def get_manual_vin_data(dealership_name):
+    """Fetch vehicle data for manually entered VINs from active scraper data for a specific dealership"""
+    try:
+        data = request.get_json()
+        vins = data.get('vins', [])
+
+        if not vins:
+            return jsonify({'error': 'No VINs provided'}), 400
+
+        # Fetch vehicle data from active scraper imports for this dealership
+        query = """
+            SELECT nvd.*
+            FROM normalized_vehicle_data nvd
+            JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
+            JOIN scraper_imports si ON rvd.import_id = si.import_id
+            WHERE nvd.vin = ANY(%s)
+            AND nvd.location = %s
+            AND si.status = 'active'
+            ORDER BY rvd.import_timestamp DESC
+        """
+
+        vehicles = []
+        for vin in vins:
+            result = db_manager.execute_query(query, [[vin], dealership_name])
+            if result and len(result) > 0:
+                vehicle_data = dict(result[0])
+                # Format the vehicle data to match CAO format
+                vehicles.append({
+                    'vin': vehicle_data.get('vin', vin),
+                    'year': str(vehicle_data.get('year', '')),
+                    'make': vehicle_data.get('make', ''),
+                    'model': vehicle_data.get('model', ''),
+                    'trim': vehicle_data.get('trim', ''),
+                    'stock': vehicle_data.get('stock', ''),
+                    'price': vehicle_data.get('price', ''),
+                    'vehicle_type': vehicle_data.get('vehicle_condition', ''),
+                    'source': 'manual_lookup'
+                })
+            else:
+                # If VIN not found in active data, return placeholder
+                vehicles.append({
+                    'vin': vin,
+                    'year': 'Manual',
+                    'make': 'Entry',
+                    'model': 'VIN Not Found',
+                    'trim': '',
+                    'stock': 'MANUAL',
+                    'price': '',
+                    'vehicle_type': '',
+                    'source': 'manual_not_found'
+                })
+
+        return jsonify({'success': True, 'vehicles': vehicles})
+
+    except Exception as e:
+        logger.error(f"Error fetching manual VIN data for {dealership_name}: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/data/export', methods=['POST'])
 def export_search_results():
     """Export search results to CSV"""
@@ -4471,11 +4533,13 @@ def enhanced_csv_download():
         dealership_name = data.get('dealership_name')
         order_number = data.get('order_number')
         csv_data = data.get('csv_data')
+        custom_templates = data.get('custom_templates')
 
         if not dealership_name or not csv_data:
             return jsonify({'error': 'Missing dealership_name or csv_data'}), 400
 
         logger.info(f"[ENHANCED DOWNLOAD] Processing {dealership_name} with order number: {order_number}")
+        logger.info(f"[ENHANCED DOWNLOAD] Custom templates: {custom_templates}")
 
         # Step 1: Create a new output folder with order number and timestamp
         from datetime import datetime
@@ -4496,7 +4560,19 @@ def enhanced_csv_download():
 
         # Step 2: Get correct template type and save CSV with proper filename
         # Get template type from dealership configuration
-        template_type = order_processor._get_dealership_template_config(dealership_name)
+        template_type = None
+        if custom_templates:
+            logger.info(f"[ENHANCED DOWNLOAD] Custom templates provided: {custom_templates}")
+            # For enhanced download, use 'used' template since CAO mostly processes used vehicles
+            template_type = custom_templates.get('used', '') or custom_templates.get('new', '')
+            if template_type:
+                logger.info(f"[ENHANCED DOWNLOAD] Using custom template: {template_type}")
+            else:
+                logger.info(f"[ENHANCED DOWNLOAD] No custom template found, falling back to config")
+                template_type = order_processor._get_dealership_template_config(dealership_name)
+        else:
+            template_type = order_processor._get_dealership_template_config(dealership_name)
+
         logger.info(f"[ENHANCED DOWNLOAD] Template type for {dealership_name}: {template_type}")
 
         # Determine filename abbreviation based on template type (matching backend logic)
@@ -4544,6 +4620,37 @@ def enhanced_csv_download():
                 writer.writerows(shortcut_rows)
 
             logger.info(f"[ENHANCED DOWNLOAD] Generated shortcut format CSV with {len(shortcut_rows)} vehicles")
+
+        elif template_type and template_type.startswith('custom_'):
+            # Handle custom templates: use the same logic as the auto-process workflow
+            logger.info(f"[ENHANCED DOWNLOAD] Processing custom template: {template_type}")
+
+            # Parse the original CSV data to get vehicle data
+            csv_reader = csv.DictReader(io.StringIO(csv_data))
+            raw_vehicles = list(csv_reader)
+
+            # Normalize field names to lowercase for template mapping
+            vehicles = []
+            for vehicle in raw_vehicles:
+                normalized_vehicle = {}
+                for key, value in vehicle.items():
+                    # Convert CSV field names to lowercase for template mapping
+                    # STOCK -> stock, MODEL -> model, etc.
+                    normalized_key = key.lower()
+                    normalized_vehicle[normalized_key] = value
+                vehicles.append(normalized_vehicle)
+
+            # Generate QR paths for custom template CSV
+            qr_paths = []
+            for idx in range(len(vehicles)):
+                qr_path = _convert_qr_path_for_nicks_computer(f"qr_code_{idx+1}", dealership_name, idx)
+                qr_paths.append(qr_path)
+
+            # Generate custom template CSV using the same method as auto-process
+            with open(csv_file_path, 'w', newline='', encoding='utf-8') as f:
+                order_processor._generate_custom_template_csv(vehicles, template_type, f, qr_paths, dealership_name)
+
+            logger.info(f"[ENHANCED DOWNLOAD] Generated custom template CSV with {len(vehicles)} vehicles using {template_type}")
 
         else:
             # Other template types: parse and convert QR paths for Nick's computer
@@ -4828,73 +4935,73 @@ def scraper_output_callback(output_msg):
 
 @app.route('/api/scrapers/start', methods=['POST'])
 def start_scraper():
-    """Start scraping for a specific dealership"""
+    """Start scraping for selected dealerships"""
     try:
         data = request.get_json()
         # Support both singular and plural formats for compatibility
         dealership_names = data.get('dealership_names', [])
         dealership_name = data.get('dealership_name')
-        
-        # If plural format is used, take the first dealership
-        if dealership_names and len(dealership_names) > 0:
-            dealership_name = dealership_names[0]
-        
-        if not dealership_name:
-            return jsonify({'success': False, 'error': 'Dealership name required'}), 400
-            
+
+        # Handle single dealership format
+        if dealership_name and not dealership_names:
+            dealership_names = [dealership_name]
+
+        if not dealership_names or len(dealership_names) == 0:
+            return jsonify({'success': False, 'error': 'No dealerships selected'}), 400
+
         if DEMO_MODE or scraper18_controller is None:
             # Simulate demo scraper output for testing
             def simulate_demo_scraper():
                 import time
+                for dealership in dealership_names:
+                    socketio.emit('scraper_output', {
+                        'message': f'[DEMO] Starting scraper for {dealership}',
+                        'status': 'starting',
+                        'dealership': dealership
+                    })
+                    time.sleep(1)
+
                 socketio.emit('scraper_output', {
-                    'message': f'🔄 DEMO: Starting scraper for {dealership_name}',
-                    'status': 'starting',
-                    'dealership': dealership_name
-                })
-                
-                time.sleep(2)
-                socketio.emit('scraper_output', {
-                    'message': f'📊 DEMO: Processing pages for {dealership_name}',
-                    'status': 'processing',
-                    'progress': 25,
-                    'vehicles_processed': 15,
-                    'dealership': dealership_name
-                })
-                
-                time.sleep(3)
-                socketio.emit('scraper_output', {
-                    'message': f'🏁 DEMO: Completed scraper for {dealership_name}',
+                    'message': f'[DEMO] Completed {len(dealership_names)} scrapers',
                     'status': 'completed',
-                    'progress': 100,
-                    'vehicles_processed': 45,
-                    'dealership': dealership_name
+                    'progress': 100
                 })
-            
+
             # Run demo in background thread
             demo_thread = threading.Thread(target=simulate_demo_scraper, daemon=True)
             demo_thread.start()
-            
+
             return jsonify({
                 'success': True,
-                'message': f'DEMO: Started scraper for {dealership_name}',
+                'message': f'DEMO: Started scrapers for {len(dealership_names)} dealerships',
                 'demo_mode': True
             })
-        
-        # Start scraper in background thread
-        def run_scraper():
+
+        # Start scrapers in background thread
+        def run_scrapers():
             try:
-                result = scraper18_controller.run_single_scraper(dealership_name, force_run=True)
-                logger.info(f"Scraper result for {dealership_name}: {result}")
+                if len(dealership_names) == 1:
+                    # Single scraper
+                    result = scraper18_controller.run_single_scraper(dealership_names[0], force_run=True)
+                    logger.info(f"Scraper result for {dealership_names[0]}: {result}")
+                else:
+                    # Multiple scrapers - run all selected
+                    result = scraper18_controller.run_all_scrapers(dealership_names)
+                    logger.info(f"Scraper results for {len(dealership_names)} dealerships: {result}")
             except Exception as e:
-                logger.error(f"Error running scraper for {dealership_name}: {e}")
-        
-        thread = threading.Thread(target=run_scraper, daemon=True)
+                logger.error(f"Error running scrapers: {e}")
+                socketio.emit('scraper_output', {
+                    'message': f'[ERROR] Scraper failed: {str(e)}',
+                    'status': 'error'
+                })
+
+        thread = threading.Thread(target=run_scrapers, daemon=True)
         thread.start()
-        
+
         return jsonify({
             'success': True,
-            'message': f'Started scraper for {dealership_name}',
-            'dealership': dealership_name
+            'message': f'Started scrapers for {len(dealership_names)} dealerships',
+            'dealerships': dealership_names
         })
             
     except Exception as e:

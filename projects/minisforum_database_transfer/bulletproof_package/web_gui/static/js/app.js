@@ -964,17 +964,28 @@ class MinisFornumApp {
             const templateVariant = document.getElementById('templateVariant')?.value || 'standard';
             const priceMarkup = parseInt(document.getElementById('priceMarkup')?.value) || 0;
 
+            // Get custom template selections for new and used vehicles
+            const newCustomTemplate = document.getElementById('newVehicleCustomTemplate')?.value || '';
+            const usedCustomTemplate = document.getElementById('usedVehicleCustomTemplate')?.value || '';
+
+            console.log('[DEBUG] Custom template values:', {
+                newCustomTemplate,
+                usedCustomTemplate,
+                newElement: document.getElementById('newVehicleCustomTemplate'),
+                usedElement: document.getElementById('usedVehicleCustomTemplate')
+            });
+
             const outputRules = {
-                template_types: {
-                    new: document.getElementById('newVehicleTemplate')?.checked ? 'shortcut' : 'shortcut_pack',
-                    used: document.getElementById('usedVehicleTemplate')?.checked ? 'shortcut' : 'shortcut_pack',
-                    default: 'shortcut_pack'
+                custom_templates: {
+                    new: newCustomTemplate,
+                    used: usedCustomTemplate
                 },
                 template_variant: templateVariant,
                 price_markup: priceMarkup
             };
 
-            console.log('Template type settings:', outputRules.template_types);
+            console.log('Custom template settings:', outputRules.custom_templates);
+            console.log('Full output rules:', outputRules);
 
             // Send update to server
             const requestBody = {
@@ -1036,11 +1047,20 @@ class MinisFornumApp {
     
     async startScraper() {
         if (this.scraperRunning) return;
-        
+
+        // If no dealerships selected, ask if they want to run all
         if (this.selectedDealerships.size === 0) {
-            this.addTerminalMessage('Please select at least one dealership before starting the scraper.', 'warning');
-            this.addScraperConsoleMessage('⚠️ Please select at least one dealership before starting the scraper.', 'warning');
-            return;
+            const runAll = confirm('No dealerships selected. Would you like to run scrapers for ALL dealerships?');
+            if (runAll) {
+                // Select all dealerships
+                this.selectAllDealerships();
+                this.addTerminalMessage('Selected all dealerships for scraping', 'info');
+                this.addScraperConsoleMessage('[INFO] Selected all dealerships for scraping', 'info');
+            } else {
+                this.addTerminalMessage('Please select at least one dealership before starting the scraper.', 'warning');
+                this.addScraperConsoleMessage('[WARNING] Please select at least one dealership before starting the scraper.', 'warning');
+                return;
+            }
         }
         
         try {
@@ -1243,8 +1263,56 @@ class MinisFornumApp {
         });
         
         const targetPanel = document.getElementById(`${tabName}-panel`);
+        console.log(`[DEBUG] Switching to tab: ${tabName}`);
+        console.log(`[DEBUG] Target panel ID: ${tabName}-panel`);
+        console.log(`[DEBUG] Panel found:`, !!targetPanel);
+
         if (targetPanel) {
             targetPanel.classList.add('active');
+            console.log(`[DEBUG] Added active class to panel:`, targetPanel.id);
+
+            // Template builder activation
+            if (tabName === 'template-builder') {
+                console.log(`[SUCCESS] Template builder activated`);
+
+                // Make a global function to inspect this panel
+                window.debugTemplateBuilder = function() {
+                    const panel = document.getElementById('template-builder-panel');
+                    console.log('=== TEMPLATE BUILDER DEBUG INFO ===');
+                    console.log('Panel exists:', !!panel);
+                    if (panel) {
+                        console.log('Panel position:', panel.getBoundingClientRect());
+                        console.log('Panel computed styles:', getComputedStyle(panel));
+                        console.log('Panel parent:', panel.parentElement);
+                        console.log('Panel innerHTML length:', panel.innerHTML.length);
+                        console.log('Panel classes:', panel.className);
+                        panel.style.border = '20px solid lime';
+                        panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                };
+
+                console.log(`[DEBUG] Global debug function created: debugTemplateBuilder()`);
+
+                // Auto-fix: Move template builder if it's in wrong container
+                if (tabName === 'template-builder') {
+                    const parentContainer = targetPanel.parentElement;
+
+                    // Check if it's in the wrong container and fix it
+                    if (parentContainer && parentContainer.classList.contains('sub-tab-panels')) {
+                        // Move it to the correct container
+                        const mainTabContainer = document.querySelector('.main-content .tab-panels') ||
+                                               document.querySelector('.main-content') ||
+                                               parentContainer.parentElement.parentElement;
+
+                        if (mainTabContainer && mainTabContainer !== parentContainer) {
+                            mainTabContainer.appendChild(targetPanel);
+                            console.log(`[AUTO-FIX] Template builder moved to correct container`);
+                        }
+                    }
+                }
+            }
+        } else {
+            console.error(`[ERROR] Panel not found for tab: ${tabName}`);
         }
         
         this.currentTab = tabName;
@@ -1295,6 +1363,10 @@ class MinisFornumApp {
                 break;
             case 'dealership-settings':
                 this.loadDealershipSettings();
+                break;
+            case 'template-builder':
+                // Template builder doesn't need data loading
+                console.log('Template Builder tab activated');
                 break;
         }
     }
@@ -2832,16 +2904,16 @@ class MinisFornumApp {
 
     async editDealershipSettings(dealershipName) {
         console.log(`Editing settings for: ${dealershipName}`);
-        
+
         try {
             // Get current dealership settings
             const response = await fetch('/api/dealership-settings');
             const data = await response.json();
-            
+
             if (!data.success) {
                 throw new Error(data.error || 'Failed to load dealership settings');
             }
-            
+
             // Find the specific dealership
             const dealership = data.dealerships.find(d => d.name === dealershipName);
             if (!dealership) {
@@ -2853,7 +2925,7 @@ class MinisFornumApp {
             this.currentDealership = dealership.name;  // Set this for saveDealershipSettings function
             
             // Populate and show the modal
-            this.showDealershipModal(dealership);
+            await this.showDealershipModal(dealership);
             
         } catch (error) {
             console.error('Error loading dealership settings:', error);
@@ -2861,7 +2933,7 @@ class MinisFornumApp {
         }
     }
     
-    showDealershipModal(dealership) {
+    async showDealershipModal(dealership) {
         // Set modal title
         const modalTitle = document.getElementById('modalTitle');
         if (modalTitle) {
@@ -2945,52 +3017,32 @@ class MinisFornumApp {
             excludeMissingPriceCheckbox.checked = filteringRules.exclude_missing_price || false;
         }
 
-        // Set template type toggles based on output_rules
+        // Set template settings based on output_rules
         const outputRules = dealership.output_rules || {};
-        const templateTypes = outputRules.template_types || {};
 
         // Set template variant and price markup from output_rules
         const templateVariantSelect = document.getElementById('templateVariant');
         const priceMarkupInput = document.getElementById('priceMarkup');
 
         if (templateVariantSelect) {
-            templateVariantSelect.value = outputRules.template_variant || 'standard';
+            // Load custom templates from template builder
+            await this.loadCustomTemplates(templateVariantSelect, outputRules.template_variant || 'standard');
         }
         if (priceMarkupInput) {
             priceMarkupInput.value = outputRules.price_markup || '';
         }
 
-        // New vehicles template toggle
-        const newVehicleTemplate = document.getElementById('newVehicleTemplate');
-        const newTemplateLabel = document.getElementById('newTemplateLabel');
-        if (newVehicleTemplate && newTemplateLabel) {
-            const isShortcut = templateTypes.new === 'shortcut';
-            newVehicleTemplate.checked = isShortcut;
-            newTemplateLabel.textContent = isShortcut ? 'SHORTCUT' : 'SHORTCUT PACK';
-        }
 
-        // Used vehicles template toggle
-        const usedVehicleTemplate = document.getElementById('usedVehicleTemplate');
-        const usedTemplateLabel = document.getElementById('usedTemplateLabel');
-        if (usedVehicleTemplate && usedTemplateLabel) {
-            const isShortcut = templateTypes.used === 'shortcut';
-            usedVehicleTemplate.checked = isShortcut;
-            usedTemplateLabel.textContent = isShortcut ? 'SHORTCUT' : 'SHORTCUT PACK';
-        }
+        // Set custom template selections if they exist
+        const customTemplates = outputRules.custom_templates || {};
+        const newCustomTemplateSelect = document.getElementById('newVehicleCustomTemplate');
+        const usedCustomTemplateSelect = document.getElementById('usedVehicleCustomTemplate');
 
-        // Add toggle event listeners
-        if (newVehicleTemplate && !newVehicleTemplate.hasEventListener) {
-            newVehicleTemplate.addEventListener('change', (e) => {
-                newTemplateLabel.textContent = e.target.checked ? 'SHORTCUT' : 'SHORTCUT PACK';
-            });
-            newVehicleTemplate.hasEventListener = true;
+        if (newCustomTemplateSelect) {
+            newCustomTemplateSelect.value = customTemplates.new || '';
         }
-
-        if (usedVehicleTemplate && !usedVehicleTemplate.hasEventListener) {
-            usedVehicleTemplate.addEventListener('change', (e) => {
-                usedTemplateLabel.textContent = e.target.checked ? 'SHORTCUT' : 'SHORTCUT PACK';
-            });
-            usedVehicleTemplate.hasEventListener = true;
+        if (usedCustomTemplateSelect) {
+            usedCustomTemplateSelect.value = customTemplates.used || '';
         }
 
         // Show the modal
@@ -3002,7 +3054,63 @@ class MinisFornumApp {
         
         console.log('Dealership modal opened for:', dealership.name);
     }
-    
+
+    async loadCustomTemplates(templateSelect, currentSelection) {
+        try {
+            // Fetch custom templates from template builder
+            const response = await fetch('/api/templates/list');
+            const data = await response.json();
+
+            if (data.success && data.templates) {
+                // Get the custom templates optgroup for main dropdown
+                const customGroup = document.getElementById('customTemplatesGroup');
+                if (customGroup) {
+                    // Clear existing custom templates
+                    customGroup.innerHTML = '';
+
+                    // Add each custom template as an option
+                    data.templates.forEach(template => {
+                        const option = document.createElement('option');
+                        option.value = `custom_${template.id}`;
+                        option.textContent = template.template_name;
+                        customGroup.appendChild(option);
+                    });
+
+                    console.log(`[TEMPLATE LOADER] Loaded ${data.templates.length} custom templates to main dropdown`);
+                }
+
+                // Also populate the vehicle-specific dropdowns
+                const newVehicleGroup = document.getElementById('newCustomTemplatesGroup');
+                const usedVehicleGroup = document.getElementById('usedCustomTemplatesGroup');
+
+                [newVehicleGroup, usedVehicleGroup].forEach(group => {
+                    if (group) {
+                        // Clear existing custom templates
+                        group.innerHTML = '';
+
+                        // Add each custom template as an option
+                        data.templates.forEach(template => {
+                            const option = document.createElement('option');
+                            option.value = `custom_${template.id}`;
+                            option.textContent = template.template_name;
+                            group.appendChild(option);
+                        });
+                    }
+                });
+
+                console.log(`[TEMPLATE LOADER] Loaded ${data.templates.length} custom templates to vehicle-specific dropdowns`);
+            }
+
+            // Set the current selection after loading templates
+            if (templateSelect) {
+                templateSelect.value = currentSelection;
+            }
+
+        } catch (error) {
+            console.error('[TEMPLATE LOADER] Failed to load custom templates:', error);
+        }
+    }
+
     async saveDealershipSettingsOLD_DUPLICATE() {
         console.log('saveDealershipSettings (DUPLICATE - should not be called)');
         
@@ -8672,6 +8780,12 @@ class ModalOrderWizard {
         console.log('Original CAO API response:', originalResults);
         const originalResult = originalResults[0] || originalResults; // Handle both array and single object responses
         console.log('Original CAO processed result:', originalResult);
+        console.log('[DEBUG] Vehicle count properties in result:', {
+            'new_vehicles': originalResult.new_vehicles,
+            'vehicle_count': originalResult.vehicle_count,
+            'vehicles_processed': originalResult.vehicles_processed,
+            'success': originalResult.success
+        });
 
         // PHASE 1: ALSO prepare CAO data for the new two-phase workflow
         console.log(`[PHASE 1] ALSO preparing CAO data for ${dealershipName} for new workflow`);
@@ -8712,11 +8826,14 @@ class ModalOrderWizard {
         };
     }
 
-    async generateFinalFiles(dealershipName, vehiclesData, orderNumber, templateType = null) {
+    async generateFinalFiles(dealershipName, vehiclesData, orderNumber, templateType = null, forceVinLogging = false) {
         // PHASE 2: Generate final files from prepared data + order number
         const modalTestingCheckbox = document.getElementById('modalSkipVinLogging');
         const testingMode = modalTestingCheckbox ? modalTestingCheckbox.checked :
                            (localStorage.getItem('orderWizardTestingMode') === 'true');
+
+        // If forceVinLogging is true, always enable VIN logging regardless of testing mode
+        const skipVinLogging = forceVinLogging ? false : testingMode;
 
         console.log(`[PHASE 2] Generating final files for ${dealershipName} with order number: ${orderNumber}`);
         console.log(`[PHASE 2] Processing ${vehiclesData.length} vehicles`);
@@ -8728,6 +8845,11 @@ class ModalOrderWizard {
         console.log(`[JS QR TRACE 1]   - Testing Mode: ${testingMode}`);
         console.log(`[JS QR TRACE 1]   - Sample Vehicle Data:`, vehiclesData.slice(0, 2));
 
+        // Get custom template configuration for this dealership
+        const dealershipData = window.app?.dealerships?.find(d => d.name === dealershipName);
+        const customTemplateConfig = dealershipData?.output_rules?.custom_templates || null;
+        console.log(`[JS QR TRACE 1]   - Custom Template Config:`, customTemplateConfig);
+
         const response = await fetch('/api/orders/generate-final-files', {
             method: 'POST',
             headers: {
@@ -8738,7 +8860,8 @@ class ModalOrderWizard {
                 vehicles_data: vehiclesData,
                 order_number: orderNumber,
                 template_type: templateType,
-                skip_vin_logging: testingMode
+                custom_templates: customTemplateConfig,
+                skip_vin_logging: skipVinLogging
             })
         });
 
@@ -8748,7 +8871,7 @@ class ModalOrderWizard {
             vehicles_data: vehiclesData.slice(0, 2), // Show first 2 for brevity
             order_number: orderNumber,
             template_type: templateType,
-            skip_vin_logging: testingMode
+            skip_vin_logging: skipVinLogging
         });
 
         if (!response.ok) {
@@ -8881,7 +9004,8 @@ class ModalOrderWizard {
                     dealershipName,
                     vehiclesData,
                     orderNumber,
-                    templateType
+                    templateType,
+                    true  // forceVinLogging=true for Process Presently
                 );
 
                 // Update the processed order with final file information
@@ -9256,27 +9380,66 @@ class ModalOrderWizard {
         }
     }
     
-    processMaintenanceVins() {
+    async processMaintenanceVins() {
         const vinInput = document.getElementById('maintenanceVinInput');
         const manualVins = vinInput ? vinInput.value.trim().split('\n').filter(vin => vin.trim()) : [];
-        
+
         // Store manual VINs for current maintenance order
         if (this.maintenanceResults[this.currentMaintenanceIndex]) {
+            // If there are manual VINs, fetch their actual data from the database
+            let manualVehicles = [];
+            if (manualVins.length > 0) {
+                const currentOrder = this.maintenanceOrders[this.currentMaintenanceIndex];
+                const dealershipName = currentOrder.name;
+
+                try {
+                    // Fetch actual vehicle data for manual VINs
+                    const response = await fetch(`/api/data/manual-vins/${encodeURIComponent(dealershipName)}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            vins: manualVins.map(vin => vin.trim())
+                        })
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        manualVehicles = data.vehicles || [];
+                        console.log(`Fetched data for ${manualVehicles.length} manual VINs from ${dealershipName}`);
+                    } else {
+                        console.error('Failed to fetch manual VIN data, using placeholders');
+                        // Fallback to placeholder data
+                        manualVehicles = manualVins.map(vin => ({
+                            vin: vin.trim(),
+                            source: 'manual',
+                            year: 'Unknown',
+                            make: 'Manual Entry',
+                            model: 'Manual Entry'
+                        }));
+                    }
+                } catch (error) {
+                    console.error('Error fetching manual VIN data:', error);
+                    // Fallback to placeholder data
+                    manualVehicles = manualVins.map(vin => ({
+                        vin: vin.trim(),
+                        source: 'manual',
+                        year: 'Unknown',
+                        make: 'Manual Entry',
+                        model: 'Manual Entry'
+                    }));
+                }
+            }
+
+            // Store the manual vehicles with actual data (or placeholders if not found)
             this.maintenanceResults[this.currentMaintenanceIndex].manualVins = manualVins;
-            
+            this.maintenanceResults[this.currentMaintenanceIndex].manualVehicles = manualVehicles;
+
             // Combine CAO results with manual VINs and add to processed orders
             const caoResults = this.maintenanceResults[this.currentMaintenanceIndex].caoResults;
             const caoVehicles = caoResults ? caoResults.vehicles || [] : [];
-            
-            // Create manual VIN objects
-            const manualVehicles = manualVins.map(vin => ({
-                vin: vin.trim(),
-                source: 'manual',
-                year: 'Unknown',
-                make: 'Manual Entry',
-                model: 'Manual Entry'
-            }));
-            
+
             // Combine results
             const combinedResults = {
                 dealership: this.maintenanceResults[this.currentMaintenanceIndex].order.name,
@@ -9701,6 +9864,7 @@ Example:
         // Add maintenance results
         if (this.maintenanceResults && this.maintenanceResults.length > 0) {
             this.maintenanceResults.forEach(result => {
+                // Include both CAO and manual VINs in the count
                 const vehicleCount = (result.caoResults?.vehicles?.length || 0) + (result.manualVins?.length || 0);
                 dealerships.set(result.order.name, {
                     name: result.order.name,
@@ -9913,7 +10077,7 @@ Example:
                     }
                 }
 
-                // Prioritize CAO results over manual VINs for maintenance processing
+                // Add BOTH CAO results AND manual VINs for maintenance processing
                 if (maintenanceResult && maintenanceResult.caoResults && maintenanceResult.caoResults.vehicles && maintenanceResult.caoResults.vehicles.length > 0) {
                     console.log(`Found ${maintenanceResult.caoResults.vehicles.length} vehicles from maintenance CAO results for ${maintenanceResult.order.name}`);
                     // Add dealership info to vehicles (these are already formatted from CSV)
@@ -9922,10 +10086,20 @@ Example:
                         dealership: maintenanceResult.order.name
                     }));
                     allVehicles.push(...vehiclesWithDealership);
+                }
+
+                // ALSO add manual vehicles if they exist (not just as a fallback)
+                if (maintenanceResult && maintenanceResult.manualVehicles && maintenanceResult.manualVehicles.length > 0) {
+                    console.log(`Adding ${maintenanceResult.manualVehicles.length} manual vehicles for ${maintenanceResult.order.name}`);
+                    // Use the fetched vehicle data with dealership info
+                    const manualVehiclesWithDealership = maintenanceResult.manualVehicles.map(vehicle => ({
+                        ...vehicle,
+                        dealership: maintenanceResult.order.name
+                    }));
+                    allVehicles.push(...manualVehiclesWithDealership);
                 } else if (maintenanceResult && maintenanceResult.manualVins && maintenanceResult.manualVins.length > 0) {
-                    // Only use manual VINs if no CAO results are available
-                    console.log(`No CAO results found, using ${maintenanceResult.manualVins.length} manual VINs for ${maintenanceResult.order.name}`);
-                    // Convert manual VINs to vehicle objects
+                    // Fallback: If we have VINs but no vehicle data (shouldn't happen normally)
+                    console.log(`Adding ${maintenanceResult.manualVins.length} manual VINs for ${maintenanceResult.order.name} (fallback mode)`);
                     const manualVehicles = maintenanceResult.manualVins.map(vin => ({
                         vin: vin,
                         year: 'Manual',
@@ -11081,6 +11255,11 @@ Output folder: ${result.output_folder}`;
                     throw new Error('No edited vehicle data available for processing');
                 }
 
+                // Get custom template configuration for this dealership
+                const dealershipData = window.app?.dealerships?.find(d => d.name === currentDealership);
+                const customTemplateConfig = dealershipData?.output_rules?.custom_templates || null;
+                console.log(`[ENHANCED DOWNLOAD] Custom Template Config for ${currentDealership}:`, customTemplateConfig);
+
                 // Call the enhanced download endpoint that preserves edits
                 const enhancedResponse = await fetch('/api/csv/enhanced-download', {
                     method: 'POST',
@@ -11090,7 +11269,8 @@ Output folder: ${result.output_folder}`;
                     body: JSON.stringify({
                         dealership_name: currentDealership,
                         order_number: orderNumber.trim(),
-                        csv_data: csvData
+                        csv_data: csvData,
+                        custom_templates: customTemplateConfig
                     })
                 });
 
@@ -11296,6 +11476,7 @@ Output folder: ${result.output_folder}`;
         // Add maintenance results if any
         if (this.maintenanceResults && this.maintenanceResults.length > 0) {
             this.maintenanceResults.forEach(result => {
+                // Include both CAO and manual VINs in the count
                 const vehicleCount = (result.caoResults?.vehicles?.length || 0) + (result.manualVins?.length || 0);
                 if (vehicleCount > 0) {
                     dealerships.set(result.order.name, {
@@ -11410,6 +11591,7 @@ Output folder: ${result.output_folder}`;
         // Add maintenance results if any
         if (this.maintenanceResults && this.maintenanceResults.length > 0) {
             this.maintenanceResults.forEach(result => {
+                // Include both CAO and manual VINs in the count
                 const vehicleCount = (result.caoResults?.vehicles?.length || 0) + (result.manualVins?.length || 0);
                 if (vehicleCount > 0) {
                     dealerships.push({

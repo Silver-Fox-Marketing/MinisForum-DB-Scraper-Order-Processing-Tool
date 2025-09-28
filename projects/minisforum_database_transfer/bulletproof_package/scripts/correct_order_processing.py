@@ -413,7 +413,7 @@ class CorrectOrderProcessor:
             logger.warning(f"[DATA FORMAT] Unknown data format - sample keys: {list(sample.keys())}")
             return 'unknown'
 
-    def generate_final_files(self, dealership_name: str, vehicles_data: List[Dict], order_number: str, template_type: str = None, skip_vin_logging: bool = False) -> Dict[str, Any]:
+    def generate_final_files(self, dealership_name: str, vehicles_data: List[Dict], order_number: str, template_type: str = None, custom_templates: Dict = None, skip_vin_logging: bool = False) -> Dict[str, Any]:
         """
         PHASE 2: Generate final files from prepared data + order number
 
@@ -425,7 +425,19 @@ class CorrectOrderProcessor:
 
         # Get template type from config if not specified
         if template_type is None:
-            template_type = self._get_dealership_template_config(dealership_name)
+            # NEW: Check if custom templates are provided
+            if custom_templates:
+                logger.info(f"[GENERATE FINAL] Custom templates provided: {custom_templates}")
+                # For NEW workflow, we need to determine vehicle condition to select correct template
+                # Since this is processed data from CAO, it's mostly used vehicles
+                template_type = custom_templates.get('used', '') or custom_templates.get('new', '')
+                if template_type:
+                    logger.info(f"[GENERATE FINAL] Using custom template: {template_type}")
+                else:
+                    logger.info(f"[GENERATE FINAL] No custom template found, falling back to config")
+                    template_type = self._get_dealership_template_config(dealership_name)
+            else:
+                template_type = self._get_dealership_template_config(dealership_name)
 
         logger.info(f"[CAO GENERATE] Generating final files for {dealership_name} - Order: {order_number}")
         logger.info(f"[CAO GENERATE] Received {len(vehicles_data)} vehicles for processing")
@@ -436,13 +448,13 @@ class CorrectOrderProcessor:
         if data_format == 'template_formatted':
             # Data is already normalized - use direct template processing
             logger.info(f"[CAO GENERATE] Using template-formatted data processing path")
-            return self._generate_from_template_data(dealership_name, vehicles_data, order_number, template_type, skip_vin_logging)
+            return self._generate_from_template_data(dealership_name, vehicles_data, order_number, template_type, custom_templates, skip_vin_logging)
         else:
             # Raw data or unknown - continue with existing normalization process
             logger.info(f"[CAO GENERATE] Using raw database processing path (format: {data_format})")
-            return self._generate_from_raw_data(dealership_name, vehicles_data, order_number, template_type, skip_vin_logging)
+            return self._generate_from_raw_data(dealership_name, vehicles_data, order_number, template_type, custom_templates, skip_vin_logging)
 
-    def _generate_from_raw_data(self, dealership_name: str, vehicles_data: List[Dict], order_number: str, template_type: str, skip_vin_logging: bool) -> Dict[str, Any]:
+    def _generate_from_raw_data(self, dealership_name: str, vehicles_data: List[Dict], order_number: str, template_type: str, custom_templates: Dict = None, skip_vin_logging: bool = False) -> Dict[str, Any]:
         """
         Handle raw database records - existing processing logic preserved
         """
@@ -536,7 +548,7 @@ class CorrectOrderProcessor:
             logger.error(f"Error generating final files: {e}")
             return {'success': False, 'error': str(e)}
 
-    def _generate_from_template_data(self, dealership_name: str, vehicles_data: List[Dict], order_number: str, template_type: str, skip_vin_logging: bool) -> Dict[str, Any]:
+    def _generate_from_template_data(self, dealership_name: str, vehicles_data: List[Dict], order_number: str, template_type: str, custom_templates: Dict = None, skip_vin_logging: bool = False) -> Dict[str, Any]:
         """
         Handle already-normalized template data from review stage.
         Data is already in correct template format with fields like YEARMODEL, TRIM, PRICE.
@@ -1602,7 +1614,8 @@ class CorrectOrderProcessor:
     
     def _get_dealership_template_config(self, dealership_name: str, vehicle_condition: str = None) -> str:
         """
-        Get template type (shortcut or shortcut_pack) for a dealership based on vehicle condition.
+        Get template configuration for a dealership based on vehicle condition.
+        Now supports custom templates from template builder.
         Returns 'shortcut_pack' as default if no specific config is found.
         """
         # Get dealership config
@@ -1618,13 +1631,28 @@ class CorrectOrderProcessor:
             if isinstance(output_rules, str):
                 output_rules = json.loads(output_rules)
 
-            # Debug logging for Porsche
-            if dealership_name == "Porsche St. Louis":
-                logger.info(f"[DEBUG] Porsche output_rules: {output_rules}")
-                if 'template_types' in output_rules:
-                    logger.info(f"[DEBUG] Porsche template_types: {output_rules['template_types']}")
+            logger.info(f"[TEMPLATE CONFIG] {dealership_name} output_rules: {output_rules}")
 
-            # Check for template_type settings
+            # NEW: Check for custom templates (from template builder)
+            if 'custom_templates' in output_rules:
+                custom_templates = output_rules['custom_templates']
+                logger.info(f"[TEMPLATE CONFIG] {dealership_name} custom_templates: {custom_templates}")
+
+                # If vehicle_condition is specified, check for condition-specific custom template
+                if vehicle_condition:
+                    # Normalize condition for lookup
+                    if vehicle_condition.lower() in ['new']:
+                        template_id = custom_templates.get('new', '')
+                        if template_id:
+                            logger.info(f"[TEMPLATE CONFIG] {dealership_name} - Using 'new' custom template: {template_id}")
+                            return template_id
+                    elif vehicle_condition.lower() in ['used', 'po', 'cpo', 'certified', 'pre-owned']:
+                        template_id = custom_templates.get('used', '')
+                        if template_id:
+                            logger.info(f"[TEMPLATE CONFIG] {dealership_name} - Using 'used' custom template: {template_id}")
+                            return template_id
+
+            # FALLBACK: Check for legacy template_types settings (for backwards compatibility)
             if 'template_types' in output_rules:
                 template_types = output_rules['template_types']
 
@@ -1633,20 +1661,20 @@ class CorrectOrderProcessor:
                     # Normalize condition for lookup
                     if vehicle_condition.lower() in ['new']:
                         result = template_types.get('new', 'shortcut_pack')
-                        logger.info(f"[DEBUG] {dealership_name} - Using 'new' template: {result}")
+                        logger.info(f"[TEMPLATE CONFIG] {dealership_name} - Using legacy 'new' template: {result}")
                         return result
                     elif vehicle_condition.lower() in ['used', 'po', 'cpo', 'certified', 'pre-owned']:
                         result = template_types.get('used', 'shortcut_pack')
-                        logger.info(f"[DEBUG] {dealership_name} - Using 'used' template: {result}")
+                        logger.info(f"[TEMPLATE CONFIG] {dealership_name} - Using legacy 'used' template: {result}")
                         return result
 
                 # Return default template type if specified
                 result = template_types.get('default', 'shortcut_pack')
-                logger.info(f"[DEBUG] {dealership_name} - Using 'default' template: {result} (vehicle_condition={vehicle_condition})")
+                logger.info(f"[TEMPLATE CONFIG] {dealership_name} - Using legacy 'default' template: {result} (vehicle_condition={vehicle_condition})")
                 return result
 
         # Default to shortcut_pack if no config found
-        logger.info(f"[DEBUG] {dealership_name} - No config found, using default: shortcut_pack")
+        logger.info(f"[TEMPLATE CONFIG] {dealership_name} - No config found, using default: shortcut_pack")
         return 'shortcut_pack'
 
     def _apply_dealership_filters(self, vehicles: List[Dict], dealership_name: str) -> List[Dict]:
@@ -2031,8 +2059,13 @@ class CorrectOrderProcessor:
             logger.info(f"[CAO CSV] Sample vehicle data for CSV writing: {vehicles[0]}")
 
         with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
-            
-            if template_type == "shortcut":
+
+            # Check if this is a custom template from template builder
+            if template_type.startswith('custom_'):
+                logger.info(f"[CSV CUSTOM] Processing custom template: {template_type}")
+                self._generate_custom_template_csv(vehicles, template_type, csvfile, qr_paths, dealership_name)
+
+            elif template_type == "shortcut":
                 # Shortcut format: STOCK,MODEL,@QR (simplified 3-column format)
                 writer = csv.writer(csvfile)
                 writer.writerow(['STOCK', 'MODEL', '@QR'])
@@ -2179,7 +2212,118 @@ class CorrectOrderProcessor:
         
         logger.info(f"Generated Adobe CSV: {csv_path}")
         return csv_path
-    
+
+    def _generate_custom_template_csv(self, vehicles: List[Dict], template_id: str, csvfile, qr_paths: List[str], dealership_name: str):
+        """
+        Generate CSV using custom template from template builder.
+        """
+        logger.info(f"[CUSTOM TEMPLATE] Generating CSV using template: {template_id}")
+
+        # Extract template ID number from custom_X format
+        try:
+            template_id_num = int(template_id.replace('custom_', ''))
+        except (ValueError, AttributeError):
+            logger.error(f"[CUSTOM TEMPLATE] Invalid template ID format: {template_id}")
+            # Fallback to shortcut_pack format
+            self._generate_shortcut_pack_csv(vehicles, csvfile, qr_paths, dealership_name)
+            return
+
+        # Fetch template definition from database
+        template_config = db_manager.execute_query("""
+            SELECT template_name, fields FROM template_configs
+            WHERE id = %s AND is_active = true
+        """, (template_id_num,))
+
+        if not template_config:
+            logger.error(f"[CUSTOM TEMPLATE] Template not found: {template_id}")
+            # Fallback to shortcut_pack format
+            self._generate_shortcut_pack_csv(vehicles, csvfile, qr_paths, dealership_name)
+            return
+
+        template_name = template_config[0]['template_name']
+        template_fields = template_config[0]['fields']
+
+        if isinstance(template_fields, str):
+            template_fields = json.loads(template_fields)
+
+        logger.info(f"[CUSTOM TEMPLATE] Using template '{template_name}' with {len(template_fields.get('columns', []))} columns")
+
+        # Get columns and sort by order
+        columns = template_fields.get('columns', [])
+        columns.sort(key=lambda x: x.get('order', 999))
+
+        # Create CSV writer and write header
+        writer = csv.writer(csvfile)
+        headers = [col.get('label', col.get('key', '')) for col in columns]
+        writer.writerow(headers)
+
+        # Process each vehicle
+        for idx, vehicle in enumerate(vehicles):
+            row_data = []
+
+            for col in columns:
+                col_type = col.get('type', 'text')
+                col_source = col.get('source', col.get('key', ''))
+
+                if col_type == 'special' and col_source == 'qr_code':
+                    # Handle QR code column
+                    qr_path = qr_paths[idx] if idx < len(qr_paths) else ''
+                    nicks_qr_path = self._convert_qr_path_for_nicks_computer(qr_path, dealership_name, idx)
+                    row_data.append(nicks_qr_path)
+
+                elif col_type == 'concatenated':
+                    # Handle concatenated fields like year_make_model
+                    format_str = col.get('format', '{year} {make} {model}')
+                    try:
+                        formatted_value = format_str.format(
+                            year=vehicle.get('year', ''),
+                            make=vehicle.get('make', ''),
+                            model=vehicle.get('model', ''),
+                            trim=vehicle.get('trim', ''),
+                            stock=vehicle.get('stock', ''),
+                            vin=vehicle.get('vin', '')
+                        )
+                        row_data.append(formatted_value)
+                    except KeyError as e:
+                        logger.warning(f"[CUSTOM TEMPLATE] Missing field for concatenation: {e}")
+                        row_data.append('')
+
+                elif col_type == 'text':
+                    # Handle regular text fields
+                    value = vehicle.get(col_source, '')
+                    row_data.append(value)
+
+                else:
+                    # Default: treat as text field
+                    value = vehicle.get(col_source, '')
+                    row_data.append(value)
+
+            writer.writerow(row_data)
+
+        logger.info(f"[CUSTOM TEMPLATE] Generated CSV with {len(vehicles)} vehicles using template '{template_name}'")
+
+    def _generate_shortcut_pack_csv(self, vehicles: List[Dict], csvfile, qr_paths: List[str], dealership_name: str):
+        """
+        Generate shortcut pack format CSV (fallback method).
+        """
+        writer = csv.writer(csvfile)
+        # Use the existing shortcut_pack logic from _generate_adobe_csv
+        # This is a simplified version for fallback purposes
+        writer.writerow(['STOCK', 'YEARMODEL', 'TRIM', '@QR'])
+
+        for idx, vehicle in enumerate(vehicles):
+            stock = vehicle.get('stock', '')
+            year = vehicle.get('year', '')
+            make = vehicle.get('make', '')
+            model = vehicle.get('model', '')
+            trim = vehicle.get('trim', '')
+
+            qr_path = qr_paths[idx] if idx < len(qr_paths) else ''
+            nicks_qr_path = self._convert_qr_path_for_nicks_computer(qr_path, dealership_name, idx)
+
+            yearmodel = f"{year} {make} {model}".strip()
+            writer.writerow([stock, yearmodel, trim, nicks_qr_path])
+
     def _get_type_prefix(self, vehicle_type: str) -> str:
         """Convert vehicle type to prefix used in Adobe CSVs - ONLY NEW or USED"""
         vtype = vehicle_type.lower()
