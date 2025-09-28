@@ -31,9 +31,23 @@ class TemplateBuilder {
         // Template management buttons
         document.getElementById('newTemplateBtn')?.addEventListener('click', () => this.createNewTemplate());
         document.getElementById('saveTemplateBtn')?.addEventListener('click', () => this.saveTemplate());
+        document.getElementById('updateTemplateBtn')?.addEventListener('click', () => this.updateTemplate());
         document.getElementById('templatePreviewBtn')?.addEventListener('click', () => this.previewTemplate());
         document.getElementById('clearTemplateBtn')?.addEventListener('click', () => this.clearTemplate());
         document.getElementById('addColumnBtn')?.addEventListener('click', () => this.addColumn());
+
+        // Field concatenation button
+        const createBtn = document.getElementById('createCombinedFieldBtn');
+        console.log('[TEMPLATE BUILDER] createCombinedFieldBtn element:', createBtn);
+        if (createBtn) {
+            createBtn.addEventListener('click', (e) => {
+                console.log('[TEMPLATE BUILDER] Create combined field button clicked');
+                e.preventDefault();
+                this.openFieldConcatenationModal();
+            });
+        } else {
+            console.error('[TEMPLATE BUILDER] createCombinedFieldBtn element not found!');
+        }
 
         // Template properties form
         document.getElementById('templateName')?.addEventListener('input', (e) => {
@@ -54,6 +68,9 @@ class TemplateBuilder {
                 this.loadPreviewData(e.target.value);
             }
         });
+
+        // Field concatenation modal events
+        this.bindConcatenationModalEvents();
     }
 
     setupDragAndDrop() {
@@ -68,6 +85,29 @@ class TemplateBuilder {
         const fieldItems = document.querySelectorAll('.field-item[draggable="true"]');
 
         fieldItems.forEach(item => {
+            // Add click functionality
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                console.log('[TEMPLATE BUILDER] Field clicked:', item.dataset.field);
+
+                const fieldData = {
+                    key: item.dataset.field,
+                    label: item.querySelector('span').textContent,
+                    type: this.getFieldType(item.dataset.field),
+                    icon: item.querySelector('i').className
+                };
+
+                // Add visual feedback for click
+                item.classList.add('field-clicked');
+                setTimeout(() => {
+                    item.classList.remove('field-clicked');
+                }, 300);
+
+                // Add field to template
+                this.addFieldToTemplate(fieldData);
+            });
+
+            // Drag functionality
             item.addEventListener('dragstart', (e) => {
                 const fieldData = {
                     key: item.dataset.field,
@@ -143,6 +183,13 @@ class TemplateBuilder {
             order: this.currentTemplate.fields.columns.length + 1
         };
 
+        // Handle special calculated fields that need additional configuration
+        if (fieldData.key === 'price_with_markup') {
+            fieldConfig.calculation = 'price_markup';
+            // Default markup amount - can be configured later
+            fieldConfig.markup_amount = 1000;
+        }
+
         this.currentTemplate.fields.columns.push(fieldConfig);
 
         // Update UI
@@ -158,8 +205,8 @@ class TemplateBuilder {
                 <div class="drop-zone empty" id="dropZone">
                     <div class="drop-message">
                         <i class="fas fa-mouse-pointer"></i>
-                        <p>Drag and drop fields here to create your template</p>
-                        <p class="help-text">Start by dragging a field from the Available Fields panel</p>
+                        <p>Click or drag fields to add them to your template</p>
+                        <p class="help-text">Click any field from the Available Fields panel to add it</p>
                     </div>
                 </div>
             `;
@@ -268,6 +315,22 @@ class TemplateBuilder {
 
         this.renderTemplateColumns();
         this.updatePreview();
+        this.updateButtonVisibility();
+    }
+
+    updateButtonVisibility() {
+        const updateBtn = document.getElementById('updateTemplateBtn');
+        const saveBtn = document.getElementById('saveTemplateBtn');
+
+        if (this.currentTemplate.id) {
+            // Template is loaded - show Update button
+            updateBtn.style.display = 'inline-block';
+            saveBtn.textContent = 'Save as New';
+        } else {
+            // New template - hide Update button
+            updateBtn.style.display = 'none';
+            saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Template';
+        }
     }
 
     async saveTemplate() {
@@ -282,23 +345,77 @@ class TemplateBuilder {
         }
 
         try {
+            // Always create new template (save as new)
             const response = await fetch('/api/templates/save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(this.currentTemplate)
+                body: JSON.stringify({
+                    name: this.currentTemplate.name,
+                    description: this.currentTemplate.description,
+                    type: this.currentTemplate.type,
+                    fields: this.currentTemplate.fields
+                })
             });
 
             const result = await response.json();
 
             if (result.success) {
                 alert('Template saved successfully!');
+                // Update the current template ID to the new template
+                if (result.template_id) {
+                    this.currentTemplate.id = result.template_id;
+                }
                 this.loadTemplates();
+                this.updateButtonVisibility();
             } else {
                 alert('Error saving template: ' + result.error);
             }
         } catch (error) {
             console.error('[TEMPLATE BUILDER] Save error:', error);
             alert('Error saving template');
+        }
+    }
+
+    async updateTemplate() {
+        if (!this.currentTemplate.id) {
+            alert('No template loaded to update');
+            return;
+        }
+
+        if (!this.currentTemplate.name.trim()) {
+            alert('Please enter a template name');
+            return;
+        }
+
+        if (this.currentTemplate.fields.columns.length === 0) {
+            alert('Please add at least one field to the template');
+            return;
+        }
+
+        try {
+            // Update existing template
+            const response = await fetch(`/api/templates/${this.currentTemplate.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    template_name: this.currentTemplate.name,
+                    description: this.currentTemplate.description,
+                    template_type: this.currentTemplate.type,
+                    fields: this.currentTemplate.fields
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                alert('Template updated successfully!');
+                this.loadTemplates();
+            } else {
+                alert('Error updating template: ' + result.error);
+            }
+        } catch (error) {
+            console.error('[TEMPLATE BUILDER] Update error:', error);
+            alert('Error updating template');
         }
     }
 
@@ -334,10 +451,12 @@ class TemplateBuilder {
         let templatesHTML = '';
 
         this.templates.forEach(template => {
+            const statusClass = template.is_active ? '' : 'inactive';
+            const statusLabel = template.is_active ? '' : ' (Inactive)';
             templatesHTML += `
-                <div class="template-item ${template.id === this.currentTemplate.id ? 'active' : ''}" onclick="templateBuilder.loadTemplate(${template.id})">
+                <div class="template-item ${template.id === this.currentTemplate.id ? 'active' : ''} ${statusClass}" onclick="templateBuilder.loadTemplate(${template.id})">
                     <div class="template-info">
-                        <div class="template-name">${template.template_name}</div>
+                        <div class="template-name">${template.template_name}${statusLabel}</div>
                         <div class="template-details">${template.fields?.columns?.length || 0} columns • ${template.template_type}</div>
                     </div>
                     <div class="template-actions">
@@ -381,6 +500,7 @@ class TemplateBuilder {
                 this.renderTemplateColumns();
                 this.renderTemplateList();
                 this.updatePreview();
+                this.updateButtonVisibility();
             }
         } catch (error) {
             console.error('[TEMPLATE BUILDER] Load template error:', error);
@@ -468,23 +588,29 @@ class TemplateBuilder {
             return;
         }
 
+        const requestData = {
+            dealership: dealershipName,
+            fields: {
+                columns: this.currentTemplate.fields || []
+            },
+            sample_vin: null // Will be filled when user selects a specific VIN
+        };
+
+        console.log('[TEMPLATE BUILDER DEBUG] Request data:', requestData);
+
         try {
-            const response = await fetch(`/api/custom-templates/preview`, {
+            const response = await fetch(`/api/templates/preview`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    dealership_name: dealershipName,
-                    template_data: {
-                        template_name: this.currentTemplate.name || 'Preview Template',
-                        fields: this.currentTemplate.fields
-                    }
-                })
+                body: JSON.stringify(requestData)
             });
 
             const result = await response.json();
+            console.log('[TEMPLATE BUILDER DEBUG] API response:', result);
 
             if (result.success) {
-                this.updatePreview(result.preview_data || []);
+                console.log('[TEMPLATE BUILDER DEBUG] Preview data:', result.preview);
+                this.updatePreview(result.preview || []);
             } else {
                 console.error('[TEMPLATE BUILDER] Preview error:', result.error);
                 this.updatePreview([]);
@@ -561,6 +687,11 @@ class TemplateBuilder {
 
     // Helper methods
     getFieldType(fieldKey) {
+        // Check if it's a custom combined field first
+        if (this.customCombinedFields && this.customCombinedFields[fieldKey]) {
+            return 'concatenated';
+        }
+
         const typeMap = {
             'vin': 'text',
             'stock': 'text',
@@ -572,6 +703,7 @@ class TemplateBuilder {
             'msrp': 'currency',
             'qr_code': 'special',
             'days_on_lot': 'calculated',
+            'price_with_markup': 'calculated',
             'year_make_model': 'concatenated',
             'stock_vin': 'concatenated'
         };
@@ -616,19 +748,562 @@ class TemplateBuilder {
 
         return widthMap[fieldKey] || '20%';
     }
+
+    // Field Concatenation Methods
+    bindConcatenationModalEvents() {
+        // Initialize concatenation state
+        this.selectedFields = [];
+
+        // Modal controls
+        document.getElementById('closeConcatenationModal')?.addEventListener('click', () => this.closeConcatenationModal());
+        document.getElementById('cancelConcatenation')?.addEventListener('click', () => this.closeConcatenationModal());
+        document.getElementById('createCombinedField')?.addEventListener('click', () => this.createCombinedField());
+
+        // Field name input - auto-generate key
+        document.getElementById('combinedFieldName')?.addEventListener('input', (e) => {
+            const name = e.target.value;
+            const key = name.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+            document.getElementById('combinedFieldKey').value = key;
+            this.updateFieldPreview();
+        });
+
+        // Separator change
+        document.getElementById('fieldSeparator')?.addEventListener('change', () => this.updateFieldPreview());
+
+        // Field chip clicks
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('.field-chip') && e.target.closest('#availableFieldChips')) {
+                this.toggleFieldSelection(e.target.closest('.field-chip'));
+            }
+        });
+
+        // Close modal when clicking outside
+        document.getElementById('fieldConcatenationModal')?.addEventListener('click', (e) => {
+            if (e.target.id === 'fieldConcatenationModal') {
+                this.closeConcatenationModal();
+            }
+        });
+    }
+
+    openFieldConcatenationModal() {
+        console.log('[TEMPLATE BUILDER] Opening field concatenation modal');
+
+        // Reset form
+        this.selectedFields = [];
+
+        const nameField = document.getElementById('combinedFieldName');
+        const keyField = document.getElementById('combinedFieldKey');
+        const separatorField = document.getElementById('fieldSeparator');
+        const modal = document.getElementById('fieldConcatenationModal');
+
+        console.log('[TEMPLATE BUILDER] Modal elements:', {
+            nameField,
+            keyField,
+            separatorField,
+            modal
+        });
+
+        if (nameField) nameField.value = '';
+        if (keyField) keyField.value = '';
+        if (separatorField) separatorField.value = ' ';
+
+        // Clear any selected state
+        document.querySelectorAll('.field-chip').forEach(chip => {
+            chip.classList.remove('selected');
+        });
+
+        // Reset builder area
+        this.updateFieldCombinationBuilder();
+        this.updateFieldPreview();
+
+        // Show modal
+        if (modal) {
+            console.log('[TEMPLATE BUILDER] Showing modal');
+            modal.style.display = 'flex';
+
+            // Setup event listeners for field selection after modal is shown
+            setTimeout(() => {
+                this.setupModalFieldInteractions();
+            }, 100);
+        } else {
+            console.error('[TEMPLATE BUILDER] Modal element not found!');
+        }
+    }
+
+    closeConcatenationModal() {
+        document.getElementById('fieldConcatenationModal').style.display = 'none';
+        this.selectedFields = [];
+    }
+
+    setupDropZoneOnly() {
+        const self = this;
+        const builderArea = document.getElementById('fieldCombinationBuilder');
+        if (!builderArea) return;
+
+        // Remove old listeners by cloning
+        const newBuilderArea = builderArea.cloneNode(true);
+        builderArea.parentNode.replaceChild(newBuilderArea, builderArea);
+        const dropZone = newBuilderArea;
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            e.dataTransfer.dropEffect = 'copy';
+            dropZone.classList.add('drag-over');
+        });
+
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const rect = dropZone.getBoundingClientRect();
+            if (e.clientX < rect.left || e.clientX >= rect.right ||
+                e.clientY < rect.top || e.clientY >= rect.bottom) {
+                dropZone.classList.remove('drag-over');
+            }
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('drag-over');
+
+            try {
+                const dataStr = e.dataTransfer.getData('text/plain');
+                if (!dataStr) {
+                    console.error('[TEMPLATE BUILDER] No data in drop event');
+                    return;
+                }
+
+                const fieldData = JSON.parse(dataStr);
+                console.log('[TEMPLATE BUILDER] Field dropped:', fieldData);
+
+                // Check if field is already selected
+                if (!self.selectedFields.some(f => f.key === fieldData.key)) {
+                    // Add to selected fields
+                    self.selectedFields.push(fieldData);
+
+                    // Update visual state
+                    const sourceChip = document.querySelector(`#availableFieldChips [data-field="${fieldData.key}"]`);
+                    if (sourceChip) {
+                        sourceChip.classList.add('selected');
+                    }
+
+                    // Update UI
+                    self.updateFieldCombinationBuilder();
+                    self.updateFieldPreview();
+
+                    // Re-setup drop zone after DOM update
+                    setTimeout(() => {
+                        self.setupDropZoneOnly();
+                    }, 100);
+                } else {
+                    console.log('[TEMPLATE BUILDER] Field already selected:', fieldData.key);
+                }
+            } catch (err) {
+                console.error('[TEMPLATE BUILDER] Error handling drop:', err);
+            }
+        });
+    }
+
+    setupModalFieldInteractions() {
+        console.log('[TEMPLATE BUILDER] Setting up modal field interactions');
+        console.log('[DEBUG] Current context:', this);
+        console.log('[DEBUG] Initial selectedFields:', this.selectedFields);
+
+        // Remove old event listeners by cloning
+        const container = document.getElementById('availableFieldChips');
+        if (!container) {
+            console.error('[DEBUG] availableFieldChips container not found!');
+            return;
+        }
+
+        const newContainer = container.cloneNode(true);
+        container.parentNode.replaceChild(newContainer, container);
+
+        // Setup click handlers for available field chips using arrow functions to preserve context
+        document.querySelectorAll('#availableFieldChips .field-chip').forEach(chip => {
+            // Click to select/deselect - arrow function preserves 'this'
+            chip.addEventListener('click', (e) => {
+                e.preventDefault();
+                console.log('[TEMPLATE BUILDER] Field chip clicked:', chip.dataset.field);
+                console.log('[DEBUG] Context in click handler:', this);
+                this.toggleFieldSelection(chip);
+            });
+
+            // Make draggable
+            chip.draggable = true;
+
+            chip.addEventListener('dragstart', (e) => {
+                console.log('[TEMPLATE BUILDER] Drag started:', chip.dataset.field);
+                e.dataTransfer.effectAllowed = 'copy';
+
+                // Get the text content (excluding the icon)
+                const textContent = chip.textContent.trim();
+                const iconElement = chip.querySelector('i');
+                const fieldLabel = textContent; // The text after the icon
+
+                e.dataTransfer.setData('text/plain', JSON.stringify({
+                    key: chip.dataset.field,
+                    label: fieldLabel,
+                    icon: iconElement ? iconElement.className : ''
+                }));
+                chip.classList.add('dragging');
+            });
+
+            chip.addEventListener('dragend', (e) => {
+                console.log('[TEMPLATE BUILDER] Drag ended:', chip.dataset.field);
+                chip.classList.remove('dragging');
+                // Remove drag-over class from any drop zones
+                document.querySelectorAll('.drag-over').forEach(el => {
+                    el.classList.remove('drag-over');
+                });
+            });
+        });
+
+        // Setup drop zone for selected fields
+        const builderArea = document.getElementById('fieldCombinationBuilder');
+
+        if (builderArea) {
+            // Remove existing listeners
+            const newBuilderArea = builderArea.cloneNode(true);
+            builderArea.parentNode.replaceChild(newBuilderArea, builderArea);
+            const dropZone = newBuilderArea;
+
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                e.dataTransfer.dropEffect = 'copy';
+                dropZone.classList.add('drag-over');
+            });
+
+            dropZone.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                // Check if we're leaving the actual drop zone
+                const rect = dropZone.getBoundingClientRect();
+                if (e.clientX < rect.left || e.clientX >= rect.right ||
+                    e.clientY < rect.top || e.clientY >= rect.bottom) {
+                    dropZone.classList.remove('drag-over');
+                }
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.remove('drag-over');
+
+                try {
+                    const dataStr = e.dataTransfer.getData('text/plain');
+                    if (!dataStr) {
+                        console.error('[TEMPLATE BUILDER] No data in drop event');
+                        return;
+                    }
+
+                    const fieldData = JSON.parse(dataStr);
+                    console.log('[TEMPLATE BUILDER] Field dropped:', fieldData);
+
+                    // Check if field is already selected - use 'this' with arrow function
+                    if (!this.selectedFields.some(f => f.key === fieldData.key)) {
+                        // Add to selected fields
+                        this.selectedFields.push(fieldData);
+                        console.log('[TEMPLATE BUILDER] Selected fields now:', this.selectedFields);
+
+                        // Update visual state
+                        const sourceChip = document.querySelector(`#availableFieldChips [data-field="${fieldData.key}"]`);
+                        if (sourceChip) {
+                            sourceChip.classList.add('selected');
+                        }
+
+                        // Update UI without re-setting up drop zones
+                        this.updateFieldCombinationBuilder();
+                        this.updateFieldPreview();
+
+                        // Re-setup interactions after DOM update
+                        setTimeout(() => {
+                            this.setupDropZoneOnly();
+                        }, 100);
+                    } else {
+                        console.log('[TEMPLATE BUILDER] Field already selected:', fieldData.key);
+                    }
+                } catch (err) {
+                    console.error('[TEMPLATE BUILDER] Error handling drop:', err);
+                }
+            });
+        } else {
+            console.error('[TEMPLATE BUILDER] fieldCombinationBuilder not found');
+        }
+    }
+
+    toggleFieldSelection(fieldChip) {
+        console.log('[DEBUG] toggleFieldSelection called');
+        if (!fieldChip) {
+            console.error('[DEBUG] fieldChip is null');
+            return;
+        }
+
+        const fieldKey = fieldChip.dataset.field;
+        const iconElement = fieldChip.querySelector('i');
+
+        // Get the text content (the field label is the text after the icon)
+        const textContent = fieldChip.textContent.trim();
+        const fieldLabel = textContent;
+        const fieldIcon = iconElement ? iconElement.className : '';
+
+        console.log('[DEBUG] Field details:', {
+            fieldKey,
+            fieldLabel,
+            fieldIcon,
+            isSelected: fieldChip.classList.contains('selected'),
+            currentSelectedFields: this.selectedFields
+        });
+
+        if (fieldChip.classList.contains('selected')) {
+            // Remove from selection
+            console.log('[DEBUG] Removing field from selection');
+            fieldChip.classList.remove('selected');
+            this.selectedFields = this.selectedFields.filter(f => f.key !== fieldKey);
+        } else {
+            // Check if field is already selected
+            if (!this.selectedFields.some(f => f.key === fieldKey)) {
+                // Add to selection
+                console.log('[DEBUG] Adding field to selection');
+                fieldChip.classList.add('selected');
+                this.selectedFields.push({
+                    key: fieldKey,
+                    label: fieldLabel,
+                    icon: fieldIcon
+                });
+
+                // Add visual feedback for click
+                fieldChip.classList.add('field-clicked');
+                setTimeout(() => {
+                    fieldChip.classList.remove('field-clicked');
+                }, 300);
+            } else {
+                console.log('[DEBUG] Field already selected');
+            }
+        }
+
+        console.log('[DEBUG] Updated selectedFields:', this.selectedFields);
+        console.log('[DEBUG] Calling updateFieldCombinationBuilder');
+        this.updateFieldCombinationBuilder();
+        console.log('[DEBUG] Calling updateFieldPreview');
+        this.updateFieldPreview();
+    }
+
+    updateFieldCombinationBuilder() {
+        console.log('[DEBUG updateFieldCombinationBuilder] Called with selectedFields:', this.selectedFields);
+        const builder = document.getElementById('fieldCombinationBuilder');
+
+        if (!builder) {
+            console.error('[TEMPLATE BUILDER] fieldCombinationBuilder not found');
+            return;
+        }
+
+        console.log('[DEBUG] Builder element found:', builder);
+        console.log('[DEBUG] Number of selected fields:', this.selectedFields.length);
+
+        if (this.selectedFields.length === 0) {
+            console.log('[DEBUG] No fields selected, showing placeholder');
+            builder.innerHTML = `
+                <div class="combination-placeholder">
+                    <i class="fas fa-mouse-pointer"></i>
+                    <p>Click or drag fields from the left to add them here</p>
+                </div>
+            `;
+        } else {
+            console.log('[DEBUG] Rendering selected fields');
+            const html = `
+                <div class="field-combination-display">
+                    ${this.selectedFields.map((field, index) => {
+                        console.log('[DEBUG] Rendering field:', field);
+                        return `
+                        <div class="selected-field-item">
+                            <i class="${field.icon}"></i>
+                            <span>${field.label}</span>
+                            <button class="remove-field" onclick="templateBuilder.removeSelectedField(${index})">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    `}).join('')}
+                </div>
+            `;
+            console.log('[DEBUG] Generated HTML:', html);
+            builder.innerHTML = html;
+        }
+        console.log('[DEBUG] updateFieldCombinationBuilder complete');
+    }
+
+    removeSelectedField(index) {
+        const removedField = this.selectedFields[index];
+        this.selectedFields.splice(index, 1);
+
+        // Update UI
+        const fieldChip = document.querySelector(`[data-field="${removedField.key}"]`);
+        if (fieldChip) {
+            fieldChip.classList.remove('selected');
+        }
+
+        this.updateFieldCombinationBuilder();
+        this.updateFieldPreview();
+    }
+
+    updateFieldPreview() {
+        const preview = document.getElementById('fieldPreview');
+        const separatorElement = document.getElementById('fieldSeparator');
+
+        if (!preview || !separatorElement) {
+            console.error('[TEMPLATE BUILDER] Preview elements not found');
+            return;
+        }
+
+        const separator = separatorElement.value;
+
+        if (this.selectedFields.length === 0) {
+            preview.innerHTML = '<span class="preview-text">Select fields to see preview</span>';
+            return;
+        }
+
+        // Create sample data for preview
+        const sampleData = {
+            'vin': '1HGBH41JXMN109186',
+            'stock': 'ST12345',
+            'type': 'New',
+            'year': '2024',
+            'make': 'Honda',
+            'model': 'Civic',
+            'trim': 'LX',
+            'price': '$25,999',
+            'msrp': '$27,500',
+            'ext_color': 'Blue',
+            'body_style': 'Sedan',
+            'fuel_type': 'Gasoline',
+            'status': 'In Stock',
+            'date_in_stock': '2024-01-15',
+            'location': 'Main Lot',
+            'street_address': '123 Main St',
+            'locality': 'St Louis',
+            'region': 'MO',
+            'postal_code': '63101',
+            'vehicle_url': 'https://dealer.com/vehicle/12345'
+        };
+
+        const previewText = this.selectedFields.map(field => sampleData[field.key] || field.label).join(separator);
+
+        preview.innerHTML = `<span class="preview-sample">${previewText}</span>`;
+    }
+
+    createCombinedField() {
+        const fieldName = document.getElementById('combinedFieldName').value.trim();
+        const fieldKey = document.getElementById('combinedFieldKey').value.trim();
+        const separator = document.getElementById('fieldSeparator').value;
+
+        // Validation
+        if (!fieldName) {
+            alert('Please enter a field name');
+            return;
+        }
+
+        if (!fieldKey) {
+            alert('Please enter a field key');
+            return;
+        }
+
+        if (this.selectedFields.length < 2) {
+            alert('Please select at least 2 fields to combine');
+            return;
+        }
+
+        // Check if field key already exists
+        const existingField = document.querySelector(`[data-field="${fieldKey}"]`);
+        if (existingField) {
+            alert('A field with this key already exists. Please choose a different name.');
+            return;
+        }
+
+        // Create the new combined field
+        const newFieldHtml = `
+            <div class="field-item combined custom-combined" data-field="${fieldKey}" draggable="true">
+                <i class="fas fa-compress-alt"></i>
+                <span>${fieldName}</span>
+                <button class="remove-combined-field" onclick="templateBuilder.removeCombinedField('${fieldKey}')" title="Remove custom field">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+
+        // Add to the combined fields grid
+        const combinedGrid = document.getElementById('combinedFieldsGrid');
+        combinedGrid.insertAdjacentHTML('beforeend', newFieldHtml);
+
+        // Store the combination definition for later use
+        if (!this.customCombinedFields) {
+            this.customCombinedFields = {};
+        }
+
+        this.customCombinedFields[fieldKey] = {
+            name: fieldName,
+            fields: this.selectedFields.map(f => f.key),
+            separator: separator,
+            label: fieldName
+        };
+
+        // Re-setup drag handlers for the new field
+        this.setupFieldDragHandlers();
+
+        // Close modal
+        this.closeConcatenationModal();
+
+        console.log('[TEMPLATE BUILDER] Created combined field:', fieldKey, this.customCombinedFields[fieldKey]);
+    }
+
+    removeCombinedField(fieldKey) {
+        if (confirm('Are you sure you want to remove this combined field?')) {
+            // Remove from DOM
+            const fieldElement = document.querySelector(`[data-field="${fieldKey}"]`);
+            if (fieldElement) {
+                fieldElement.remove();
+            }
+
+            // Remove from storage
+            if (this.customCombinedFields && this.customCombinedFields[fieldKey]) {
+                delete this.customCombinedFields[fieldKey];
+            }
+
+            // Remove from current template if it exists there
+            this.currentTemplate.fields.columns = this.currentTemplate.fields.columns.filter(
+                col => col.key !== fieldKey
+            );
+
+            // Update template display
+            this.renderTemplateColumns();
+            this.updatePreview();
+        }
+    }
 }
 
 // Initialize when page loads
 let templateBuilder;
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Always create template builder instance for global access
+    console.log('[TEMPLATE BUILDER] Initializing global instance...');
+    templateBuilder = new TemplateBuilder();
+
+    // Assign to global scope immediately
+    window.templateBuilder = templateBuilder;
+    console.log('[TEMPLATE BUILDER] Global assignment complete:', !!window.templateBuilder);
+
     // Debug: Check if template builder panel exists
     const panel = document.getElementById('template-builder-panel');
     console.log('[TEMPLATE BUILDER DEBUG] Panel found:', !!panel);
     if (panel) {
         console.log('[TEMPLATE BUILDER DEBUG] Panel classes:', panel.className);
         console.log('[TEMPLATE BUILDER DEBUG] Panel display style:', getComputedStyle(panel).display);
-        templateBuilder = new TemplateBuilder();
+
+        // Check if the create button exists at this time
+        const createBtn = document.getElementById('createCombinedFieldBtn');
+        console.log('[TEMPLATE BUILDER DEBUG] createCombinedFieldBtn found at DOM ready:', !!createBtn);
     }
 
     // Add debugging for tab clicks
@@ -648,5 +1323,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Export for global access
-window.templateBuilder = templateBuilder;
+// Global fallback event handler for the plus button
+window.openFieldConcatenationModal = function() {
+    console.log('[GLOBAL] openFieldConcatenationModal called');
+    if (window.templateBuilder && window.templateBuilder.openFieldConcatenationModal) {
+        window.templateBuilder.openFieldConcatenationModal();
+    } else {
+        console.error('[GLOBAL] templateBuilder not available');
+        alert('Template builder not initialized. Please refresh the page and try again.');
+    }
+};
+
+// Also add a direct click handler using event delegation
+document.addEventListener('click', function(e) {
+    if (e.target && e.target.id === 'createCombinedFieldBtn') {
+        console.log('[DELEGATION] createCombinedFieldBtn clicked via event delegation');
+        e.preventDefault();
+        window.openFieldConcatenationModal();
+    }
+});
