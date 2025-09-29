@@ -426,7 +426,7 @@ class CorrectOrderProcessor:
                     allowed_conditions.append('cpo')
                 elif vtype in ['po', 'pre-owned']:
                     allowed_conditions.append('po')
-            
+
             if allowed_conditions:
                 # Remove duplicates
                 allowed_conditions = list(set(allowed_conditions))
@@ -434,7 +434,20 @@ class CorrectOrderProcessor:
                 placeholders = ', '.join(['%s'] * len(allowed_conditions))
                 query += f" AND nvd.vehicle_condition IN ({placeholders})"
                 params.extend(allowed_conditions)
-        
+
+        # Apply exclude_conditions filter (exclude specific vehicle conditions)
+        exclude_conditions = filtering_rules.get('exclude_conditions')
+        if exclude_conditions:
+            if isinstance(exclude_conditions, list):
+                for condition in exclude_conditions:
+                    query += " AND nvd.vehicle_condition != %s"
+                    params.append(condition)
+                logger.info(f"[EXCLUDE CONDITIONS FILTER] Applying exclude conditions filter for {dealership_name}: {exclude_conditions}")
+            else:
+                query += " AND nvd.vehicle_condition != %s"
+                params.append(exclude_conditions)
+                logger.info(f"[EXCLUDE CONDITIONS FILTER] Applying exclude conditions filter for {dealership_name}: {exclude_conditions}")
+
         # Apply year filter
         min_year = filtering_rules.get('min_year')
         if min_year:
@@ -471,14 +484,31 @@ class CorrectOrderProcessor:
             query += " AND nvd.stock IS NOT NULL AND nvd.stock != %s AND nvd.stock != %s"
             params.extend(['', '*'])
             
-        # Apply price filter - Enhanced to exclude placeholder values
+        # Apply price filter - Exclude blank and placeholder price values
         if filtering_rules.get('exclude_missing_price', False):
-            # Enhanced price filtering: exclude NULL, 0, negative values, and common placeholders
-            query += " AND nvd.price IS NOT NULL AND nvd.price > 0"
-            # Also check raw price data for placeholder values that might have been normalized incorrectly
-            query += " AND rvd.price IS NOT NULL AND rvd.price NOT IN ('*', '', 'Call', 'TBD', 'N/A', '0', '$0')"
-            query += " AND rvd.price NOT LIKE '%*%' AND rvd.price NOT LIKE '%Call%'"
-        
+            logger.info(f"[PRICE FILTER] Applying missing price filter for {dealership_name}")
+            # Simple price filtering: exclude only blank fields and common placeholders
+            query += " AND rvd.price IS NOT NULL AND rvd.price NOT IN ('*', '', 'Call', 'TBD', 'N/A', 'call', 'tbd', 'n/a')"
+            query += " AND TRIM(rvd.price) != '' AND TRIM(rvd.price) != '*'"
+            logger.info(f"[PRICE FILTER] Filter conditions added to query")
+
+        # Apply brand filter (required_brands)
+        required_brands = filtering_rules.get('required_brands')
+        if required_brands:
+            if isinstance(required_brands, list):
+                if len(required_brands) == 1:
+                    query += " AND nvd.make = %s"
+                    params.append(required_brands[0])
+                else:
+                    placeholders = ', '.join(['%s'] * len(required_brands))
+                    query += f" AND nvd.make IN ({placeholders})"
+                    params.extend(required_brands)
+                logger.info(f"[BRAND FILTER] Applying brand filter for {dealership_name}: {required_brands}")
+            else:
+                query += " AND nvd.make = %s"
+                params.append(required_brands)
+                logger.info(f"[BRAND FILTER] Applying brand filter for {dealership_name}: {required_brands}")
+
         query += " ORDER BY created_at DESC"
         
         logger.info(f"[CAO DEBUG] Final Query: {query}")
@@ -490,31 +520,105 @@ class CorrectOrderProcessor:
             logger.info(f"[CAO DEBUG] Final query params as tuple: {query_params}")
             result = db_manager.execute_query(query, query_params)
             logger.info(f"[CAO DEBUG] Query returned {len(result)} vehicles for {dealership_name}")
-            
+
             if result:
                 logger.info(f"[CAO DEBUG] Sample VINs from query: {[v['vin'] for v in result[:5]]}")
+
+                # Special logging for Glendale CDJR to diagnose price filter issue
+                if dealership_name == "Glendale CDJR" and filtering_rules.get('exclude_missing_price', False):
+                    logger.info(f"[GLENDALE DEBUG] Checking prices for returned vehicles...")
+                    for v in result[:10]:  # Check first 10 vehicles
+                        logger.info(f"[GLENDALE DEBUG] VIN: {v.get('vin')} | Price: {v.get('price')} | Raw Status: {v.get('raw_status', 'N/A')}")
             
             return result
         except Exception as e:
             logger.error(f"Database query failed: {e}")
             logger.error("Attempting simplified query without problematic constraints...")
-            # Try a simplified query without filtering if the main query fails
+            # Try a simplified query without complex filtering if the main query fails
             # CRITICAL: Still only process vehicles from ACTIVE import that are on the lot
             # Use normalized_vehicle_data for consistent data structure
-            # IMPORTANT: Include VIN log comparison even in simplified query
+            # IMPORTANT: Include VIN log comparison and basic filtering even in simplified query
             vin_log_table = self._get_dealership_vin_log_table(dealership_name)
+
+            # Build simplified query with basic filtering
             simplified_query = f"""
                 SELECT nvd.*, rvd.status as raw_status FROM normalized_vehicle_data nvd
                 JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
                 JOIN scraper_imports si ON rvd.import_id = si.import_id
-                WHERE nvd.location = %s 
+                WHERE nvd.location = %s
                 AND nvd.on_lot_status IN ('onlot', 'on lot')
                 AND si.status = 'active'
                 AND nvd.vin NOT IN (SELECT vin FROM {vin_log_table} WHERE vin IS NOT NULL)
-                ORDER BY nvd.updated_at DESC
             """
+
+            simplified_params = [actual_location_name]
+
+            # Apply vehicle type filtering in simplified query
+            vehicle_types = filtering_rules.get('vehicle_types', ['used'])
+            if vehicle_types and vehicle_types != ['all']:
+                type_conditions = []
+                for vtype in vehicle_types:
+                    if vtype == 'used':
+                        type_conditions.extend(['used', 'po', 'cpo', 'certified', 'pre-owned'])
+                    elif vtype == 'new':
+                        type_conditions.append('new')
+                    else:
+                        type_conditions.append(vtype)
+
+                if type_conditions:
+                    placeholders = ', '.join(['%s'] * len(type_conditions))
+                    simplified_query += f" AND nvd.vehicle_condition IN ({placeholders})"
+                    simplified_params.extend(type_conditions)
+
+            # Apply stock number filter in simplified query
+            if filtering_rules.get('exclude_missing_stock', True):
+                simplified_query += " AND nvd.stock IS NOT NULL AND nvd.stock != %s AND nvd.stock != %s"
+                simplified_params.extend(['', '*'])
+
+            # Apply exclude_conditions filter in simplified query
+            exclude_conditions = filtering_rules.get('exclude_conditions')
+            if exclude_conditions:
+                if isinstance(exclude_conditions, list):
+                    for condition in exclude_conditions:
+                        simplified_query += " AND nvd.vehicle_condition != %s"
+                        simplified_params.append(condition)
+                    logger.info(f"[FALLBACK EXCLUDE CONDITIONS FILTER] Applying exclude conditions filter for {dealership_name}: {exclude_conditions}")
+                else:
+                    simplified_query += " AND nvd.vehicle_condition != %s"
+                    simplified_params.append(exclude_conditions)
+                    logger.info(f"[FALLBACK EXCLUDE CONDITIONS FILTER] Applying exclude conditions filter for {dealership_name}: {exclude_conditions}")
+
+            # Apply price filter in simplified query - Exclude blank and placeholder price values
+            if filtering_rules.get('exclude_missing_price', False):
+                logger.info(f"[FALLBACK PRICE FILTER] Applying missing price filter for {dealership_name}")
+                simplified_query += " AND rvd.price IS NOT NULL AND rvd.price NOT IN ('*', '', 'Call', 'TBD', 'N/A', 'call', 'tbd', 'n/a')"
+                simplified_query += " AND TRIM(rvd.price) != '' AND TRIM(rvd.price) != '*'"
+                logger.info(f"[FALLBACK PRICE FILTER] Filter conditions added to simplified query")
+
+            # Apply brand filter in simplified query
+            required_brands = filtering_rules.get('required_brands')
+            if required_brands:
+                if isinstance(required_brands, list):
+                    if len(required_brands) == 1:
+                        simplified_query += " AND nvd.make = %s"
+                        simplified_params.append(required_brands[0])
+                    else:
+                        placeholders = ', '.join(['%s'] * len(required_brands))
+                        simplified_query += f" AND nvd.make IN ({placeholders})"
+                        simplified_params.extend(required_brands)
+                    logger.info(f"[FALLBACK BRAND FILTER] Applying brand filter for {dealership_name}: {required_brands}")
+                else:
+                    simplified_query += " AND nvd.make = %s"
+                    simplified_params.append(required_brands)
+                    logger.info(f"[FALLBACK BRAND FILTER] Applying brand filter for {dealership_name}: {required_brands}")
+
+            simplified_query += " ORDER BY nvd.updated_at DESC"
+
+            logger.info(f"[FALLBACK DEBUG] Simplified query: {simplified_query}")
+            logger.info(f"[FALLBACK DEBUG] Simplified params: {simplified_params}")
+
             try:
-                result = db_manager.execute_query(simplified_query, (actual_location_name,))
+                result = db_manager.execute_query(simplified_query, tuple(simplified_params))
                 logger.info(f"Simplified query returned {len(result)} vehicles")
                 return result
             except Exception as e2:

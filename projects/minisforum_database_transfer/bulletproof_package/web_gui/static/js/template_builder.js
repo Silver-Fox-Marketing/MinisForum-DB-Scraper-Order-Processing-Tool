@@ -15,8 +15,12 @@ class TemplateBuilder {
         this.draggedField = null;
         this.templates = [];
         this.dealerships = [];
+        this.customCombinedFields = {};
+        this.selectedFields = [];
 
         this.init();
+        // Load custom fields from localStorage after initialization
+        setTimeout(() => this.loadCustomFieldsFromStorage(), 100);
     }
 
     init() {
@@ -173,15 +177,25 @@ class TemplateBuilder {
     addFieldToTemplate(fieldData) {
         console.log('[TEMPLATE BUILDER] Adding field to template:', fieldData);
 
+        // Check if this is a custom combined field
+        const isCustomCombined = this.customCombinedFields && this.customCombinedFields[fieldData.key];
+
         // Add to current template
         const fieldConfig = {
             key: fieldData.key,
-            label: fieldData.label,
-            type: fieldData.type,
+            label: fieldData.label || (isCustomCombined ? this.customCombinedFields[fieldData.key].label : fieldData.key),
+            type: fieldData.type || (isCustomCombined ? 'combined' : 'text'),
             source: fieldData.key,
             width: this.getDefaultWidth(fieldData.key),
             order: this.currentTemplate.fields.columns.length + 1
         };
+
+        // If it's a custom combined field, add the combination definition
+        if (isCustomCombined) {
+            fieldConfig.isCombined = true;
+            fieldConfig.combinedFields = this.customCombinedFields[fieldData.key].fields;
+            fieldConfig.separator = this.customCombinedFields[fieldData.key].separator;
+        }
 
         // Handle special calculated fields that need additional configuration
         if (fieldData.key === 'price_with_markup') {
@@ -339,22 +353,28 @@ class TemplateBuilder {
             return;
         }
 
-        if (this.currentTemplate.fields.columns.length === 0) {
+        if (!this.currentTemplate.fields || !this.currentTemplate.fields.columns || this.currentTemplate.fields.columns.length === 0) {
             alert('Please add at least one field to the template');
             return;
         }
+
+        // Include custom combined fields in the template data
+        const templateData = {
+            name: this.currentTemplate.name,
+            description: this.currentTemplate.description,
+            type: this.currentTemplate.type,
+            fields: this.currentTemplate.fields,
+            customCombinedFields: this.customCombinedFields || {}
+        };
+
+        console.log('[TEMPLATE SAVE] Saving template with data:', templateData);
 
         try {
             // Always create new template (save as new)
             const response = await fetch('/api/templates/save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: this.currentTemplate.name,
-                    description: this.currentTemplate.description,
-                    type: this.currentTemplate.type,
-                    fields: this.currentTemplate.fields
-                })
+                body: JSON.stringify(templateData)
             });
 
             const result = await response.json();
@@ -490,6 +510,15 @@ class TemplateBuilder {
                     type: result.template.template_type,
                     fields: result.template.fields || { columns: [] }
                 };
+
+                // Load custom combined fields if present in the template
+                if (result.template.fields && result.template.fields.customCombinedFields) {
+                    this.customCombinedFields = result.template.fields.customCombinedFields;
+                    // Also save to localStorage for persistence
+                    this.saveCustomFieldsToStorage();
+                    // Render the custom fields in the UI
+                    this.renderStoredCustomFields();
+                }
 
                 // Update form
                 document.getElementById('templateName').value = this.currentTemplate.name;
@@ -1245,8 +1274,12 @@ class TemplateBuilder {
             name: fieldName,
             fields: this.selectedFields.map(f => f.key),
             separator: separator,
-            label: fieldName
+            label: fieldName,
+            icon: 'fas fa-compress-alt'
         };
+
+        // Save to localStorage for persistence
+        this.saveCustomFieldsToStorage();
 
         // Re-setup drag handlers for the new field
         this.setupFieldDragHandlers();
@@ -1255,6 +1288,55 @@ class TemplateBuilder {
         this.closeConcatenationModal();
 
         console.log('[TEMPLATE BUILDER] Created combined field:', fieldKey, this.customCombinedFields[fieldKey]);
+    }
+
+    saveCustomFieldsToStorage() {
+        if (this.customCombinedFields) {
+            localStorage.setItem('templateBuilderCustomFields', JSON.stringify(this.customCombinedFields));
+        }
+    }
+
+    loadCustomFieldsFromStorage() {
+        const stored = localStorage.getItem('templateBuilderCustomFields');
+        if (stored) {
+            try {
+                this.customCombinedFields = JSON.parse(stored);
+                // Re-render custom fields in the UI
+                this.renderStoredCustomFields();
+            } catch (e) {
+                console.error('[TEMPLATE BUILDER] Error loading custom fields:', e);
+                this.customCombinedFields = {};
+            }
+        }
+    }
+
+    renderStoredCustomFields() {
+        if (!this.customCombinedFields || Object.keys(this.customCombinedFields).length === 0) {
+            return;
+        }
+
+        const combinedGrid = document.getElementById('combinedFieldsGrid');
+        if (!combinedGrid) return;
+
+        Object.entries(this.customCombinedFields).forEach(([fieldKey, fieldData]) => {
+            // Check if field already exists in DOM
+            const existingField = document.querySelector(`[data-field="${fieldKey}"]`);
+            if (!existingField) {
+                const newFieldHtml = `
+                    <div class="field-item combined custom-combined" data-field="${fieldKey}" draggable="true">
+                        <i class="fas fa-compress-alt"></i>
+                        <span>${fieldData.name || fieldData.label}</span>
+                        <button class="remove-combined-field" onclick="templateBuilder.removeCombinedField('${fieldKey}')" title="Remove custom field">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+                combinedGrid.insertAdjacentHTML('beforeend', newFieldHtml);
+            }
+        });
+
+        // Re-setup drag handlers for the restored fields
+        this.setupFieldDragHandlers();
     }
 
     removeCombinedField(fieldKey) {
@@ -1268,6 +1350,8 @@ class TemplateBuilder {
             // Remove from storage
             if (this.customCombinedFields && this.customCombinedFields[fieldKey]) {
                 delete this.customCombinedFields[fieldKey];
+                // Update localStorage
+                this.saveCustomFieldsToStorage();
             }
 
             // Remove from current template if it exists there

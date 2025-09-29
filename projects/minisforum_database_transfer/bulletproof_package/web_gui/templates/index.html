@@ -3015,7 +3015,12 @@ SF24002
                     return originalUpdatePreview.call(this, sampleData);
                 };
 
-                // Override save template function
+                // COMMENTED OUT: Override save template function - now handled properly in template_builder.js
+                // The save function in template_builder.js now properly handles:
+                // - Custom combined fields persistence
+                // - Proper validation
+                // - Correct endpoint (/api/templates/save)
+                /*
                 window.templateBuilder.saveTemplate = async function() {
                     if (!this.currentTemplate.name) {
                         alert('Please enter a template name');
@@ -3023,15 +3028,16 @@ SF24002
                     }
 
                     try {
-                        console.log('[SAVE FIX] Saving template to /api/templates...');
-                        const response = await fetch('/api/templates', {
+                        console.log('[SAVE FIX] Saving template to /api/templates/save...');
+                        const response = await fetch('/api/templates/save', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 name: this.currentTemplate.name,
                                 description: this.currentTemplate.description || '',
                                 type: this.currentTemplate.type || 'standard',
-                                fields: this.currentTemplate.fields
+                                fields: this.currentTemplate.fields,
+                                customCombinedFields: window.templateBuilder ? window.templateBuilder.customCombinedFields : {}
                             })
                         });
 
@@ -3049,6 +3055,7 @@ SF24002
                         alert('Failed to save template');
                     }
                 };
+                */
 
                 console.log('[EMERGENCY FIX] Template builder functions overridden successfully');
             }
