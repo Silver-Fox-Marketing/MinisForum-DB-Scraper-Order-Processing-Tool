@@ -27,11 +27,13 @@ print(f"DEBUG: Current file: {current_file}")
 projects_root = current_file.parent.parent.parent.parent
 print(f"DEBUG: Projects root: {projects_root}")
 
-scrapers_path = current_file.parent.parent / "scrapers"  # Point to bulletproof package scrapers
+# Point to the actual vehicle_scraper 18 system
+scrapers_path = projects_root / "shared_resources" / "vehicle_scraper 18" / "scrapers"
 print(f"DEBUG: Scrapers path: {scrapers_path}")
 print(f"DEBUG: Scrapers path exists: {scrapers_path.exists()}")
 
 sys.path.insert(0, str(scrapers_path))
+sys.path.insert(0, str(scrapers_path.parent))  # Add parent for main.py access
 
 from database_connection import db_manager
 from realtime_scraper_progress import ScraperProgressReporter
@@ -50,49 +52,48 @@ class RealScraperIntegration:
         print(f"DEBUG: Scrapers path in class: {self.scrapers_path}")
         print(f"DEBUG: Scrapers path exists in class: {self.scrapers_path.exists()}")
         
-                # Map dealership names to their real scraper files
+                # Map dealership names to their real scraper modules (without .py)
         self.real_scraper_mapping = {
-            'Test Integration Dealer': 'test_integration_scraper.py',
-            'Audi Ranch Mirage': 'audiranchomirage.py',
-            'Auffenberg Hyundai': 'auffenberghyundai.py',
-            'BMW of West St. Louis': 'bmwofweststlouis.py',
-            'Bommarito Cadillac': 'bommaritocadillac.py',
-            'Bommarito West County PO': 'bommaritowestcounty.py',
-            'Columbia BMW': 'columbiabmw.py',
-            'Columbia Honda': 'columbiahonda.py',
-            'Dave Sinclair Lincoln South': 'davesinclairlincolnsouth.py',
-            'Dave Sinclair Lincoln St. Peters': 'davesinclairlincolnstpeters.py',
-            'Frank Leta Honda': 'frankletahonda.py',
-            'Glendale Chrysler Jeep': 'glendalechryslerjeep.py',
-            'Honda of Frontenac': 'hondafrontenac.py',
-            'H&W Kia': 'hwkia.py',
-            'Indigo Auto Group': 'indigoautogroup.py',
-            'Jaguar Ranch Mirage': 'jaguarranchomirage.py',
-            'CDJR of Columbia': 'joemachenscdjr.py',
-            'Joe Machens Hyundai': 'joemachenshyundai.py',
-            'Joe Machens Nissan': 'joemachensnissan.py',
-            'Joe Machens Toyota': 'joemachenstoyota.py',
-            'Kia of Columbia': 'kiaofcolumbia.py',
-            'Land Rover Ranch Mirage': 'landroverranchomirage.py',
-            'Mini of St. Louis': 'miniofstlouis.py',
-            'Pappas Toyota': 'pappastoyota.py',
-            'Porsche St. Louis': 'porschestlouis.py',
-            'Pundmann Ford': 'pundmannford.py',
-            'Rusty Drewing Cadillac': 'rustydrewingcadillac.py',
-            'Rusty Drewing Chevrolet Buick GMC': 'rustydrewingchevroletbuickgmc.py',
-            'Serra Honda O\'Fallon': 'serrahondaofallon.py',
-            'South County Autos': 'southcountyautos.py',
-            'Spirit Lexus': 'spiritlexus.py',
-            'Stehouwer Auto': 'stehouwerauto.py',
-            'Suntrup Buick GMC': 'suntrupbuickgmc.py',
-            'Suntrup Ford Kirkwood': 'suntrupfordkirkwood.py',
-            'Suntrup Ford West': 'suntrupfordwest.py',
-            'Suntrup Hyundai South': 'suntruphyundaisouth.py',
-            'Suntrup Kia South': 'suntrupkiasouth.py',
-            'Thoroughbred Ford': 'thoroughbredford.py',
-            'Twin City Toyota': 'twincitytoyota.py',
-            'Volvo Cars West County': 'wcvolvocars.py',
-            'Weber Chevrolet': 'weberchev.py'
+            'Audi Ranch Mirage': 'audiranchomirage',
+            'Auffenberg Hyundai': 'auffenberghyundai',
+            'BMW of West St. Louis': 'bmwofweststlouis',
+            'Bommarito Cadillac': 'bommaritocadillac',
+            'Bommarito West County PO': 'bommaritowestcounty',
+            'Columbia BMW': 'columbiabmw',
+            'Columbia Honda': 'columbiahonda',
+            'Dave Sinclair Lincoln South': 'davesinclairlincolnsouth',
+            'Dave Sinclair Lincoln St. Peters': 'davesinclairlincolnstpeters',
+            'Frank Leta Honda': 'frankletahonda',
+            'Glendale Chrysler Jeep': 'glendalechryslerjeep',
+            'Honda of Frontenac': 'hondafrontenac',
+            'H&W Kia': 'hwkia',
+            'Indigo Auto Group': 'indigoautogroup',
+            'Jaguar Ranch Mirage': 'jaguarranchomirage',
+            'CDJR of Columbia': 'joemachenscdjr',
+            'Joe Machens Hyundai': 'joemachenshyundai',
+            'Joe Machens Nissan': 'joemachensnissan',
+            'Joe Machens Toyota': 'joemachenstoyota',
+            'Kia of Columbia': 'kiaofcolumbia',
+            'Land Rover Ranch Mirage': 'landroverranchomirage',
+            'Mini of St. Louis': 'miniofstlouis',
+            'Pappas Toyota': 'pappastoyota',
+            'Porsche St. Louis': 'porschestlouis',
+            'Pundmann Ford': 'pundmannford',
+            'Rusty Drewing Cadillac': 'rustydrewingcadillac',
+            'Rusty Drewing Chevrolet Buick GMC': 'rustydrewingchevroletbuickgmc',
+            'Serra Honda O\'Fallon': 'serrahondaofallon',
+            'South County Autos': 'southcountyautos',
+            'Spirit Lexus': 'spiritlexus',
+            'Stehouwer Auto': 'stehouwerauto',
+            'Suntrup Buick GMC': 'suntrupbuickgmc',
+            'Suntrup Ford Kirkwood': 'suntrupfordkirkwood',
+            'Suntrup Ford West': 'suntrupfordwest',
+            'Suntrup Hyundai South': 'suntruphyundaisouth',
+            'Suntrup Kia South': 'suntrupkiasouth',
+            'Thoroughbred Ford': 'thoroughbredford',
+            'Twin City Toyota': 'twincitytoyota',
+            'Volvo Cars West County': 'wcvolvocars',
+            'Weber Chevrolet': 'weberchev'
         }
         
                 # Expected vehicle counts for progress estimation

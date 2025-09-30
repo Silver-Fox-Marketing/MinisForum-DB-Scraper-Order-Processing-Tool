@@ -12178,3 +12178,185 @@ body:has(#dealership-settings-panel.active) .sidebar-navigation,
 [data-theme="dark"] .switch input:checked + .slider {
     background-color: #ff6b35;
 }
+
+/* Template Builder Styles */
+.template-builder-container {
+    display: flex;
+    gap: 1.5rem;
+    height: calc(100vh - 200px);
+    margin-top: 1rem;
+}
+
+.template-sidebar {
+    width: 300px;
+    background: var(--surface-color);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    overflow-y: auto;
+}
+
+.template-section {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.template-section:last-child {
+    border-bottom: none;
+}
+
+.template-section h3 {
+    margin: 0 0 1rem 0;
+    color: var(--text-color);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.template-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.template-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem;
+    background: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.template-item:hover {
+    border-color: var(--primary-color);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(255, 107, 53, 0.15);
+}
+
+.template-info {
+    flex-grow: 1;
+}
+
+.template-name {
+    font-weight: 500;
+    color: var(--text-color);
+    margin-bottom: 0.25rem;
+}
+
+.template-details {
+    font-size: 0.8rem;
+    color: var(--muted-color);
+}
+
+.template-actions {
+    display: flex;
+    gap: 0.25rem;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.template-item:hover .template-actions {
+    opacity: 1;
+}
+
+.btn-icon {
+    padding: 0.25rem;
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--muted-color);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.8rem;
+}
+
+.btn-icon:hover {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.btn-icon.danger:hover {
+    background: #dc3545;
+    border-color: #dc3545;
+}
+
+.template-canvas {
+    flex-grow: 1;
+    background: var(--surface-color);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.canvas-header {
+    display: flex;
+    justify-content: between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.canvas-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-color);
+    margin: 0;
+}
+
+.canvas-tools {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.canvas-content {
+    flex-grow: 1;
+    background: var(--background-color);
+    border: 2px dashed var(--border-color);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+}
+
+.empty-canvas {
+    text-align: center;
+    color: var(--muted-color);
+}
+
+.empty-canvas i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.empty-canvas h3 {
+    margin: 0 0 0.5rem 0;
+    font-weight: 500;
+}
+
+.empty-canvas p {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+/* Dark mode overrides for template builder */
+[data-theme="dark"] .template-builder-container {
+    --surface-color: #2a2a2a;
+    --background-color: #1e1e1e;
+    --border-color: #444;
+    --text-color: #e0e0e0;
+    --muted-color: #888;
+    --primary-color: #ff6b35;
+}

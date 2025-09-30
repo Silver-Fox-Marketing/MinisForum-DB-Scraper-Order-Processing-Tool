@@ -6598,31 +6598,61 @@ def templates_save():
         data = request.get_json()
         logger.info(f"Template save request received: {data}")
 
-        # Map the data structure to what create_template expects
-        mapped_data = {
-            'template_name': data.get('name'),  # Map 'name' to 'template_name'
-            'description': data.get('description', ''),
-            'template_type': data.get('type', 'standard'),
-            'fields': data.get('fields', {}),
-            'created_by': 'user'
-        }
+        # Extract custom combined fields if present
+        custom_combined_fields = data.get('customCombinedFields', {})
 
-        logger.info(f"Mapped data for create_template: {mapped_data}")
+        # Get the fields object, ensuring it has the columns key
+        fields = data.get('fields', {})
+        if not fields:
+            fields = {}
+        if 'columns' not in fields:
+            fields['columns'] = []
 
-        # Temporarily replace request data
-        from flask import g
-        original_json = request.get_json
-        request.get_json = lambda: mapped_data
+        # Store custom combined fields in the fields object for persistence
+        if custom_combined_fields:
+            fields['customCombinedFields'] = custom_combined_fields
 
-        try:
-            result = create_template()
-            return result
-        finally:
-            # Restore original request
-            request.get_json = original_json
+        # Validate required fields
+        template_name = data.get('name')
+        if not template_name or not template_name.strip():
+            logger.error("Template name is missing or empty")
+            return jsonify({'error': 'Template name is required'}), 400
+
+        if not fields or (not fields.get('columns') and not fields.get('customCombinedFields')):
+            logger.error("Template fields are missing or empty")
+            return jsonify({'error': 'Template must have at least one field'}), 400
+
+        # Direct database insertion instead of calling create_template
+        import json
+
+        logger.info(f"Saving template: name={template_name}, fields={fields}")
+
+        result = db_manager.execute_query("""
+            INSERT INTO template_configs
+            (template_name, description, template_type, fields, created_by)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            template_name,
+            data.get('description', ''),
+            data.get('type', 'standard'),
+            json.dumps(fields),
+            'user'
+        ))
+
+        if result and len(result) > 0:
+            logger.info(f"Template saved successfully with ID: {result[0]['id']}")
+            return jsonify({
+                'success': True,
+                'template_id': result[0]['id'],
+                'message': 'Template created successfully'
+            })
+        else:
+            logger.error("Failed to save template - no ID returned")
+            return jsonify({'error': 'Failed to save template'}), 500
 
     except Exception as e:
-        logger.error(f"Error in templates_save: {e}")
+        logger.error(f"Error in templates_save: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/custom-templates/test/<dealership_name>', methods=['POST'])

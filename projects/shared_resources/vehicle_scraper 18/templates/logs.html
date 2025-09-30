@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+
+{% block title %}{{ scraper_name|title }} - Logs{% endblock %}
+
+{% block extra_head %}
+<style>
+    .log-container {
+        background: #1e1e1e;
+        color: #d4d4d4;
+        border-radius: 8px;
+        padding: 1.5rem;
+        font-family: 'Courier New', Monaco, monospace;
+        font-size: 14px;
+        line-height: 1.4;
+        max-height: 500px;
+        overflow-y: auto;
+        border: 2px solid #333;
+    }
+
+    .log-entry {
+        margin-bottom: 0.5rem;
+        padding: 0.25rem 0;
+        border-bottom: 1px solid #333;
+    }
+
+    .log-entry:last-child {
+        border-bottom: none;
+    }
+
+    .log-timestamp {
+        color: #569cd6;
+        font-weight: bold;
+    }
+
+    .log-message {
+        color: #d4d4d4;
+        white-space: pre-wrap;
+    }
+
+    .log-message.error {
+        color: #f14c4c;
+    }
+
+    .log-message.success {
+        color: #4ec9b0;
+    }
+
+    .log-message.warning {
+        color: #dcdcaa;
+    }
+
+    .status-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1rem;
+        padding: 1rem;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    .status-info {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .controls {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .auto-scroll-toggle {
+        margin-right: 1rem;
+    }
+
+    .empty-logs {
+        text-align: center;
+        color: #888;
+        font-style: italic;
+        padding: 2rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>📜 {{ scraper_name|title|replace('joemachens', 'Joe Machens')|replace('suntrup', 'Suntrup') }} - Live Logs</h2>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+        <div class="status-info">
+            <span class="status-indicator status-{{ status }}"></span>
+            <strong>Status: {{ status.title() }}</strong>
+            <span id="logCount">{{ logs|length }} log entries</span>
+        </div>
+        <div class="controls">
+            <label class="auto-scroll-toggle">
+                <input type="checkbox" id="autoScroll" checked> Auto-scroll
+            </label>
+            <button class="btn btn-secondary" onclick="refreshLogs()">🔄 Refresh</button>
+            {% if status == 'running' %}
+            <button class="btn btn-danger" onclick="stopScraper()">⏹ Stop</button>
+            {% endif %}
+            <button class="btn" onclick="downloadLogs()">💾 Download</button>
+        </div>
+    </div>
+
+    <!-- Logs Container -->
+    <div class="log-container" id="logContainer">
+        {% if logs %}
+            {% for log in logs %}
+            <div class="log-entry">
+                <span class="log-timestamp">[{{ log.timestamp }}]</span>
+                <div class="log-message {{ 'error' if 'error' in log.message.lower() else ('success' if 'success' in log.message.lower() else ('warning' if 'warning' in log.message.lower() else '')) }}">{{ log.message }}</div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-logs">
+                No logs available yet. The scraper may still be starting up.
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<div style="text-align: center; margin: 2rem 0;">
+    <a href="/results" class="btn btn-secondary">← Back to Results</a>
+    <a href="/" class="btn">🏠 Home</a>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let autoScroll = true;
+let lastLogCount = {{ logs|length }};
+
+function refreshLogs() {
+    fetch(`/status/{{ scraper_name }}`)
+        .then(response => response.json())
+        .then(data => {
+            updateLogs(data.logs, data.status);
+        })
+        .catch(error => {
+            console.error('Error fetching logs:', error);
+        });
+}
+
+function updateLogs(logs, status) {
+    const container = document.getElementById('logContainer');
+    const logCountSpan = document.getElementById('logCount');
+
+    if (logs && logs.length > 0) {
+        // Clear existing logs
+        container.innerHTML = '';
+
+        // Add new logs
+        logs.forEach(log => {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+
+            const messageClass = log.message.toLowerCase().includes('error') ? 'error' :
+                               log.message.toLowerCase().includes('success') ? 'success' :
+                               log.message.toLowerCase().includes('warning') ? 'warning' : '';
+
+            entry.innerHTML = `
+                <span class="log-timestamp">[${log.timestamp}]</span>
+                <div class="log-message ${messageClass}">${log.message}</div>
+            `;
+            container.appendChild(entry);
+        });
+
+        // Update log count
+        logCountSpan.textContent = `${logs.length} log entries`;
+        lastLogCount = logs.length;
+
+        // Auto-scroll to bottom if enabled
+        if (autoScroll) {
+            container.scrollTop = container.scrollHeight;
+        }
+    }
+
+    // Update status indicator
+    const statusIndicator = document.querySelector('.status-indicator');
+    if (statusIndicator) {
+        statusIndicator.className = `status-indicator status-${status}`;
+    }
+
+    // Update status text
+    const statusText = document.querySelector('.status-info strong');
+    if (statusText) {
+        statusText.textContent = `Status: ${status.charAt(0).toUpperCase() + status.slice(1)}`;
+    }
+}
+
+function stopScraper() {
+    if (confirm('Are you sure you want to stop this scraper?')) {
+        fetch(`/stop/{{ scraper_name }}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.message);
+            if (data.success) {
+                location.reload();
+            }
+        })
+        .catch(error => {
+            console.error('Error stopping scraper:', error);
+            alert('Failed to stop scraper');
+        });
+    }
+}
+
+function downloadLogs() {
+    const container = document.getElementById('logContainer');
+    const logs = container.innerText;
+
+    const blob = new Blob([logs], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `{{ scraper_name }}_logs_${new Date().toISOString().slice(0,16).replace('T', '_').replace(/:/g, '-')}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+}
+
+// Auto-scroll toggle
+document.getElementById('autoScroll').addEventListener('change', function() {
+    autoScroll = this.checked;
+});
+
+// Auto-refresh every 3 seconds for running scrapers
+{% if status == 'running' %}
+setInterval(refreshLogs, 3000);
+{% endif %}
+
+// Initial scroll to bottom
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('logContainer');
+    container.scrollTop = container.scrollHeight;
+});
+</script>
+{% endblock %}

@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<style>
+    .scraper-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .scraper-item {
+        background: white;
+        border: 2px solid #ecf0f1;
+        border-radius: 8px;
+        padding: 1rem;
+        transition: all 0.3s ease;
+    }
+
+    .scraper-item:hover {
+        border-color: #3498db;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    .scraper-item.selected {
+        border-color: #27ae60;
+        background-color: #f8fff9;
+    }
+
+    .scraper-checkbox {
+        margin-right: 10px;
+        transform: scale(1.2);
+    }
+
+    .scraper-name {
+        font-weight: bold;
+        color: #2c3e50;
+        margin-bottom: 0.5rem;
+    }
+
+    .scraper-status {
+        font-size: 0.9rem;
+        color: #7f8c8d;
+    }
+
+    .selection-controls {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 2rem;
+        flex-wrap: wrap;
+    }
+
+    .selection-controls button {
+        padding: 8px 16px;
+        font-size: 14px;
+    }
+
+    .run-button {
+        position: sticky;
+        bottom: 20px;
+        z-index: 100;
+        text-align: center;
+        margin-top: 2rem;
+    }
+
+    .run-button button {
+        font-size: 16px;
+        padding: 12px 30px;
+        min-width: 200px;
+    }
+
+    .selected-count {
+        background: #e74c3c;
+        color: white;
+        border-radius: 50%;
+        padding: 2px 6px;
+        font-size: 12px;
+        margin-left: 5px;
+    }
+
+    .search-box {
+        width: 100%;
+        padding: 12px;
+        font-size: 16px;
+        border: 2px solid #bdc3c7;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+
+    .search-box:focus {
+        border-color: #3498db;
+        outline: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Select Scrapers to Run</h2>
+    <p>Choose which dealership scrapers you want to execute. Each scraper will collect vehicle inventory data from its respective dealership.</p>
+
+    <!-- Search -->
+    <input type="text" id="searchBox" class="search-box" placeholder="🔍 Search dealerships..." onkeyup="filterScrapers()">
+
+    <!-- Selection Controls -->
+    <div class="selection-controls">
+        <button type="button" class="btn btn-secondary" onclick="selectAll()">Select All</button>
+        <button type="button" class="btn btn-secondary" onclick="selectNone()">Select None</button>
+        <button type="button" class="btn btn-secondary" onclick="selectJoeMachens()">Joe Machens Only</button>
+        <button type="button" class="btn btn-secondary" onclick="selectSuntrup()">Suntrup Only</button>
+    </div>
+
+    <form method="POST" action="/run_scrapers" id="scraperForm">
+        <!-- Scrapers Grid -->
+        <div class="scraper-grid" id="scraperGrid">
+            {% for scraper in scrapers %}
+            <div class="scraper-item" data-name="{{ scraper.display_name.lower() }}">
+                <label for="scraper_{{ scraper.name }}">
+                    <input type="checkbox"
+                           name="scrapers"
+                           value="{{ scraper.name }}"
+                           id="scraper_{{ scraper.name }}"
+                           class="scraper-checkbox"
+                           onchange="updateSelection()">
+                    <div class="scraper-name">{{ scraper.display_name }}</div>
+                    <div class="scraper-status">
+                        <span class="status-indicator status-{{ scraper.status }}"></span>
+                        Status: {{ scraper.status.title() }}
+                    </div>
+                </label>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Run Button -->
+        <div class="run-button">
+            <button type="submit" class="btn btn-success" id="runButton" disabled>
+                🚀 Run Selected Scrapers <span class="selected-count" id="selectedCount">0</span>
+            </button>
+        </div>
+    </form>
+</div>
+
+{% if request.args.get('error') %}
+<div class="alert alert-error">
+    {{ request.args.get('error') }}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function updateSelection() {
+    const checkboxes = document.querySelectorAll('input[name="scrapers"]:checked');
+    const count = checkboxes.length;
+
+    document.getElementById('selectedCount').textContent = count;
+    document.getElementById('runButton').disabled = count === 0;
+
+    // Update visual selection
+    document.querySelectorAll('.scraper-item').forEach(item => {
+        const checkbox = item.querySelector('input[type="checkbox"]');
+        if (checkbox.checked) {
+            item.classList.add('selected');
+        } else {
+            item.classList.remove('selected');
+        }
+    });
+}
+
+function selectAll() {
+    document.querySelectorAll('input[name="scrapers"]:not(:disabled)').forEach(cb => {
+        cb.checked = true;
+    });
+    updateSelection();
+}
+
+function selectNone() {
+    document.querySelectorAll('input[name="scrapers"]').forEach(cb => {
+        cb.checked = false;
+    });
+    updateSelection();
+}
+
+function selectJoeMachens() {
+    selectNone();
+    document.querySelectorAll('.scraper-item').forEach(item => {
+        if (item.dataset.name.includes('joe machens')) {
+            const checkbox = item.querySelector('input[type="checkbox"]');
+            if (checkbox) checkbox.checked = true;
+        }
+    });
+    updateSelection();
+}
+
+function selectSuntrup() {
+    selectNone();
+    document.querySelectorAll('.scraper-item').forEach(item => {
+        if (item.dataset.name.includes('suntrup')) {
+            const checkbox = item.querySelector('input[type="checkbox"]');
+            if (checkbox) checkbox.checked = true;
+        }
+    });
+    updateSelection();
+}
+
+function filterScrapers() {
+    const searchTerm = document.getElementById('searchBox').value.toLowerCase();
+    document.querySelectorAll('.scraper-item').forEach(item => {
+        const name = item.dataset.name;
+        if (name.includes(searchTerm)) {
+            item.style.display = 'block';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    updateSelection();
+});
+</script>
+{% endblock %}

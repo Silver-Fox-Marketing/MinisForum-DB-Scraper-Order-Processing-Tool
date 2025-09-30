@@ -1,0 +1,28 @@
+import base64, json, requests
+
+DI_BASE = "https://www.joemachensnissan.com/api/inventory/query/"
+
+def di_encode_filter(expr: str) -> str:
+    return base64.b64encode(expr.encode("utf-8")).decode("ascii")
+
+def fetch_di_inventory(filter_expr="Type='N'", page=1, per_page=200, sort="createdAt_desc", timeout=30):
+    params = {
+        "encoded": "true",
+        "filter": di_encode_filter(filter_expr),
+        "page": str(page),
+        "perPage": str(per_page),
+        "sort": sort
+    }
+    r = requests.get(DI_BASE, params=params, timeout=timeout, headers={
+        "User-Agent": "Mozilla/5.0"
+    })
+    if not r.ok:
+        return {"error": f"HTTP {r.status_code}", "body": r.text[:500]}
+    try:
+        data = r.json()
+    except ValueError:
+        return {"error": "Non-JSON", "body": r.text[:500]}
+    # Typical DI payload has counts + array of vehicles, but be defensive.
+    vehicles = data.get("vehicles") or data.get("results") or data.get("data") or []
+    total = data.get("total") or data.get("count") or len(vehicles)
+    return {"total": total, "vehicles": vehicles, "raw": data}

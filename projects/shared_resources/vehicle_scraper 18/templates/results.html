@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<style>
+    .result-item {
+        background: white;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        border-left: 5px solid;
+    }
+
+    .result-success {
+        border-left-color: #27ae60;
+        background-color: #f8fff9;
+    }
+
+    .result-error {
+        border-left-color: #e74c3c;
+        background-color: #fff8f8;
+    }
+
+    .scraper-name {
+        font-weight: bold;
+        font-size: 1.1rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .result-message {
+        color: #5d6d7e;
+        line-height: 1.6;
+    }
+
+    .status-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+
+    .status-card {
+        background: white;
+        border-radius: 8px;
+        padding: 1rem;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    .status-header {
+        display: flex;
+        justify-content: between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .log-preview {
+        background: #f8f9fa;
+        border-radius: 4px;
+        padding: 0.5rem;
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        max-height: 100px;
+        overflow-y: auto;
+        color: #495057;
+    }
+
+    .refresh-btn {
+        margin-left: auto;
+    }
+
+    .auto-refresh {
+        color: #28a745;
+        font-size: 12px;
+        margin-left: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>🚀 Scraper Execution Results</h2>
+    <p>Results from running the selected scrapers. Check the status and logs for each scraper below.</p>
+
+    <div class="grid">
+        {% for result in results %}
+        <div class="result-item {{ 'result-success' if result.success else 'result-error' }}">
+            <div class="scraper-name">
+                <span class="status-indicator status-{{ 'running' if result.success else 'failed' }}"></span>
+                {{ result.scraper|title|replace('joemachens', 'Joe Machens')|replace('suntrup', 'Suntrup') }}
+            </div>
+            <div class="result-message">{{ result.message }}</div>
+            {% if result.success %}
+            <div style="margin-top: 1rem;">
+                <a href="/logs/{{ result.scraper }}" class="btn">View Live Logs</a>
+                <button class="btn btn-secondary" onclick="refreshStatus('{{ result.scraper }}')">Refresh Status</button>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Live Status Monitoring -->
+<div class="card">
+    <h3>📊 Live Status Monitoring <span class="auto-refresh">🔄 Auto-refreshing every 5 seconds</span></h3>
+    <div class="status-grid" id="statusGrid">
+        {% for result in results %}
+        {% if result.success %}
+        <div class="status-card" id="status-{{ result.scraper }}">
+            <div class="status-header">
+                <strong>{{ result.scraper|title }}</strong>
+                <span class="status-indicator status-running"></span>
+            </div>
+            <div class="log-preview" id="logs-{{ result.scraper }}">
+                Loading logs...
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+<div style="text-align: center; margin: 2rem 0;">
+    <a href="/" class="btn">← Back to Scraper Selection</a>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let runningScrapers = [
+    {% for result in results %}
+    {% if result.success %}'{{ result.scraper }}',{% endif %}
+    {% endfor %}
+];
+
+function refreshStatus(scraperName) {
+    fetch(`/status/${scraperName}`)
+        .then(response => response.json())
+        .then(data => {
+            updateScraperStatus(scraperName, data);
+        })
+        .catch(error => {
+            console.error('Error fetching status:', error);
+        });
+}
+
+function updateScraperStatus(scraperName, data) {
+    const statusCard = document.getElementById(`status-${scraperName}`);
+    const logsDiv = document.getElementById(`logs-${scraperName}`);
+
+    if (statusCard && logsDiv) {
+        // Update status indicator
+        const indicator = statusCard.querySelector('.status-indicator');
+        indicator.className = `status-indicator status-${data.status}`;
+
+        // Update logs
+        if (data.logs && data.logs.length > 0) {
+            logsDiv.innerHTML = data.logs.map(log =>
+                `<div>[${log.timestamp}] ${log.message}</div>`
+            ).join('');
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+
+        // Remove from running list if completed or failed
+        if (data.status === 'completed' || data.status === 'failed') {
+            runningScrapers = runningScrapers.filter(name => name !== scraperName);
+        }
+    }
+}
+
+function refreshAllStatus() {
+    runningScrapers.forEach(scraperName => {
+        refreshStatus(scraperName);
+    });
+}
+
+// Auto-refresh every 5 seconds
+setInterval(() => {
+    if (runningScrapers.length > 0) {
+        refreshAllStatus();
+    }
+}, 5000);
+
+// Initial load
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(refreshAllStatus, 1000); // Wait 1 second then start monitoring
+});
+</script>
+{% endblock %}

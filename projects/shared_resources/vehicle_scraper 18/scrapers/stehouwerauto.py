@@ -1,0 +1,179 @@
+from . helper_class import *
+
+class STEHOUWERAUTO():
+
+	def __init__(self, data_folder, output_file):
+
+		self.helper = Helper()
+		
+		self.data_folder = data_folder
+		self.output_file = output_file
+		self.log_folder = self.helper.checking_folder_existence(f'{self.data_folder}log/')
+
+	
+	def processing_each_vehicle(self, vehicle_url, body):
+
+		soup = self.helper.make_soup_url(vehicle_url)
+
+		json_data = soup.find('script', string=re.compile('model')).string.strip()
+		json_data = json.loads(' '.join(json_data.split()))
+
+		# self.helper.write_json_file(json_data, 'json_data.json')
+
+		vehicle_name = json_data['makesOffer']['itemOffered']['name']
+
+		vin = soup.find('div', class_='vin-container').text.strip()
+		stock = soup.find('div', class_='stock-container').text.strip().split(':')[1].strip()
+		v_type = 'Used'
+		year = int(json_data['makesOffer']['itemOffered']['name'].split()[0])
+
+		if year >= 2024:
+			v_type = 'New'
+
+		make = json_data['makesOffer']['itemOffered']['manufacturer']['name']
+		model = json_data['makesOffer']['itemOffered']['model']
+		trim = vehicle_name.split(f' {model} ')[1].strip()
+		try:
+			ext_color = soup.find('b', string='Exterior').parent.find_next_sibling('td').text.strip()
+		except:
+			ext_color = ''
+			
+		status = ''
+
+		try:
+			price = json_data['makesOffer']['priceSpecification']['price']
+		except:
+			price = 'Call for Price'
+
+		try:
+			fuel_type = json_data['makesOffer']['itemOffered']['fuelType']
+		except:
+			fuel_type = ''
+
+		msrp = ''
+
+		date_in_stock = ''
+		street_addr = '7000 Division Ave S'
+		locality = 'Grand Rapids'
+		postal_code = '49548'
+		region = 'MO'
+		country = 'US'
+		location = 'Tom Stehouwer Auto Sales'
+
+		self.helper.writing_output_file([
+			vin,
+			stock,
+			v_type,
+			year,
+			make,
+			model,
+			trim,
+			ext_color,
+			status,
+			price,
+			body,
+			fuel_type,
+			msrp,
+			date_in_stock,
+			street_addr,
+			locality,
+			postal_code,
+			region,
+			country,
+			location,
+			vehicle_url
+		], self.output_file)
+
+	def get_all_vehicles(self, page_num, mode):
+
+		print('Getting Vehicles: ', page_num)
+
+		url = 'https://2591j46p8g-dsn.algolia.net/1/indexes/*/queries?x-algolia-agent=Algolia%20for%20JavaScript%20(4.9.1)%3B%20Browser%20(lite)%3B%20JS%20Helper%20(3.22.4)&x-algolia-api-key=78311e75e16dd6273d6b00cd6c21db3c&x-algolia-application-id=2591J46P8G'
+
+		if mode == 'used':
+			payload = json.dumps({
+				"requests": [
+			{
+				"indexName": "pundmannford_production_inventory_low_to_high",
+				"params": f"facetFilters=%5B%5B%22type%3ACertified%20Used%22%2C%22type%3AUsed%22%5D%5D&facets=%5B%22Location%22%2C%22algolia_sort_order%22%2C%22api_id%22%2C%22bedtype%22%2C%22body%22%2C%22certified%22%2C%22chrome_model%22%2C%22chrome_trim%22%2C%22city_mpg%22%2C%22cylinders%22%2C%22date_in_stock%22%2C%22date_modified%22%2C%22days_in_stock%22%2C%22doors%22%2C%22drivetrain%22%2C%22engine_description%22%2C%22ext_color%22%2C%22ext_color_generic%22%2C%22ext_options%22%2C%22features%22%2C%22features%22%2C%22finance_details%22%2C%22ford_SpecialVehicle%22%2C%22fueltype%22%2C%22hash%22%2C%22hw_mpg%22%2C%22in_transit_filter%22%2C%22int_color%22%2C%22int_options%22%2C%22intransit%22%2C%22lease_details%22%2C%22lightning%22%2C%22lightning.class%22%2C%22lightning.finance_monthly_payment%22%2C%22lightning.isPolice%22%2C%22lightning.isSpecial%22%2C%22lightning.lease_monthly_payment%22%2C%22lightning.locations%22%2C%22lightning.locations.meta_location%22%2C%22lightning.status%22%2C%22link%22%2C%22location%22%2C%22make%22%2C%22metal_flags%22%2C%22miles%22%2C%22model%22%2C%22model_number%22%2C%22msrp%22%2C%22objectID%22%2C%22our_price%22%2C%22our_price_label%22%2C%22special_field_1%22%2C%22stock%22%2C%22thumbnail%22%2C%22title_vrp%22%2C%22transmission_description%22%2C%22trim%22%2C%22type%22%2C%22vehicle_sort%22%2C%22vin%22%2C%22year%22%5D&hitsPerPage=20&maxValuesPerFacet=250&page={page_num}"
+			}, {
+				"indexName": "pundmannford_production_inventory_low_to_high",
+				"params": "analytics=false&clickAnalytics=false&facets=type&hitsPerPage=0&maxValuesPerFacet=250&page=0"
+			} ] })
+
+		else:
+			payload = json.dumps({
+				"requests": [
+			{
+				"indexName": "pundmannford_production_inventory_low_to_high",
+				"params": f"facetFilters=%5B%5B%22type%3ANew%22%5D%5D&facets=%5B%22Location%22%2C%22algolia_sort_order%22%2C%22api_id%22%2C%22bedtype%22%2C%22body%22%2C%22certified%22%2C%22chrome_model%22%2C%22chrome_trim%22%2C%22city_mpg%22%2C%22cylinders%22%2C%22date_in_stock%22%2C%22date_modified%22%2C%22days_in_stock%22%2C%22doors%22%2C%22drivetrain%22%2C%22engine_description%22%2C%22ext_color%22%2C%22ext_color_generic%22%2C%22ext_options%22%2C%22features%22%2C%22features%22%2C%22finance_details%22%2C%22ford_SpecialVehicle%22%2C%22fueltype%22%2C%22hash%22%2C%22hw_mpg%22%2C%22in_transit_filter%22%2C%22int_color%22%2C%22int_options%22%2C%22intransit%22%2C%22lease_details%22%2C%22lightning%22%2C%22lightning.class%22%2C%22lightning.finance_monthly_payment%22%2C%22lightning.isPolice%22%2C%22lightning.isSpecial%22%2C%22lightning.lease_monthly_payment%22%2C%22lightning.locations%22%2C%22lightning.locations.meta_location%22%2C%22lightning.status%22%2C%22link%22%2C%22location%22%2C%22make%22%2C%22metal_flags%22%2C%22miles%22%2C%22model%22%2C%22model_number%22%2C%22msrp%22%2C%22objectID%22%2C%22our_price%22%2C%22our_price_label%22%2C%22special_field_1%22%2C%22stock%22%2C%22thumbnail%22%2C%22title_vrp%22%2C%22transmission_description%22%2C%22trim%22%2C%22type%22%2C%22vehicle_sort%22%2C%22vin%22%2C%22year%22%5D&hitsPerPage=20&maxValuesPerFacet=250&page={page_num}"
+			}, {
+				"indexName": "pundmannford_production_inventory_low_to_high",
+				"params": "analytics=false&clickAnalytics=false&facets=type&hitsPerPage=0&maxValuesPerFacet=250&page=0"
+			} ] })
+
+		headers = {
+			'Content-Type': 'application/json'
+		}
+
+		while 1:
+			try:
+				response = requests.request("POST", url, headers=headers, data=payload)
+				return response.json()
+
+			except Exception as error:
+				print('error in getting vehicles: ', error)
+
+			time.sleep(1)
+
+			
+	def start_scraping_stehouwerauto(self):
+
+		processed_json_file = self.log_folder + 'vehicles_processed.json'
+		processed_json_data = self.helper.json_exist_data(processed_json_file)
+
+		for body_type in ['Car', 'Suv', 'Truck']:
+
+			url = f'https://www.stehouwerauto.com/functions/getInventorySubset?body_type={body_type}&blockKey=blocks%2Finventory%2Fsrp%2Finventory-list.twig'
+
+			json_data = self.helper.get_url_response(url, is_json=True)
+
+			total_vehicles = json_data['filters']['matches']
+			total_pages = json_data['filters']['pages']
+
+			all_vehicles = BeautifulSoup(json_data['list'], 'html.parser')
+			all_vehicles = all_vehicles.find_all('a', class_='dealr-inventory-list__vehicle__photo-container')
+
+			print(len(all_vehicles), ' : ', total_vehicles, ' : ', total_pages)
+
+			for index, vehicle in enumerate(all_vehicles):
+
+				vehicle_url = 'https://www.stehouwerauto.com/' + vehicle['href']
+
+				print(len(all_vehicles), ' : ', vehicle_url)
+
+
+				if vehicle_url not in processed_json_data:
+
+					self.processing_each_vehicle(vehicle_url, body_type)
+
+					processed_json_data.append(vehicle_url)
+					self.helper.write_json_file(processed_json_data, processed_json_file)
+					
+				else:
+					print('Vehicle Already Processed...')
+
+				print('-'*50)
+				print()
+
+
+
+if __name__ == "__main__":
+	handle = MAINCLASS()
+	handle.start_scraping()
+
+	print()
+	print('*'*50)
+	print('ALL DONE, YOU CAN CLOSE THIS CONSOLE AND CHECK THE DATA IN THE OUTPUT_DATA FOLDER.')
+	print('*'*50)
+	print()

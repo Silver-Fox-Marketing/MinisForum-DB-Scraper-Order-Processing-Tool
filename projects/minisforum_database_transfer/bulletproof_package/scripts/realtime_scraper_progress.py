@@ -34,6 +34,38 @@ class ScraperProgressReporter:
     def set_progress_callback(self, callback: Callable):
         """Set callback function for progress updates"""
         self.progress_callback = callback
+
+    def report_progress(self, dealership_name: str, status: str, progress: int, message: str = ""):
+        """Report progress for a specific dealership scraper"""
+        # Terminal output
+        if status == 'starting':
+            print(f"[START] {dealership_name}: Starting scraper")
+        elif status == 'processing':
+            print(f"[PROGRESS] {dealership_name}: {message} ({progress}%)")
+        elif status == 'complete':
+            print(f"[COMPLETE] {dealership_name}: Scraping completed ({message})")
+        elif status == 'error':
+            print(f"[ERROR] {dealership_name}: {message}")
+
+        # WebSocket update
+        if self.socketio:
+            self.socketio.emit('scraper_output', {
+                'dealership': dealership_name,
+                'status': status,
+                'progress': progress,
+                'message': message,
+                'timestamp': datetime.now().isoformat()
+            })
+
+        # Progress callback
+        if self.progress_callback:
+            self.progress_callback({
+                'type': 'progress',
+                'dealership': dealership_name,
+                'status': status,
+                'progress': progress,
+                'message': message
+            })
     
     def start_scraping_session(self, total_scrapers: int, scraper_names: List[str]):
         """Start a new scraping session"""

@@ -31,9 +31,7 @@
    generate_final_files(already_normalized_data) → Field Mapping Failure
    ```
 
-**The Problem**: The `generate_final_files` method expects **raw database records** but receives **already-normalized template data** from the review stage.
-
----
+**The Problem**: The `generate_final_files` method expects **raw database records** but receives **already-normalized templa
 
 ## **Technical Evidence**
 

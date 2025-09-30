@@ -1,0 +1,9 @@
+[JOE MACHENS NISSAN PAGE-BASED] SAMPLE KEYS: ['year', 'make', 'model', 'vin', 'stock', 'price']
+
+SAMPLE VEHICLE DATA FROM PAGE:
+year: 
+make: 2025
+model: Nissan
+vin: 1N4BL4BVXSN333575
+stock: N333575
+price: New vehicle pricing includes all offers and incentives. Tax, Title and Tags not included in vehicle 
