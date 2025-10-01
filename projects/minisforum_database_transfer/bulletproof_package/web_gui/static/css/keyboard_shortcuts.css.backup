@@ -1,0 +1,219 @@
+/* Keyboard Shortcuts Styling */
+
+/* Keyboard shortcut indicators in buttons and menus */
+.shortcut-hint {
+    display: inline-block;
+    margin-left: auto;
+    padding-left: 10px;
+    opacity: 0.6;
+    font-size: 0.85em;
+}
+
+/* Keyboard key styling */
+kbd {
+    display: inline-block;
+    padding: 2px 6px;
+    margin: 0 2px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85em;
+    line-height: 1.4;
+    color: var(--theme-text-primary);
+    background: var(--theme-surface-elevated);
+    border: 1px solid var(--theme-border);
+    border-radius: 3px;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.1), inset 0 0 0 1px rgba(255,255,255,0.1);
+}
+
+/* Help Modal Styling */
+#keyboardShortcutsModal .modal-content {
+    background: var(--theme-surface);
+    border-radius: 10px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+}
+
+#keyboardShortcutsModal .modal-header {
+    background: var(--theme-surface-elevated);
+    padding: 20px;
+    border-bottom: 1px solid var(--theme-border);
+    border-radius: 10px 10px 0 0;
+}
+
+#keyboardShortcutsModal .modal-header h2 {
+    margin: 0;
+    color: var(--theme-text-primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#keyboardShortcutsModal .modal-body {
+    padding: 20px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+/* Shortcut categories */
+.shortcut-category {
+    margin-bottom: 30px;
+}
+
+.shortcut-category h3 {
+    color: var(--theme-primary);
+    margin-bottom: 15px;
+    padding-bottom: 5px;
+    border-bottom: 2px solid var(--theme-primary);
+    font-size: 1.1em;
+}
+
+/* Shortcut list */
+.shortcut-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 10px;
+}
+
+.shortcut-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 8px 12px;
+    background: var(--theme-surface-elevated);
+    border-radius: 6px;
+    transition: background 0.2s ease;
+}
+
+.shortcut-item:hover {
+    background: var(--theme-hover);
+}
+
+.shortcut-item kbd {
+    min-width: fit-content;
+    background: var(--theme-surface);
+    border: 2px solid var(--theme-border);
+    font-weight: 600;
+}
+
+.shortcut-item span {
+    color: var(--theme-text-secondary);
+    font-size: 0.9em;
+}
+
+/* Help hint in footer */
+.help-hint {
+    text-align: center;
+    color: var(--theme-text-secondary);
+    margin: 0;
+    padding: 10px;
+    background: var(--theme-surface-elevated);
+    border-radius: 6px;
+}
+
+/* Visual feedback when shortcut is pressed */
+.shortcut-activated {
+    animation: shortcutPress 0.3s ease;
+}
+
+@keyframes shortcutPress {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(253, 65, 13, 0.4);
+    }
+    50% {
+        transform: scale(0.98);
+        box-shadow: 0 0 0 10px rgba(253, 65, 13, 0);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(253, 65, 13, 0);
+    }
+}
+
+/* Tab shortcuts indicator */
+.tab-nav-item .shortcut-badge {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: rgba(253, 65, 13, 0.8);
+    color: white;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 0.7em;
+    font-weight: 600;
+    display: none;
+}
+
+.tab-nav-item:hover .shortcut-badge {
+    display: block;
+}
+
+/* Focus indicator for keyboard navigation */
+.keyboard-focus {
+    outline: 2px solid var(--theme-primary) !important;
+    outline-offset: 2px;
+}
+
+/* Tooltip for shortcuts */
+.shortcut-tooltip {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    z-index: 10000;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.shortcut-tooltip.visible {
+    opacity: 1;
+}
+
+/* Dark mode adjustments */
+[data-theme="dark"] kbd {
+    background: #2a2a2a;
+    border-color: #404040;
+    color: #e0e0e0;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.3), inset 0 0 0 1px rgba(255,255,255,0.05);
+}
+
+[data-theme="dark"] .shortcut-item {
+    background: #2a2a2a;
+}
+
+[data-theme="dark"] .shortcut-item:hover {
+    background: #333333;
+}
+
+[data-theme="dark"] #keyboardShortcutsModal .modal-content {
+    background: #1a1a1a;
+}
+
+[data-theme="dark"] #keyboardShortcutsModal .modal-header {
+    background: #222222;
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+    .shortcut-activated {
+        animation: none;
+    }
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .shortcut-list {
+        grid-template-columns: 1fr;
+    }
+
+    .shortcut-hint {
+        display: none; /* Hide shortcuts on mobile */
+    }
+
+    #keyboardShortcutsModal .modal-content {
+        max-width: 95vw;
+        margin: 10px;
+    }
+}

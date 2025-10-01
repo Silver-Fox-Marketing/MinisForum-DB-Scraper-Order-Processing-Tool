@@ -3390,7 +3390,7 @@ class MinisFornumApp {
                 const lastOrderDate = this.lastOrderDates[dealership.name] || 'No orders yet';
                 
                 return `
-                    <div class="modern-dealer-panel ${typeClass}" data-dealership="${dealership.name}" draggable="true">
+                    <div class="modern-dealer-panel ${typeClass}" data-dealership="${dealership.name}" draggable="true" tabindex="0" title="Click to add to queue or press Alt+L when focused">
                         <div class="panel-content">
                             <h3 class="dealer-title">${dealership.name}</h3>
                             <div class="panel-details">
@@ -3438,7 +3438,16 @@ class MinisFornumApp {
         
         // Add event listener using delegation
         dealershipList.addEventListener('click', this.dealershipClickHandler);
-        
+
+        // Add keyboard navigation for dealership panels
+        dealershipList.addEventListener('keydown', (e) => {
+            const dealershipItem = e.target.closest('.modern-dealer-panel');
+            if (dealershipItem && e.key === 'Enter') {
+                e.preventDefault();
+                dealershipItem.click();
+            }
+        });
+
         // Set up drag and drop event handlers
         this.setupDragAndDrop();
     }
@@ -3923,19 +3932,9 @@ class MinisFornumApp {
             this.addTerminalMessage('No dealerships in queue to process', 'warning');
             return;
         }
-        
-        // Ask user which method they prefer
-        const useWizard = confirm(
-            'How would you like to process the queue?\n\n' +
-            'OK = Open Order Processing Wizard (recommended)\n' +
-            'Cancel = Process directly in this window'
-        );
-        
-        if (useWizard) {
-            this.openOrderWizard();
-        } else {
-            this.processQueueDirectly();
-        }
+
+        // Launch order wizard directly (production mode)
+        this.openOrderWizard();
     }
     
     openOrderWizard() {
@@ -9384,77 +9383,63 @@ class ModalOrderWizard {
         const vinInput = document.getElementById('maintenanceVinInput');
         const manualVins = vinInput ? vinInput.value.trim().split('\n').filter(vin => vin.trim()) : [];
 
-        // Store manual VINs for current maintenance order
         if (this.maintenanceResults[this.currentMaintenanceIndex]) {
-            // If there are manual VINs, fetch their actual data from the database
-            let manualVehicles = [];
-            if (manualVins.length > 0) {
-                const currentOrder = this.maintenanceOrders[this.currentMaintenanceIndex];
-                const dealershipName = currentOrder.name;
+            const currentOrder = this.maintenanceOrders[this.currentMaintenanceIndex];
+            const dealershipName = currentOrder.name;
 
-                try {
-                    // Fetch actual vehicle data for manual VINs
-                    const response = await fetch(`/api/data/manual-vins/${encodeURIComponent(dealershipName)}`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            vins: manualVins.map(vin => vin.trim())
-                        })
-                    });
+            try {
+                // Call the maintenance API with manual VINs - it will handle CAO + LIST deduplication
+                const response = await fetch('/api/orders/process-maintenance', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        dealership: dealershipName,
+                        vins: manualVins.map(vin => vin.trim()),
+                        skip_vin_logging: document.getElementById('orderWizardTestingMode')?.checked || false
+                    })
+                });
 
-                    if (response.ok) {
-                        const data = await response.json();
-                        manualVehicles = data.vehicles || [];
-                        console.log(`Fetched data for ${manualVehicles.length} manual VINs from ${dealershipName}`);
+                if (response.ok) {
+                    const result = await response.json();
+
+                    if (result.success) {
+                        // Backend returns deduplicated combined vehicles in 'vehicles' field
+                        const vehicles = result.vehicles || result.vehicles_data || [];
+
+                        const combinedResults = {
+                            dealership: dealershipName,
+                            orderType: 'MAINTENANCE',
+                            type: 'maintenance',  // For compatibility with review stage
+                            success: true,
+                            vehicle_count: result.total_count || result.vehicle_count,
+                            vehicles: vehicles,
+                            caoCount: result.cao_count || 0,
+                            manualCount: result.list_count || 0,
+                            // Add result object for compatibility with "Process Presently" function
+                            result: {
+                                phase: 'prepared_for_review',
+                                vehicles_for_review: vehicles,  // Make vehicles available for review
+                                dealership: dealershipName
+                            }
+                        };
+
+                        console.log(`Maintenance order processed: ${combinedResults.vehicle_count} vehicles (${combinedResults.caoCount} CAO + ${combinedResults.manualCount} LIST, deduplicated)`);
+
+                        this.processedOrders.push(combinedResults);
+                        this.processingResults.totalVehicles += combinedResults.vehicle_count;
                     } else {
-                        console.error('Failed to fetch manual VIN data, using placeholders');
-                        // Fallback to placeholder data
-                        manualVehicles = manualVins.map(vin => ({
-                            vin: vin.trim(),
-                            source: 'manual',
-                            year: 'Unknown',
-                            make: 'Manual Entry',
-                            model: 'Manual Entry'
-                        }));
+                        console.error('Maintenance processing failed:', result.error);
                     }
-                } catch (error) {
-                    console.error('Error fetching manual VIN data:', error);
-                    // Fallback to placeholder data
-                    manualVehicles = manualVins.map(vin => ({
-                        vin: vin.trim(),
-                        source: 'manual',
-                        year: 'Unknown',
-                        make: 'Manual Entry',
-                        model: 'Manual Entry'
-                    }));
+                } else {
+                    console.error('Failed to process maintenance order');
                 }
+            } catch (error) {
+                console.error('Error processing maintenance vins:', error);
             }
-
-            // Store the manual vehicles with actual data (or placeholders if not found)
-            this.maintenanceResults[this.currentMaintenanceIndex].manualVins = manualVins;
-            this.maintenanceResults[this.currentMaintenanceIndex].manualVehicles = manualVehicles;
-
-            // Combine CAO results with manual VINs and add to processed orders
-            const caoResults = this.maintenanceResults[this.currentMaintenanceIndex].caoResults;
-            const caoVehicles = caoResults ? caoResults.vehicles || [] : [];
-
-            // Combine results
-            const combinedResults = {
-                dealership: this.maintenanceResults[this.currentMaintenanceIndex].order.name,
-                orderType: 'MAINTENANCE',
-                success: true,
-                vehicle_count: caoVehicles.length + manualVehicles.length,
-                vehicles: [...caoVehicles, ...manualVehicles],
-                caoCount: caoVehicles.length,
-                manualCount: manualVehicles.length
-            };
-            
-            this.processedOrders.push(combinedResults);
-            this.processingResults.totalVehicles += combinedResults.vehicle_count;
         }
-        
+
         // Move to next maintenance order
         this.currentMaintenanceIndex++;
         this.processCurrentMaintenanceOrder();
@@ -9587,8 +9572,8 @@ Example:
             }
 
             // Show excluded VINs notification if any
-            if (prepareResult.excluded_vins && prepareResult.excluded_vins.length > 0) {
-                const excludedMessage = `${prepareResult.excluded_vins.length} VIN(s) were excluded because they are not found in scraper data:\n${prepareResult.excluded_vins.join('\n')}\n\nOnly ${prepareResult.valid_vins} valid VINs will be processed. Continue?`;
+            if (prepareResult.invalid_vin_list && prepareResult.invalid_vin_list.length > 0) {
+                const excludedMessage = `${prepareResult.invalid_vin_list.length} VIN(s) were excluded because they are not found in scraper data:\n${prepareResult.invalid_vin_list.join('\n')}\n\nOnly ${prepareResult.valid_vins} valid VINs will be processed. Continue?`;
                 if (!confirm(excludedMessage)) {
                     return;
                 }
@@ -9596,6 +9581,13 @@ Example:
 
             // Store the preparation result for review stage
             this.currentListPrepareData = prepareResult;
+
+            // Add additional fields for review stage
+            prepareResult.dealership = currentOrder.name;
+            prepareResult.vehicles_for_review = prepareResult.vehicles_data || [];
+            prepareResult.filtered_vin_list = (prepareResult.vehicles_data || []).map(v => v.vin);
+            prepareResult.original_vin_list = vins;
+            prepareResult.template_type = currentOrder.template || 'shortcut_pack';
 
             // Move to review stage with only valid vehicles
             this.showListReviewStage(prepareResult);
@@ -10065,53 +10057,6 @@ Example:
 
         // Get all vehicles from processed orders, filtered by selected dealership
         let allVehicles = [];
-
-        // Handle maintenance orders - they're stored in this.maintenanceResults
-        if (this.maintenanceResults && this.maintenanceResults.length > 0) {
-            console.log('Processing maintenance results:', this.maintenanceResults);
-            this.maintenanceResults.forEach(maintenanceResult => {
-                // Filter by selected dealership
-                if (this.selectedReviewDealership && this.selectedReviewDealership !== 'all') {
-                    if (maintenanceResult.order.name !== this.selectedReviewDealership) {
-                        return; // Skip this dealership
-                    }
-                }
-
-                // Add BOTH CAO results AND manual VINs for maintenance processing
-                if (maintenanceResult && maintenanceResult.caoResults && maintenanceResult.caoResults.vehicles && maintenanceResult.caoResults.vehicles.length > 0) {
-                    console.log(`Found ${maintenanceResult.caoResults.vehicles.length} vehicles from maintenance CAO results for ${maintenanceResult.order.name}`);
-                    // Add dealership info to vehicles (these are already formatted from CSV)
-                    const vehiclesWithDealership = maintenanceResult.caoResults.vehicles.map(vehicle => ({
-                        ...vehicle,
-                        dealership: maintenanceResult.order.name
-                    }));
-                    allVehicles.push(...vehiclesWithDealership);
-                }
-
-                // ALSO add manual vehicles if they exist (not just as a fallback)
-                if (maintenanceResult && maintenanceResult.manualVehicles && maintenanceResult.manualVehicles.length > 0) {
-                    console.log(`Adding ${maintenanceResult.manualVehicles.length} manual vehicles for ${maintenanceResult.order.name}`);
-                    // Use the fetched vehicle data with dealership info
-                    const manualVehiclesWithDealership = maintenanceResult.manualVehicles.map(vehicle => ({
-                        ...vehicle,
-                        dealership: maintenanceResult.order.name
-                    }));
-                    allVehicles.push(...manualVehiclesWithDealership);
-                } else if (maintenanceResult && maintenanceResult.manualVins && maintenanceResult.manualVins.length > 0) {
-                    // Fallback: If we have VINs but no vehicle data (shouldn't happen normally)
-                    console.log(`Adding ${maintenanceResult.manualVins.length} manual VINs for ${maintenanceResult.order.name} (fallback mode)`);
-                    const manualVehicles = maintenanceResult.manualVins.map(vin => ({
-                        vin: vin,
-                        year: 'Manual',
-                        make: 'Entry',
-                        model: 'VIN',
-                        stock: 'MANUAL',
-                        dealership: maintenanceResult.order.name
-                    }));
-                    allVehicles.push(...manualVehicles);
-                }
-            });
-        }
         
         // Generate sample vehicle data for all processed orders (regular CAO/LIST orders)
         this.processedOrders.forEach(order => {
@@ -11196,14 +11141,20 @@ Output folder: ${result.output_folder}`;
             return;
         }
 
-        // Check if we have either CSV data OR prepared LIST data
+        // Check if we have either CSV data OR prepared LIST data OR maintenance data
         const isPreparedList = currentResult &&
                               dealershipOrder &&
                               dealershipOrder.type === 'list' &&
                               currentResult.phase === 'prepared_for_review' &&
                               currentResult.vehicles_for_review;
 
-        if (!currentResult || (!currentResult.download_csv && !isPreparedList)) {
+        const isMaintenance = currentResult &&
+                             dealershipOrder &&
+                             dealershipOrder.type === 'maintenance' &&
+                             currentResult.phase === 'prepared_for_review' &&
+                             currentResult.vehicles_for_review;
+
+        if (!currentResult || (!currentResult.download_csv && !isPreparedList && !isMaintenance)) {
             alert('No CSV data or prepared LIST data available for this dealership');
             return;
         }
@@ -11233,21 +11184,21 @@ Output folder: ${result.output_folder}`;
                 // PRIORITY 1: Always use edited review data if available (user deletions/edits)
                 if (this.reviewVehicleData && this.reviewVehicleData.length > 0) {
                     vehicleDataToProcess = this.reviewVehicleData;
-                    if (isPreparedList) {
-                        // LIST order: Use VDP format with user-edited data
+                    if (isPreparedList || isMaintenance) {
+                        // LIST/MAINTENANCE order: Use VDP format with user-edited data
                         csvData = this.convertVehicleDataToCSV(this.reviewVehicleData, 'vdp', currentDealership);
-                        console.log('[ENHANCED DOWNLOAD] Using edited LIST data with VDP format for', this.reviewVehicleData.length, 'vehicles');
+                        console.log('[ENHANCED DOWNLOAD] Using edited LIST/MAINTENANCE data with VDP format for', this.reviewVehicleData.length, 'vehicles');
                     } else {
                         // CAO order: Use raw format with user-edited data (preserve existing functionality)
                         csvData = this.convertVehicleDataToCSV(this.reviewVehicleData);
                         console.log('[ENHANCED DOWNLOAD] Using edited CSV data with', this.reviewVehicleData.length, 'vehicles');
                     }
                 }
-                // PRIORITY 2: Fallback to prepared LIST data if no user edits
-                else if (isPreparedList && currentResult.vehicles_for_review && currentResult.vehicles_for_review.length > 0) {
+                // PRIORITY 2: Fallback to prepared LIST/MAINTENANCE data if no user edits
+                else if ((isPreparedList || isMaintenance) && currentResult.vehicles_for_review && currentResult.vehicles_for_review.length > 0) {
                     vehicleDataToProcess = currentResult.vehicles_for_review;
                     csvData = this.convertVehicleDataToCSV(vehicleDataToProcess, 'vdp', currentDealership);
-                    console.log('[ENHANCED DOWNLOAD] Using prepared LIST data with VDP format for', vehicleDataToProcess.length, 'vehicles');
+                    console.log('[ENHANCED DOWNLOAD] Using prepared LIST/MAINTENANCE data with VDP format for', vehicleDataToProcess.length, 'vehicles');
                 }
                 // No data available (preserve existing error handling)
                 else {
@@ -11260,6 +11211,12 @@ Output folder: ${result.output_folder}`;
                 const customTemplateConfig = dealershipData?.output_rules?.custom_templates || null;
                 console.log(`[ENHANCED DOWNLOAD] Custom Template Config for ${currentDealership}:`, customTemplateConfig);
 
+                // Get original VIN list for LIST orders (for billing ordered vs produced)
+                const originalVinList = (isPreparedList && dealershipOrder && dealershipOrder.original_vin_list) ? dealershipOrder.original_vin_list : null;
+                if (originalVinList) {
+                    console.log(`[ENHANCED DOWNLOAD] LIST order detected - passing original VIN count: ${originalVinList.length}`);
+                }
+
                 // Call the enhanced download endpoint that preserves edits
                 const enhancedResponse = await fetch('/api/csv/enhanced-download', {
                     method: 'POST',
@@ -11270,7 +11227,8 @@ Output folder: ${result.output_folder}`;
                         dealership_name: currentDealership,
                         order_number: orderNumber.trim(),
                         csv_data: csvData,
-                        custom_templates: customTemplateConfig
+                        custom_templates: customTemplateConfig,
+                        original_vin_list: originalVinList  // For LIST orders billing (ordered vs produced)
                     })
                 });
 

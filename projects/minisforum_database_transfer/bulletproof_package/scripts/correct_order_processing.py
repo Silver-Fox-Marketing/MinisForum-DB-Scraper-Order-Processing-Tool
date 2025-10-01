@@ -94,7 +94,7 @@ class CorrectOrderProcessor:
         slug = slug.replace('-', '_')
         slug = slug.replace('/', '_')
         slug = slug.replace('__', '_')
-        
+
         table_name = f'{slug}_vin_log'
         logger.info(f"[VIN LOG] Standard mapping: '{dealership_name}' -> '{table_name}'")
         return table_name
@@ -1305,6 +1305,9 @@ class CorrectOrderProcessor:
         # Determine if this is a LIST order (has original_vin_list)
         is_list_order = original_vin_list is not None and filtered_vin_list is not None
 
+        # DEBUG: Log the LIST order detection
+        logger.info(f"[BILLING DEBUG] is_list_order={is_list_order}, original_vin_list={'None' if original_vin_list is None else f'{len(original_vin_list)} VINs'}, filtered_vin_list={'None' if filtered_vin_list is None else f'{len(filtered_vin_list)} VINs'}")
+
         # Calculate ordered vs produced for LIST orders
         if is_list_order:
             ordered_count = len(original_vin_list)
@@ -1316,17 +1319,8 @@ class CorrectOrderProcessor:
             duplicates_count = 0
             duplicate_vins = []
 
-            # Get VIN log table name using comprehensive slug logic
-            slug = dealership_name.lower()
-            slug = slug.replace(' ', '_')
-            slug = slug.replace('&', 'and')
-            slug = slug.replace('.', '')  # Remove periods (St. -> St)
-            slug = slug.replace(',', '')
-            slug = slug.replace("'", '')  # Remove apostrophes
-            slug = slug.replace('-', '_')
-            slug = slug.replace('/', '_')
-            slug = slug.replace('__', '_')
-            vin_log_table = f'{slug}_vin_log'
+            # Get VIN log table name using centralized method (ensures consistency)
+            vin_log_table = self._get_dealership_vin_log_table(dealership_name)
 
             logger.info(f"[BILLING DEBUG] Checking {len(filtered_vin_list)} VINs for duplicates in {vin_log_table}")
 
@@ -1347,74 +1341,138 @@ class CorrectOrderProcessor:
             duplicates_count = 0
             duplicate_vins = []
 
-        # Write billing CSV in exact format from examples
+        # Write billing CSV in NEW format matching template
         with open(billing_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
 
-            # Header row - matches format from examples
-            # For LIST orders, add Ordered/Produced columns
-            if is_list_order:
-                writer.writerow(['Printed Vehicles:', '', 'TOTALS:', '', 'VINLOG:', '', 'Duplicates:', '', 'Ordered:', '', 'Produced:'])
-            else:
-                writer.writerow(['Printed Vehicles:', '', 'TOTALS:', '', 'VINLOG:', '', 'Duplicates:'])
-
-            # Vehicle lines with summary statistics in right columns
-            for i, (vehicle_line, vehicle_type) in enumerate(vehicle_lines):
-                if i == 0:
-                    # First row includes New count and duplicate status
-                    duplicate_status = 'No Dupes' if duplicates_count == 0 else f'{duplicates_count} Dupes'
-                    if is_list_order:
-                        writer.writerow([vehicle_line, vehicle_type, 'New:', new_count, vin_list[i] if i < len(vin_list) else '', '', duplicate_status, '', ordered_count, '', produced_count])
-                    else:
-                        writer.writerow([vehicle_line, vehicle_type, 'New:', new_count, vin_list[i] if i < len(vin_list) else '', '', duplicate_status])
-                elif i == 1:
-                    # Second row includes PO count
-                    if is_list_order:
-                        writer.writerow([vehicle_line, vehicle_type, 'PO:', used_count, vin_list[i] if i < len(vin_list) else '', '', '', '', '', '', ''])
-                    else:
-                        writer.writerow([vehicle_line, vehicle_type, 'PO:', used_count, vin_list[i] if i < len(vin_list) else '', '', ''])
-                elif i == 2:
-                    # Third row includes CPO count
-                    if is_list_order:
-                        writer.writerow([vehicle_line, vehicle_type, 'CPO:', cpo_count, vin_list[i] if i < len(vin_list) else '', '', '', '', '', '', ''])
-                    else:
-                        writer.writerow([vehicle_line, vehicle_type, 'CPO:', cpo_count, vin_list[i] if i < len(vin_list) else '', '', ''])
-                elif i == 3:
-                    # Fourth row includes Total
-                    if is_list_order:
-                        writer.writerow([vehicle_line, vehicle_type, 'Total:', total_vehicles, vin_list[i] if i < len(vin_list) else '', '', '', '', '', '', ''])
-                    else:
-                        writer.writerow([vehicle_line, vehicle_type, 'Total:', total_vehicles, vin_list[i] if i < len(vin_list) else '', '', ''])
-                elif i == 4:
-                    # Fifth row includes Duplicates count
-                    if is_list_order:
-                        writer.writerow([vehicle_line, vehicle_type, 'Duplicates:', duplicates_count, vin_list[i] if i < len(vin_list) else '', '', '', '', '', '', ''])
-                    else:
-                        writer.writerow([vehicle_line, vehicle_type, 'Duplicates:', duplicates_count, vin_list[i] if i < len(vin_list) else '', '', ''])
-                else:
-                    # Remaining rows just have vehicle info and VIN
-                    if is_list_order:
-                        writer.writerow([vehicle_line, vehicle_type, '', '', vin_list[i] if i < len(vin_list) else '', '', '', '', '', '', ''])
-                    else:
-                        writer.writerow([vehicle_line, vehicle_type, '', '', vin_list[i] if i < len(vin_list) else '', '', ''])
-
-            # Add section for Duplicate VINs (LIST orders only)
+            # Build duplicate vehicle details for right column display
+            duplicate_vehicle_details = []
             if is_list_order and duplicate_vins:
-                # Add separator rows
-                writer.writerow(['', '', '', '', '', '', '', '', '', '', ''])
-                writer.writerow(['', '', '', '', '', '', '', '', '', '', ''])
-                writer.writerow(['Duplicate VINs (Already in VIN Log):', '', '', '', '', '', '', '', '', '', ''])
+                for dup_vin in duplicate_vins:
+                    # Find vehicle details for this duplicate VIN
+                    for vehicle in vehicles:
+                        if vehicle.get('vin') == dup_vin:
+                            duplicate_vehicle_details.append({
+                                'vin': dup_vin,
+                                'year': vehicle.get('year', ''),
+                                'make': vehicle.get('make', ''),
+                                'model': vehicle.get('model', ''),
+                                'stock': vehicle.get('stock', '').split(' - ')[-1] if ' - ' in vehicle.get('stock', '') else vehicle.get('stock', ''),
+                                'type': vehicle.get('vehicle_condition', 'used').upper()
+                            })
+                            break
 
-                # List each duplicate VIN
-                for duplicate_vin in duplicate_vins:
-                    writer.writerow([duplicate_vin, '', '', '', '', '', '', '', '', '', ''])
+            # Row 1: Header row with Duplicates count
+            writer.writerow(['Printed Vehicles:', '', '', '', '', 'TOTALS:', '', '', 'Duplicates:', duplicates_count, '', '', '', ''])
 
-            # Add empty rows if needed (billing sheets typically have some padding)
-            for _ in range(3):
-                if is_list_order:
-                    writer.writerow(['', '', '', '', '', '', '', '', '', '', ''])
+            # Rows 2-8: Vehicle data with totals on right
+            for i, (vehicle_line, vehicle_type) in enumerate(vehicle_lines):
+                # Get the actual vehicle data to extract correct fields
+                vehicle = vehicles[i] if i < len(vehicles) else {}
+
+                vehicle_vin = vehicle.get('vin', '')
+
+                # Strip type prefix from VIN if present (e.g., "USED - 1C4RJYB67PC669752" -> "1C4RJYB67PC669752")
+                if ' - ' in vehicle_vin:
+                    vehicle_vin = vehicle_vin.split(' - ')[-1].strip()
+
+                year = vehicle.get('year', '')
+                make = vehicle.get('make', '')
+                model = vehicle.get('model', '')
+
+                # Extract just the stock number from the formatted stock field
+                # Stock format: "2021 Wrangler - 9257" -> extract "9257"
+                stock_field = vehicle.get('stock', '')
+                if ' - ' in stock_field:
+                    stock = stock_field.split(' - ')[-1].strip()
                 else:
-                    writer.writerow(['', '', '', '', '', '', ''])
+                    stock = stock_field.strip()
+
+                # Vehicle description: "Year Make Model"
+                vehicle_desc = f"{year} {make} {model}"
+
+                # Build left side: VIN, Vehicle Description, Stock, Type, Empty
+                row = [vehicle_vin, vehicle_desc, stock, vehicle_type, '']
+
+                # Add totals column based on row number
+                if i == 0:
+                    row.extend(['New:', new_count, ''])
+                elif i == 1:
+                    row.extend(['PO:', used_count, ''])
+                elif i == 2:
+                    row.extend(['CPO:', cpo_count, ''])
+                elif i == 3:
+                    row.extend(['Total:', total_vehicles, ''])
+                elif i == 4 and is_list_order:
+                    row.extend(['Ordered:', ordered_count, ''])
+                elif i == 5 and is_list_order:
+                    row.extend(['Produced:', produced_count, ''])
+                else:
+                    row.extend(['', '', ''])
+
+                # Add duplicate details on right side (starting column J)
+                # Only add if we have duplicate data and it's within range
+                dup_index = i - 1  # Duplicates start on row 2 (index 1)
+                if dup_index >= 0 and dup_index < len(duplicate_vehicle_details):
+                    dup = duplicate_vehicle_details[dup_index]
+                    row.extend([dup['vin'], dup['year'], dup['make'], dup['model'], dup['stock'], dup['type']])
+                else:
+                    row.extend(['', '', '', '', '', ''])
+
+                writer.writerow(row)
+
+            # Continue with remaining vehicles if any (after summary rows)
+            remaining_start = 6 if is_list_order else 4
+            for i in range(remaining_start, len(vehicle_lines)):
+                vehicle_line, vehicle_type = vehicle_lines[i]
+
+                # Get the actual vehicle data
+                vehicle = vehicles[i] if i < len(vehicles) else {}
+
+                vehicle_vin = vehicle.get('vin', '')
+
+                # Strip type prefix from VIN if present
+                if ' - ' in vehicle_vin:
+                    vehicle_vin = vehicle_vin.split(' - ')[-1].strip()
+
+                year = vehicle.get('year', '')
+                make = vehicle.get('make', '')
+                model = vehicle.get('model', '')
+
+                # Extract just the stock number
+                stock_field = vehicle.get('stock', '')
+                if ' - ' in stock_field:
+                    stock = stock_field.split(' - ')[-1].strip()
+                else:
+                    stock = stock_field.strip()
+
+                vehicle_desc = f"{year} {make} {model}"
+
+                row = [vehicle_vin, vehicle_desc, stock, vehicle_type, '', '', '', '']
+
+                # Add duplicate details if available
+                dup_index = i - 1
+                if dup_index >= 0 and dup_index < len(duplicate_vehicle_details):
+                    dup = duplicate_vehicle_details[dup_index]
+                    row.extend([dup['vin'], dup['year'], dup['make'], dup['model'], dup['stock'], dup['type']])
+                else:
+                    row.extend(['', '', '', '', '', ''])
+
+                writer.writerow(row)
+
+            # Add "Not on Website" section at bottom (for LIST orders with VINs not in scraper)
+            if is_list_order and not_produced_vins:
+                # Add separator rows
+                writer.writerow(['', '', '', '', '', '', '', '', '', '', '', '', '', ''])
+
+                # Start "Not on Website" section
+                for idx, not_produced_vin in enumerate(not_produced_vins):
+                    if idx == 0:
+                        # First row has the header
+                        writer.writerow(['', '', '', '', '', '', not_produced_vin, '', '', '', '', '', '', ''])
+                    else:
+                        # Subsequent rows just have the VIN
+                        writer.writerow(['', '', '', '', '', '', not_produced_vin, '', '', '', '', '', '', ''])
         
         logger.info(f"Generated billing sheet CSV: {billing_path}")
         return billing_path
