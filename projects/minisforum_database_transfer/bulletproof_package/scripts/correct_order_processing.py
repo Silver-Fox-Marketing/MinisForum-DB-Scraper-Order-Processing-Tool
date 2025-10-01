@@ -1312,8 +1312,21 @@ class CorrectOrderProcessor:
         if is_list_order:
             ordered_count = len(original_vin_list)
             produced_count = len(filtered_vin_list)
+
+            # Strip prefixes from filtered_vin_list for comparison
+            # filtered_vin_list has "NEW - VIN" or "USED - VIN" format
+            filtered_vins_clean = []
+            for vin in filtered_vin_list:
+                clean_vin = vin.split(' - ')[-1] if ' - ' in vin else vin
+                filtered_vins_clean.append(clean_vin)
+
             # Find VINs that were NOT produced (ordered but not in output)
-            not_produced_vins = [vin for vin in original_vin_list if vin not in filtered_vin_list]
+            # Compare raw VINs from original_vin_list against cleaned filtered VINs
+            not_produced_vins = [vin for vin in original_vin_list if vin not in filtered_vins_clean]
+
+            logger.info(f"[BILLING DEBUG] original_vin_list: {original_vin_list}")
+            logger.info(f"[BILLING DEBUG] filtered_vins_clean: {filtered_vins_clean}")
+            logger.info(f"[BILLING DEBUG] not_produced_vins: {not_produced_vins}")
 
             # Check for duplicates by comparing produced VINs against VIN log
             duplicates_count = 0
@@ -1323,11 +1336,17 @@ class CorrectOrderProcessor:
             vin_log_table = self._get_dealership_vin_log_table(dealership_name)
 
             logger.info(f"[BILLING DEBUG] Checking {len(filtered_vin_list)} VINs for duplicates in {vin_log_table}")
+            logger.info(f"[BILLING DEBUG] filtered_vin_list contents: {filtered_vin_list}")
 
             # Check each produced VIN against the VIN log
             for vin in filtered_vin_list:
+                # Strip prefix (NEW -, USED -, etc.) to get raw VIN
+                clean_vin = vin.split(' - ')[-1] if ' - ' in vin else vin
+
                 check_query = f"SELECT vin FROM {vin_log_table} WHERE vin = %s LIMIT 1"
-                result = db_manager.execute_query(check_query, (vin,))
+                logger.info(f"[BILLING DEBUG] Executing query: {check_query} with VIN={clean_vin} (original: {vin})")
+                result = db_manager.execute_query(check_query, (clean_vin,))
+                logger.info(f"[BILLING DEBUG] Query result for {clean_vin}: {result}")
                 if result and len(result) > 0:
                     duplicates_count += 1
                     duplicate_vins.append(vin)
@@ -1363,6 +1382,7 @@ class CorrectOrderProcessor:
                             break
 
             # Row 1: Header row with Duplicates count
+            logger.info(f"[BILLING DEBUG] Writing header row with duplicates_count={duplicates_count}")
             writer.writerow(['Printed Vehicles:', '', '', '', '', 'TOTALS:', '', '', 'Duplicates:', duplicates_count, '', '', '', ''])
 
             # Rows 2-8: Vehicle data with totals on right
@@ -1469,7 +1489,7 @@ class CorrectOrderProcessor:
                 for idx, not_produced_vin in enumerate(not_produced_vins):
                     if idx == 0:
                         # First row has the header
-                        writer.writerow(['', '', '', '', '', '', not_produced_vin, '', '', '', '', '', '', ''])
+                        writer.writerow(['', '', '', '', '', 'Not on Website:', not_produced_vin, '', '', '', '', '', '', ''])
                     else:
                         # Subsequent rows just have the VIN
                         writer.writerow(['', '', '', '', '', '', not_produced_vin, '', '', '', '', '', '', ''])
@@ -2141,3 +2161,4 @@ if __name__ == "__main__":
     # Test CAO order with Dave Sinclair Lincoln
     result = processor.process_cao_order("Dave Sinclair Lincoln", "shortcut_pack")
     print(json.dumps(result, indent=2))
+

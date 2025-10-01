@@ -4860,14 +4860,20 @@ def enhanced_csv_download():
                 })
 
             # For LIST orders: Use original VIN list from frontend (what user entered)
-            # If not provided, assume all VINs were valid (backward compatibility)
+            # If not provided, use vin_list for both (backward compatibility)
             if original_vin_list:
                 # LIST order with invalid VIN tracking
                 list_original_vins = original_vin_list
                 list_filtered_vins = vin_list  # VINs that are being produced
                 logger.info(f"[ENHANCED DOWNLOAD] LIST order billing - Ordered: {len(list_original_vins)}, Produced: {len(list_filtered_vins)}")
+            elif vin_list:
+                # LIST order without original VIN list tracking (assume all valid)
+                # Still pass vin_list for duplicate checking
+                list_original_vins = vin_list
+                list_filtered_vins = vin_list
+                logger.info(f"[ENHANCED DOWNLOAD] LIST order billing (no tracking) - VINs: {len(vin_list)}")
             else:
-                # CAO order or LIST without tracking (all VINs are valid)
+                # CAO order
                 list_original_vins = None
                 list_filtered_vins = None
 
