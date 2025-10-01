@@ -1019,25 +1019,40 @@ class CorrectOrderProcessor:
     def _get_vehicle_qr_content(self, vehicle: Dict, dealership_name: str) -> str:
         """
         Generate QR content for a vehicle.
-        Priority: Vehicle URL from scraper with UTM > VIN fallback
+        Priority: Vehicle URL from database with UTM > Raw VIN fallback
         """
 
         vin = vehicle.get('vin', '').strip()
-        url = vehicle.get('vehicle_url', '').strip()
         year = vehicle.get('year', '')
         make = vehicle.get('make', '')
 
-        # Priority 1: Use vehicle_url if it exists (from scraper data)
-        if url and url.startswith('http'):
-            # Add UTM tracking parameters
-            url_with_utm = self._add_utm_parameters(url)
-            logger.info(f"QR Code URL for {year} {make} {vin}: {url_with_utm}")
-            return url_with_utm
+        # Strip prefix (NEW - , USED - , etc.) from VIN
+        raw_vin = vin
+        if ' - ' in vin:
+            raw_vin = vin.split(' - ')[-1]
 
-        # Priority 2: Fallback to VIN if no URL available
-        if vin:
-            logger.warning(f"No vehicle_url found for {year} {make} {vin}, using VIN as fallback")
-            return vin
+        # Priority 1: Query database for vehicle_url
+        if raw_vin:
+            try:
+                from database_connection import db_manager
+                url_result = db_manager.execute_query(
+                    "SELECT vehicle_url FROM normalized_vehicle_data WHERE vin = %s LIMIT 1",
+                    (raw_vin,)
+                )
+                if url_result and len(url_result) > 0:
+                    url = url_result[0].get('vehicle_url', '').strip()
+                    if url and url.startswith('http'):
+                        # Add UTM tracking parameters
+                        url_with_utm = self._add_utm_parameters(url)
+                        logger.info(f"QR Code URL for {year} {make} {raw_vin}: {url_with_utm}")
+                        return url_with_utm
+            except Exception as e:
+                logger.warning(f"Could not fetch vehicle_url from database for {raw_vin}: {e}")
+
+        # Priority 2: Fallback to raw VIN if no URL available
+        if raw_vin:
+            logger.warning(f"No vehicle_url found for {year} {make} {raw_vin}, using VIN as fallback")
+            return raw_vin
 
         # Priority 3: Final fallback
         logger.warning(f"No URL or VIN for vehicle, using description")
@@ -1241,17 +1256,35 @@ class CorrectOrderProcessor:
             stock = vehicle.get('stock', '')
             vin = vehicle.get('vin', '')
             vtype = vehicle.get('vehicle_condition', '').lower()
-            
-            # Determine vehicle type for billing
-            if 'new' in vtype:
+
+            # If vehicle_condition is missing, try to look it up from the database
+            if not vtype and vin:
+                query = "SELECT vehicle_condition FROM normalized_vehicle_data WHERE vin = %s LIMIT 1"
+                result = db_manager.execute_query(query, (vin,))
+                if result and len(result) > 0:
+                    vtype = (result[0].get('vehicle_condition') or '').lower()
+                    logger.info(f"[BILLING DEBUG] Looked up vehicle_condition for VIN {vin}: '{vtype}'")
+
+            # DEBUG: Log first 3 vehicles to see what vehicle_condition values we're getting
+            if len(vehicle_lines) < 3:
+                logger.info(f"[BILLING DEBUG] Vehicle: {year} {make} {model}, vehicle_condition: '{vtype}', full vehicle data keys: {list(vehicle.keys())}")
+
+            # Determine vehicle type for billing using _get_type_prefix logic
+            type_prefix = self._get_type_prefix(vtype)
+
+            if type_prefix == 'NEW':
                 billing_type = 'New'
                 new_count += 1
-            elif 'certified' in vtype or 'cpo' in vtype or 'pre-owned' in vtype:
-                billing_type = 'Pre-Owned'
+            elif type_prefix == 'CERTIFIED':
+                billing_type = 'CPO'
                 cpo_count += 1
-            else:
-                billing_type = 'Used'
+            else:  # USED
+                billing_type = 'PO'
                 used_count += 1
+
+            # DEBUG: Log the categorization
+            if len(vehicle_lines) < 3:
+                logger.info(f"[BILLING DEBUG] Type prefix: {type_prefix}, Billing type: {billing_type}")
             
             # Format vehicle line: "Year Make Model - Stock - VIN"
             vehicle_line = f"{year} {make} {model} - {stock} - {vin}"
@@ -1321,17 +1354,17 @@ class CorrectOrderProcessor:
                     else:
                         writer.writerow([vehicle_line, vehicle_type, 'New:', new_count, vin_list[i] if i < len(vin_list) else '', '', duplicate_status])
                 elif i == 1:
-                    # Second row includes Used count
+                    # Second row includes PO count
                     if is_list_order:
-                        writer.writerow([vehicle_line, vehicle_type, 'Used:', used_count, vin_list[i] if i < len(vin_list) else '', '', '', '', '', '', ''])
+                        writer.writerow([vehicle_line, vehicle_type, 'PO:', used_count, vin_list[i] if i < len(vin_list) else '', '', '', '', '', '', ''])
                     else:
-                        writer.writerow([vehicle_line, vehicle_type, 'Used:', used_count, vin_list[i] if i < len(vin_list) else '', '', ''])
+                        writer.writerow([vehicle_line, vehicle_type, 'PO:', used_count, vin_list[i] if i < len(vin_list) else '', '', ''])
                 elif i == 2:
-                    # Third row includes Pre-Owned count
+                    # Third row includes CPO count
                     if is_list_order:
-                        writer.writerow([vehicle_line, vehicle_type, 'Pre-Owned:', cpo_count, vin_list[i] if i < len(vin_list) else '', '', '', '', '', '', ''])
+                        writer.writerow([vehicle_line, vehicle_type, 'CPO:', cpo_count, vin_list[i] if i < len(vin_list) else '', '', '', '', '', '', ''])
                     else:
-                        writer.writerow([vehicle_line, vehicle_type, 'Pre-Owned:', cpo_count, vin_list[i] if i < len(vin_list) else '', '', ''])
+                        writer.writerow([vehicle_line, vehicle_type, 'CPO:', cpo_count, vin_list[i] if i < len(vin_list) else '', '', ''])
                 elif i == 3:
                     # Fourth row includes Total
                     if is_list_order:
@@ -1433,7 +1466,13 @@ class CorrectOrderProcessor:
                         if idx < len(vehicles):
                             vehicle_vin = vehicles[idx].get('vin', '')
                             if vehicle_vin:
-                                qr_path_map[vehicle_vin] = qr_path
+                                # Strip prefix (NEW - , USED - , etc.) from VIN for mapping
+                                raw_vin = vehicle_vin
+                                if ' - ' in vehicle_vin:
+                                    raw_vin = vehicle_vin.split(' - ')[-1]
+                                # Map both prefixed and raw VIN to the same QR path
+                                qr_path_map[vehicle_vin] = qr_path  # Keep original for backward compatibility
+                                qr_path_map[raw_vin] = qr_path      # Add raw VIN mapping
 
                 # Write data rows
                 for idx, vehicle in enumerate(vehicles):
@@ -1478,23 +1517,86 @@ class CorrectOrderProcessor:
                             elif field_mapping == 'price_with_markup':
                                 # Handle price with markup calculation
                                 try:
-                                    price = vehicle.get('price', 0)
-                                    if isinstance(price, str):
-                                        # Remove currency symbols and commas
-                                        price = price.replace('$', '').replace(',', '')
-                                        price = float(price) if price else 0
-                                    elif price is None:
-                                        price = 0
+                                    # Get MSRP from database since it's not in the vehicle dict
+                                    msrp = 0
+                                    vin = vehicle.get('vin', '')
 
-                                    # Get markup amount from field configuration, default to 1000
-                                    markup = field.get('markup_amount', 1000)
-                                    price_with_markup = price + markup
-                                    value = f"${price_with_markup:,.0f}" if price_with_markup > 0 else ''
-                                except (ValueError, TypeError):
-                                    value = ''
+                                    # Extract raw VIN (remove "NEW - " or "USED - " prefix)
+                                    raw_vin = vin
+                                    if ' - ' in vin:
+                                        raw_vin = vin.split(' - ')[-1]
+
+                                    logger.info(f"[PRICE DEBUG] Looking up MSRP for VIN: {raw_vin}")
+
+                                    try:
+                                        from database_connection import db_manager
+                                        # Query for MSRP and price from normalized_vehicle_data
+                                        # Use MSRP if available, otherwise fall back to price
+                                        price_result = db_manager.execute_query(
+                                            "SELECT msrp, price FROM normalized_vehicle_data WHERE vin = %s LIMIT 1",
+                                            (raw_vin,)
+                                        )
+                                        if price_result and len(price_result) > 0:
+                                            msrp = price_result[0].get('msrp')
+                                            price = price_result[0].get('price', 0)
+
+                                            # Use MSRP if available, otherwise use price
+                                            if msrp is not None:
+                                                logger.info(f"[PRICE DEBUG] Using MSRP from database: {msrp}")
+                                                base_price = msrp
+                                            else:
+                                                logger.info(f"[PRICE DEBUG] MSRP is null, using price instead: {price}")
+                                                base_price = price
+
+                                            if isinstance(base_price, str):
+                                                # Remove currency symbols and commas
+                                                base_price = base_price.replace('$', '').replace(',', '')
+                                                msrp = float(base_price) if base_price else 0
+                                            else:
+                                                msrp = float(base_price) if base_price else 0
+                                        else:
+                                            logger.warning(f"[PRICE DEBUG] No price data found for VIN: {raw_vin}")
+                                    except Exception as e:
+                                        logger.warning(f"[CUSTOM TEMPLATE] Could not fetch price from database: {e}")
+                                        msrp = 0
+
+                                    logger.info(f"[PRICE DEBUG] Final MSRP value: {msrp}")
+
+                                    # Get markup from dealership config in database
+                                    markup = 1000  # default
+                                    try:
+                                        config_result = db_manager.execute_query(
+                                            "SELECT output_rules FROM dealership_configs WHERE name = %s",
+                                            (dealership_name,)
+                                        )
+                                        if config_result and len(config_result) > 0:
+                                            output_rules = config_result[0].get('output_rules', {})
+                                            markup = output_rules.get('price_markup', 1000)
+                                            logger.info(f"[PRICE DEBUG] Markup from config: {markup}")
+                                    except Exception as e:
+                                        logger.warning(f"[CUSTOM TEMPLATE] Could not fetch dealership markup: {e}")
+                                        markup = field.get('markup_amount', 1000)
+
+                                    price_with_markup = msrp + markup
+                                    logger.info(f"[PRICE DEBUG] Final calculation: {msrp} + {markup} = {price_with_markup}")
+                                    value = f"${price_with_markup:,.0f}" if price_with_markup > 0 else '$1,000'
+                                    logger.info(f"[PRICE DEBUG] Final value: {value}")
+                                except (ValueError, TypeError) as e:
+                                    logger.warning(f"[CUSTOM TEMPLATE] Error calculating price_with_markup: {e}")
+                                    value = '$1,000'
                             elif field_mapping in ['qr_code', 'qr_path']:
                                 vin = vehicle.get('vin', '')
+                                logger.info(f"[QR DEBUG] Looking for QR path for VIN: {vin}")
+                                logger.info(f"[QR DEBUG] Available keys in qr_path_map: {list(qr_path_map.keys())[:5]}")
+                                # Try to get QR path using the VIN as-is first
                                 value = qr_path_map.get(vin, '')
+                                logger.info(f"[QR DEBUG] Found with full VIN: {value}")
+                                # If not found, try stripping the prefix
+                                if not value and ' - ' in vin:
+                                    raw_vin = vin.split(' - ')[-1]
+                                    value = qr_path_map.get(raw_vin, '')
+                                    logger.info(f"[QR DEBUG] Found with raw VIN ({raw_vin}): {value}")
+                                logger.info(f"[QR DEBUG] Final QR path: {value}")
                             # Handle direct field mappings using actual vehicle data structure
                             elif field_mapping == 'yearmake':
                                 value = vehicle.get('yearmake', '')

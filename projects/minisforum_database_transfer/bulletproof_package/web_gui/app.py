@@ -4312,6 +4312,7 @@ def generate_qr_codes_from_csv():
                             name_mapping = {
                                 'South County DCJR': 'South County Dodge Chrysler Jeep RAM',
                                 'Glendale Subaru': 'Glendale Chrysler Jeep Dodge Ram',
+                                'Glendale CDJR': 'Glendale Chrysler Jeep Dodge Ram',
                                 'CDJR of Columbia': 'CDJR of Columbia'
                             }
                             return name_mapping.get(name, name)
@@ -4768,7 +4769,7 @@ def enhanced_csv_download():
                     'Dave Sinclair Lincoln St. Peters': 'Dave Sinclair Lincoln St. Peters',
                     'South County DCJR': 'South County Dodge Chrysler Jeep RAM',
                     'CDJR of Columbia': 'Joe Machens Chrysler Dodge Jeep Ram',
-                    'Glendale CDJR': 'Glendale Chrysler Dodge Jeep RAM',
+                    'Glendale CDJR': 'Glendale Chrysler Jeep Dodge Ram',
                     'BMW of Columbia': 'BMW of Columbia',
                     'KIA of Columbia': 'Kia of Columbia',
                     'Rusty Drewing Chevy BGMC': 'Rusty Drewing Chevrolet Buick GMC'
