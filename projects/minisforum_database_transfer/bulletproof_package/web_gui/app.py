@@ -4564,12 +4564,15 @@ def enhanced_csv_download():
         order_number = data.get('order_number')
         csv_data = data.get('csv_data')
         custom_templates = data.get('custom_templates')
+        original_vin_list = data.get('original_vin_list')  # For LIST orders - what user originally entered
 
         if not dealership_name or not csv_data:
             return jsonify({'error': 'Missing dealership_name or csv_data'}), 400
 
         logger.info(f"[ENHANCED DOWNLOAD] Processing {dealership_name} with order number: {order_number}")
         logger.info(f"[ENHANCED DOWNLOAD] Custom templates: {custom_templates}")
+        if original_vin_list:
+            logger.info(f"[ENHANCED DOWNLOAD] LIST order detected - original VIN count: {len(original_vin_list)}")
 
         # Step 1: Create a new output folder with order number and timestamp
         from datetime import datetime
@@ -4856,10 +4859,17 @@ def enhanced_csv_download():
                     'stock': vehicle['stock']
                 })
 
-            # For LIST orders, both original and filtered VIN lists are the same
-            # (all VINs provided are processed since they were pre-validated)
-            original_vin_list = vin_list.copy()
-            filtered_vin_list = vin_list.copy()
+            # For LIST orders: Use original VIN list from frontend (what user entered)
+            # If not provided, assume all VINs were valid (backward compatibility)
+            if original_vin_list:
+                # LIST order with invalid VIN tracking
+                list_original_vins = original_vin_list
+                list_filtered_vins = vin_list  # VINs that are being produced
+                logger.info(f"[ENHANCED DOWNLOAD] LIST order billing - Ordered: {len(list_original_vins)}, Produced: {len(list_filtered_vins)}")
+            else:
+                # CAO order or LIST without tracking (all VINs are valid)
+                list_original_vins = None
+                list_filtered_vins = None
 
             # Generate billing CSV using the correct method with VIN lists
             timestamp_str = timestamp.strftime('%Y%m%d_%H%M%S')
@@ -4868,8 +4878,8 @@ def enhanced_csv_download():
                 dealership_name=dealership_name,
                 output_folder=output_folder,
                 timestamp=timestamp_str,
-                original_vin_list=original_vin_list,
-                filtered_vin_list=filtered_vin_list
+                original_vin_list=list_original_vins,
+                filtered_vin_list=list_filtered_vins
             )
 
             if billing_csv_path and billing_csv_path.exists():

@@ -337,9 +337,18 @@ class CorrectOrderProcessor:
             
             # Generate Adobe CSV - use filtered vehicles
             csv_path = self._generate_adobe_csv(filtered_vehicles, dealership_name, template_type, order_folder, qr_paths)
-            
+
             # Generate billing sheet CSV automatically after QR codes
-            billing_csv_path = self._generate_billing_sheet_csv(filtered_vehicles, dealership_name, order_folder, timestamp)
+            # For LIST orders: Pass original VIN list (what user ordered) and filtered VIN list (what was produced)
+            filtered_vin_list = [v.get('vin', '') for v in filtered_vehicles]
+            billing_csv_path = self._generate_billing_sheet_csv(
+                filtered_vehicles,
+                dealership_name,
+                order_folder,
+                timestamp,
+                original_vin_list=vin_list,  # What user ordered
+                filtered_vin_list=filtered_vin_list  # What we actually produced
+            )
             
             # CRITICAL: Log processed vehicle VINs to history database for future order accuracy - use filtered vehicles (unless testing)
             if skip_vin_logging:

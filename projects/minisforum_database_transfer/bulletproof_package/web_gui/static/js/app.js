@@ -11211,6 +11211,12 @@ Output folder: ${result.output_folder}`;
                 const customTemplateConfig = dealershipData?.output_rules?.custom_templates || null;
                 console.log(`[ENHANCED DOWNLOAD] Custom Template Config for ${currentDealership}:`, customTemplateConfig);
 
+                // Get original VIN list for LIST orders (for billing ordered vs produced)
+                const originalVinList = (isPreparedList && dealershipOrder && dealershipOrder.original_vin_list) ? dealershipOrder.original_vin_list : null;
+                if (originalVinList) {
+                    console.log(`[ENHANCED DOWNLOAD] LIST order detected - passing original VIN count: ${originalVinList.length}`);
+                }
+
                 // Call the enhanced download endpoint that preserves edits
                 const enhancedResponse = await fetch('/api/csv/enhanced-download', {
                     method: 'POST',
@@ -11221,7 +11227,8 @@ Output folder: ${result.output_folder}`;
                         dealership_name: currentDealership,
                         order_number: orderNumber.trim(),
                         csv_data: csvData,
-                        custom_templates: customTemplateConfig
+                        custom_templates: customTemplateConfig,
+                        original_vin_list: originalVinList  // For LIST orders billing (ordered vs produced)
                     })
                 });
 
