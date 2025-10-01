@@ -3390,7 +3390,7 @@ class MinisFornumApp {
                 const lastOrderDate = this.lastOrderDates[dealership.name] || 'No orders yet';
                 
                 return `
-                    <div class="modern-dealer-panel ${typeClass}" data-dealership="${dealership.name}" draggable="true">
+                    <div class="modern-dealer-panel ${typeClass}" data-dealership="${dealership.name}" draggable="true" tabindex="0" title="Click to add to queue or press Alt+L when focused">
                         <div class="panel-content">
                             <h3 class="dealer-title">${dealership.name}</h3>
                             <div class="panel-details">
@@ -3438,7 +3438,16 @@ class MinisFornumApp {
         
         // Add event listener using delegation
         dealershipList.addEventListener('click', this.dealershipClickHandler);
-        
+
+        // Add keyboard navigation for dealership panels
+        dealershipList.addEventListener('keydown', (e) => {
+            const dealershipItem = e.target.closest('.modern-dealer-panel');
+            if (dealershipItem && e.key === 'Enter') {
+                e.preventDefault();
+                dealershipItem.click();
+            }
+        });
+
         // Set up drag and drop event handlers
         this.setupDragAndDrop();
     }
@@ -3923,19 +3932,9 @@ class MinisFornumApp {
             this.addTerminalMessage('No dealerships in queue to process', 'warning');
             return;
         }
-        
-        // Ask user which method they prefer
-        const useWizard = confirm(
-            'How would you like to process the queue?\n\n' +
-            'OK = Open Order Processing Wizard (recommended)\n' +
-            'Cancel = Process directly in this window'
-        );
-        
-        if (useWizard) {
-            this.openOrderWizard();
-        } else {
-            this.processQueueDirectly();
-        }
+
+        // Launch order wizard directly (production mode)
+        this.openOrderWizard();
     }
     
     openOrderWizard() {

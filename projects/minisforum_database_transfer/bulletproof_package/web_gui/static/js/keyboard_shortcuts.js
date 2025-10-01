@@ -64,21 +64,21 @@ class KeyboardShortcutManager {
         });
 
         // Order Processing Shortcuts
-        this.registerShortcut('Ctrl+N', {
+        this.registerShortcut('Alt+N', {
             description: 'Create New Order',
             category: 'Orders',
             context: 'order-processing',
             handler: () => this.createNewOrder()
         });
 
-        this.registerShortcut('Ctrl+Enter', {
+        this.registerShortcut('Alt+Enter', {
             description: 'Submit Current Order',
             category: 'Orders',
             context: 'order-processing',
             handler: () => this.submitCurrentOrder()
         });
 
-        this.registerShortcut('Ctrl+P', {
+        this.registerShortcut('Alt+O', {
             description: 'Process Selected Orders',
             category: 'Orders',
             context: 'order-queue',
@@ -93,21 +93,21 @@ class KeyboardShortcutManager {
         });
 
         // Template Builder Shortcuts
-        this.registerShortcut('Ctrl+S', {
+        this.registerShortcut('Alt+S', {
             description: 'Save Template',
             category: 'Template Builder',
             context: 'template-builder',
             handler: () => this.saveTemplate()
         });
 
-        this.registerShortcut('Ctrl+Shift+N', {
+        this.registerShortcut('Alt+Shift+N', {
             description: 'New Template',
             category: 'Template Builder',
             context: 'template-builder',
             handler: () => this.newTemplate()
         });
 
-        this.registerShortcut('Ctrl+Shift+C', {
+        this.registerShortcut('Alt+Shift+C', {
             description: 'Create Combined Field',
             category: 'Template Builder',
             context: 'template-builder',
@@ -122,7 +122,7 @@ class KeyboardShortcutManager {
             handler: () => this.refreshScraperStatus()
         });
 
-        this.registerShortcut('Ctrl+R', {
+        this.registerShortcut('Alt+R', {
             description: 'Run Selected Scrapers',
             category: 'Scraper',
             context: 'scraper-status',
@@ -137,26 +137,26 @@ class KeyboardShortcutManager {
         });
 
         // Search and Filter Shortcuts
-        this.registerShortcut('Ctrl+F', {
+        this.registerShortcut('Alt+F', {
             description: 'Focus Search Field',
             category: 'General',
             handler: () => this.focusSearch()
         });
 
-        this.registerShortcut('Ctrl+Shift+F', {
+        this.registerShortcut('Alt+Shift+F', {
             description: 'Clear All Filters',
             category: 'General',
             handler: () => this.clearFilters()
         });
 
         // Selection Shortcuts
-        this.registerShortcut('Ctrl+A', {
+        this.registerShortcut('Alt+A', {
             description: 'Select All Items',
             category: 'Selection',
             handler: (e) => this.selectAll(e)
         });
 
-        this.registerShortcut('Ctrl+Shift+A', {
+        this.registerShortcut('Alt+Shift+A', {
             description: 'Deselect All Items',
             category: 'Selection',
             handler: () => this.deselectAll()
@@ -248,7 +248,7 @@ class KeyboardShortcutManager {
         });
 
         // Quick Actions
-        this.registerShortcut('Ctrl+,', {
+        this.registerShortcut('Alt+,', {
             description: 'Open Settings',
             category: 'General',
             handler: () => this.openSettings()
@@ -277,6 +277,52 @@ class KeyboardShortcutManager {
             description: 'Toggle Selection of Current Item',
             category: 'Selection',
             handler: (e) => this.toggleItemSelection(e)
+        });
+
+        // Dealership Selection Shortcuts
+        this.registerShortcut('Alt+L', {
+            description: 'Add Focused Dealership to Queue',
+            category: 'Queue Management',
+            context: 'queue-management',
+            handler: () => this.addFocusedDealershipToQueue()
+        });
+
+        this.registerShortcut('Alt+G', {
+            description: 'Go to Dealership Panels',
+            category: 'Queue Management',
+            context: 'queue-management',
+            handler: () => this.focusFirstDealership()
+        });
+
+        // Order Wizard Modal Shortcuts
+        this.registerShortcut('Alt+Right', {
+            description: 'Next Step in Wizard',
+            category: 'Order Wizard',
+            handler: () => this.wizardNextStep()
+        });
+
+        this.registerShortcut('Alt+Left', {
+            description: 'Previous Step in Wizard',
+            category: 'Order Wizard',
+            handler: () => this.wizardPreviousStep()
+        });
+
+        this.registerShortcut('Alt+Enter', {
+            description: 'Complete Current Wizard Action',
+            category: 'Order Wizard',
+            handler: () => this.wizardPrimaryAction()
+        });
+
+        this.registerShortcut('Alt+B', {
+            description: 'Batch Process (Review Step)',
+            category: 'Order Wizard',
+            handler: () => this.wizardBatchProcess()
+        });
+
+        this.registerShortcut('Alt+Shift+P', {
+            description: 'Process Presently (Review Step)',
+            category: 'Order Wizard',
+            handler: () => this.wizardProcessPresently()
         });
     }
 
@@ -469,9 +515,18 @@ class KeyboardShortcutManager {
 
     // Modal Handlers
     closeActiveModal() {
+        // Check if keyboard shortcuts modal is open first
+        if (this.helpVisible) {
+            this.hideHelp();
+            return;
+        }
+
+        // Close other modals
         const modals = document.querySelectorAll('.modal[style*="display: flex"], .modal[style*="display: block"]');
         modals.forEach(modal => {
-            modal.style.display = 'none';
+            if (modal.id !== 'keyboardShortcutsModal') {
+                modal.style.display = 'none';
+            }
         });
     }
 
@@ -566,6 +621,46 @@ class KeyboardShortcutManager {
         if (dayButton) {
             dayButton.click();
             console.log(`[SHORTCUTS] Selected ${day}`);
+        }
+    }
+
+    focusFirstDealership() {
+        const visiblePanels = Array.from(document.querySelectorAll('.modern-dealer-panel'))
+            .filter(panel => panel.offsetParent !== null); // Only visible panels
+
+        if (visiblePanels.length > 0) {
+            visiblePanels[0].focus();
+            visiblePanels[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const dealershipName = visiblePanels[0].getAttribute('data-dealership');
+            console.log(`[SHORTCUTS] Focused first dealership: ${dealershipName}`);
+        } else {
+            console.log('[SHORTCUTS] No dealership panels available');
+        }
+    }
+
+    addFocusedDealershipToQueue() {
+        // Get the currently focused or hovered dealership panel
+        const focusedPanel = document.querySelector('.modern-dealer-panel:focus, .modern-dealer-panel:hover');
+        if (focusedPanel) {
+            const dealershipName = focusedPanel.getAttribute('data-dealership');
+            if (dealershipName && window.app) {
+                focusedPanel.click();
+                console.log(`[SHORTCUTS] Added ${dealershipName} to queue`);
+                return;
+            }
+        }
+
+        // If no focused panel, try to add the first visible dealership
+        const visiblePanels = Array.from(document.querySelectorAll('.modern-dealer-panel'))
+            .filter(panel => panel.offsetParent !== null); // Only visible panels
+
+        if (visiblePanels.length > 0) {
+            visiblePanels[0].click();
+            visiblePanels[0].focus();
+            const dealershipName = visiblePanels[0].getAttribute('data-dealership');
+            console.log(`[SHORTCUTS] Added first visible dealership (${dealershipName}) to queue`);
+        } else {
+            console.log('[SHORTCUTS] No dealership panels available to add');
         }
     }
 
@@ -670,7 +765,7 @@ class KeyboardShortcutManager {
                 <div class="modal-content" style="max-width: 800px; max-height: 80vh; overflow-y: auto;">
                     <div class="modal-header">
                         <h2><i class="fas fa-keyboard"></i> Keyboard Shortcuts</h2>
-                        <button class="modal-close" onclick="keyboardShortcuts.hideHelp()">
+                        <button class="modal-close" onclick="if(window.keyboardShortcuts) window.keyboardShortcuts.hideHelp()">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
@@ -685,6 +780,16 @@ class KeyboardShortcutManager {
         `;
 
         document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+        // Add click-outside-to-close handler
+        const modal = document.getElementById('keyboardShortcutsModal');
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    this.hideHelp();
+                }
+            });
+        }
     }
 
     // Enable/Disable shortcuts
@@ -713,6 +818,62 @@ class KeyboardShortcutManager {
     setContext(context) {
         this.currentContext = context;
         console.log(`[SHORTCUTS] Context manually set to: ${context}`);
+    }
+
+    // Order Wizard Modal Handlers
+    wizardNextStep() {
+        if (!this.isWizardModalOpen()) return;
+
+        const nextBtn = document.querySelector('.wizard-actions .btn-wizard.primary');
+        if (nextBtn && !nextBtn.disabled) {
+            nextBtn.click();
+            console.log('[SHORTCUTS] Wizard: Next step');
+        }
+    }
+
+    wizardPreviousStep() {
+        if (!this.isWizardModalOpen()) return;
+
+        const backBtn = document.querySelector('.wizard-actions .btn-wizard.secondary');
+        if (backBtn && !backBtn.disabled) {
+            backBtn.click();
+            console.log('[SHORTCUTS] Wizard: Previous step');
+        }
+    }
+
+    wizardPrimaryAction() {
+        if (!this.isWizardModalOpen()) return;
+
+        const primaryBtn = document.querySelector('.wizard-actions .btn-wizard.primary');
+        if (primaryBtn && !primaryBtn.disabled) {
+            primaryBtn.click();
+            console.log('[SHORTCUTS] Wizard: Primary action executed');
+        }
+    }
+
+    wizardBatchProcess() {
+        if (!this.isWizardModalOpen()) return;
+
+        const batchBtn = document.querySelector('.wizard-actions .btn-wizard.primary[onclick*="Batch"]');
+        if (batchBtn && !batchBtn.disabled) {
+            batchBtn.click();
+            console.log('[SHORTCUTS] Wizard: Batch process');
+        }
+    }
+
+    wizardProcessPresently() {
+        if (!this.isWizardModalOpen()) return;
+
+        const presentlyBtn = document.querySelector('.wizard-actions .btn-wizard.success[onclick*="Presently"]');
+        if (presentlyBtn && !presentlyBtn.disabled) {
+            presentlyBtn.click();
+            console.log('[SHORTCUTS] Wizard: Process presently');
+        }
+    }
+
+    isWizardModalOpen() {
+        const modal = document.getElementById('orderWizardModal');
+        return modal && modal.style.display !== 'none';
     }
 }
 

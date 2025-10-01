@@ -1637,6 +1637,35 @@ def extract_vins_from_csv_for_phase2(csv_filename, return_full_data=True):
                     if 'STOCK' in row:
                         vehicle_data[i]['stock'] = str(row['STOCK'])
 
+            # PHASE 2 QR CODE FIX: Enrich vehicle data with vehicle_url from database
+            logger.info(f"[PHASE2 CSV] Enriching vehicle data with vehicle_url from database...")
+            for vehicle in vehicle_data:
+                vin = vehicle.get('vin', '')
+                if vin:
+                    try:
+                        # Query database for vehicle_url using VIN
+                        url_result = db_manager.execute_query("""
+                            SELECT rvd.vehicle_url
+                            FROM raw_vehicle_data rvd
+                            JOIN scraper_imports si ON rvd.import_id = si.import_id
+                            WHERE rvd.vin = %s
+                            AND si.status = 'active'
+                            ORDER BY rvd.import_timestamp DESC
+                            LIMIT 1
+                        """, (vin,))
+
+                        if url_result and len(url_result) > 0:
+                            vehicle_url = url_result[0].get('vehicle_url', '')
+                            if vehicle_url:
+                                vehicle['vehicle_url'] = vehicle_url
+                                logger.info(f"[PHASE2 CSV] Enriched VIN {vin} with vehicle_url: {vehicle_url}")
+                            else:
+                                logger.warning(f"[PHASE2 CSV] No vehicle_url found for VIN {vin}")
+                        else:
+                            logger.warning(f"[PHASE2 CSV] No database record found for VIN {vin}")
+                    except Exception as e:
+                        logger.error(f"[PHASE2 CSV] Error querying vehicle_url for VIN {vin}: {e}")
+
             # Log sample of first vehicle to verify data structure
             if vehicle_data:
                 logger.info(f"[PHASE2 CSV] Sample vehicle data structure: {list(vehicle_data[0].keys())}")
@@ -4735,19 +4764,23 @@ def enhanced_csv_download():
 
                 # Map dealership name to database name (same logic as OLD workflow)
                 dealership_name_mapping = {
+                    'Dave Sinclair Lincoln South': 'Dave Sinclair Lincoln',
+                    'Dave Sinclair Lincoln St. Peters': 'Dave Sinclair Lincoln St. Peters',
                     'South County DCJR': 'South County Dodge Chrysler Jeep RAM',
-                    'CDJR of Columbia': 'Chrysler Dodge Jeep Ram of Columbia',
+                    'CDJR of Columbia': 'Joe Machens Chrysler Dodge Jeep Ram',
                     'Glendale CDJR': 'Glendale Chrysler Dodge Jeep RAM',
-                    'BMW of Columbia': 'BMW of Columbia'
+                    'BMW of Columbia': 'BMW of Columbia',
+                    'KIA of Columbia': 'Kia of Columbia',
+                    'Rusty Drewing Chevy BGMC': 'Rusty Drewing Chevrolet Buick GMC'
                 }
                 db_dealership_name = dealership_name_mapping.get(dealership_name, dealership_name)
 
-                # Look up vehicle URL from database using VIN (same query as generate_qr_codes_from_csv)
+                # Look up vehicle URL from database using VIN - FIXED to use raw_vehicle_data which has vehicle_url
                 vehicle_url_data = db_manager.execute_query("""
-                    SELECT nvd.vehicle_url FROM normalized_vehicle_data nvd
-                    JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
+                    SELECT rvd.vehicle_url
+                    FROM raw_vehicle_data rvd
                     JOIN scraper_imports si ON rvd.import_id = si.import_id
-                    WHERE nvd.vin = %s AND nvd.location = %s AND si.status = 'active'
+                    WHERE rvd.vin = %s AND rvd.location = %s AND si.status = 'active'
                     ORDER BY rvd.import_timestamp DESC
                     LIMIT 1
                 """, (vin, db_dealership_name))
