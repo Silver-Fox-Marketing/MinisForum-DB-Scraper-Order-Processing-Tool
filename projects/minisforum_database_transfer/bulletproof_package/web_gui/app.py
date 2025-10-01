@@ -4762,8 +4762,21 @@ def enhanced_csv_download():
             try:
                 # CRITICAL FIX: Look up vehicle URL from database instead of using VIN text
                 raw_vin = vehicle['vin']
-                # Strip prefixes like "NEW - " or "USED - " from VIN for database lookup
-                vin = raw_vin.replace('NEW - ', '').replace('USED - ', '').strip()
+                # Strip prefixes like "NEW - ", "USED - ", "CERTIFIED - ", "CPO - " from VIN for database lookup
+                vin = raw_vin
+                if ' - ' in vin:
+                    vin = vin.split(' - ')[-1]
+
+                # Additional fallback: strip common vehicle type prefixes if still present
+                vehicle_type_prefixes = ['NEW', 'USED', 'CPO', 'CERTIFIED PRE OWNED', 'CERTIFIED', 'PRE-OWNED', 'PRE OWNED', 'PO']
+                for prefix in vehicle_type_prefixes:
+                    if vin.upper().startswith(prefix + ' '):
+                        vin = vin[len(prefix):].strip()
+                        break
+                    if vin.upper().startswith(prefix + '-'):
+                        vin = vin[len(prefix)+1:].strip()
+                        break
+
                 logger.info(f"[ENHANCED DOWNLOAD QR FIX] Processing VIN: {raw_vin} -> cleaned: {vin}")
 
                 # Map dealership name to database name (same logic as OLD workflow)

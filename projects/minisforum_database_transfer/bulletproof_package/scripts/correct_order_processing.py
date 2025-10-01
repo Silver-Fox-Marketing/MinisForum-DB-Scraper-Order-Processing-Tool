@@ -51,7 +51,7 @@ class CorrectOrderProcessor:
             'Dave Sinclair Lincoln': ['Dave Sinclair Lincoln South', 'Dave Sinclair Lincoln'],
             'BMW of West St. Louis': ['BMW of West St. Louis'],
             'Columbia Honda': ['Columbia Honda'],
-            'Bommarito West County PO': ['Bommarito West County PO'],
+            'Bommarito West County': ['Bommarito West County'],
             'Bommarito Cadillac': ['Bommarito Cadillac'],
             'South County DCJR': ['South County DCJR', 'South County Dodge Chrysler Jeep RAM'],
             'South County Dodge Chrysler Jeep RAM': ['South County DCJR', 'South County Dodge Chrysler Jeep RAM'],
@@ -98,7 +98,32 @@ class CorrectOrderProcessor:
         table_name = f'{slug}_vin_log'
         logger.info(f"[VIN LOG] Standard mapping: '{dealership_name}' -> '{table_name}'")
         return table_name
-    
+
+    def _get_dealership_template_config(self, dealership_name: str) -> str:
+        """
+        Get the template type from dealership configuration.
+
+        Args:
+            dealership_name: The dealership name
+
+        Returns:
+            Template type string (e.g., 'shortcut_pack', 'shortcut', 'flyout')
+        """
+        try:
+            config_result = db_manager.execute_query(
+                "SELECT output_rules FROM dealership_configs WHERE name = %s",
+                (dealership_name,)
+            )
+            if config_result and len(config_result) > 0:
+                output_rules = config_result[0].get('output_rules', {})
+                template_type = output_rules.get('template_type', 'shortcut_pack')
+                return template_type
+        except Exception as e:
+            logger.warning(f"[CONFIG] Could not fetch template type for {dealership_name}: {e}")
+
+        # Default to shortcut_pack if config not found
+        return 'shortcut_pack'
+
     def process_cao_order(self, dealership_name: str, template_type: str = "shortcut_pack", skip_vin_logging: bool = False) -> Dict[str, Any]:
         """
         Process CAO (Comparative Analysis Order)
@@ -544,8 +569,10 @@ class CorrectOrderProcessor:
     
     def _get_dealership_vehicles(self, dealership_name: str) -> List[Dict]:
         """Get all vehicles for dealership with filtering"""
-        
+
         # Map dealership config name to actual data location name
+        logger.info(f"[CAO DEBUG] Looking up mapping for: '{dealership_name}' (repr: {repr(dealership_name)})")
+        logger.info(f"[CAO DEBUG] Available mappings: {list(self.dealership_name_mapping.keys())}")
         actual_location_name = self.dealership_name_mapping.get(dealership_name, dealership_name)
         logger.info(f"[CAO DEBUG] Mapping {dealership_name} -> {actual_location_name}")
         
@@ -1035,10 +1062,20 @@ class CorrectOrderProcessor:
         year = vehicle.get('year', '')
         make = vehicle.get('make', '')
 
-        # Strip prefix (NEW - , USED - , etc.) from VIN
+        # Strip prefix (NEW - , USED - , CPO - , CERTIFIED PRE OWNED - , etc.) from VIN
         raw_vin = vin
         if ' - ' in vin:
             raw_vin = vin.split(' - ')[-1]
+
+        # Additional fallback: strip common vehicle type prefixes if still present
+        vehicle_type_prefixes = ['NEW', 'USED', 'CPO', 'CERTIFIED PRE OWNED', 'CERTIFIED', 'PRE-OWNED', 'PRE OWNED', 'PO']
+        for prefix in vehicle_type_prefixes:
+            if raw_vin.upper().startswith(prefix + ' '):
+                raw_vin = raw_vin[len(prefix):].strip()
+                break
+            if raw_vin.upper().startswith(prefix + '-'):
+                raw_vin = raw_vin[len(prefix)+1:].strip()
+                break
 
         # Priority 1: Query database for vehicle_url
         if raw_vin:

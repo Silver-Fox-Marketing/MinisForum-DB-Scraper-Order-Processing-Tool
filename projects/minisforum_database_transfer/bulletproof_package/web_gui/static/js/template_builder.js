@@ -17,6 +17,7 @@ class TemplateBuilder {
         this.dealerships = [];
         this.customCombinedFields = {};
         this.selectedFields = [];
+        this.fieldSeparators = []; // Track individual separators between fields
 
         this.init();
         // Load custom fields from localStorage after initialization
@@ -1142,10 +1143,17 @@ class TemplateBuilder {
             `;
         } else {
             console.log('[DEBUG] Rendering selected fields');
+
+            // Initialize separators array if needed
+            while (this.fieldSeparators.length < this.selectedFields.length - 1) {
+                this.fieldSeparators.push(' '); // Default to space
+            }
+
             const html = `
                 <div class="field-combination-display">
                     ${this.selectedFields.map((field, index) => {
                         console.log('[DEBUG] Rendering field:', field);
+                        const separator = this.fieldSeparators[index] || ' ';
                         return `
                         <div class="selected-field-item">
                             <i class="${field.icon}"></i>
@@ -1154,6 +1162,19 @@ class TemplateBuilder {
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
+                        ${index < this.selectedFields.length - 1 ? `
+                        <div class="separator-selector">
+                            <label>Separator:</label>
+                            <select onchange="templateBuilder.updateSeparator(${index}, this.value)" class="separator-dropdown">
+                                <option value=" " ${separator === ' ' ? 'selected' : ''}>Space</option>
+                                <option value=" - " ${separator === ' - ' ? 'selected' : ''}>Space-Dash-Space</option>
+                                <option value="-" ${separator === '-' ? 'selected' : ''}>Dash</option>
+                                <option value="_" ${separator === '_' ? 'selected' : ''}>Underscore</option>
+                                <option value=", " ${separator === ', ' ? 'selected' : ''}>Comma-Space</option>
+                                <option value="" ${separator === '' ? 'selected' : ''}>None</option>
+                            </select>
+                        </div>
+                        ` : ''}
                     `}).join('')}
                 </div>
             `;
@@ -1163,9 +1184,20 @@ class TemplateBuilder {
         console.log('[DEBUG] updateFieldCombinationBuilder complete');
     }
 
+    updateSeparator(index, value) {
+        console.log(`[DEBUG] Updating separator at index ${index} to: "${value}"`);
+        this.fieldSeparators[index] = value;
+        this.updateFieldPreview();
+    }
+
     removeSelectedField(index) {
         const removedField = this.selectedFields[index];
         this.selectedFields.splice(index, 1);
+
+        // Also remove the separator after this field (if it exists)
+        if (index < this.fieldSeparators.length) {
+            this.fieldSeparators.splice(index, 1);
+        }
 
         // Update UI
         const fieldChip = document.querySelector(`[data-field="${removedField.key}"]`);
@@ -1217,7 +1249,15 @@ class TemplateBuilder {
             'vehicle_url': 'https://dealer.com/vehicle/12345'
         };
 
-        const previewText = this.selectedFields.map(field => sampleData[field.key] || field.label).join(separator);
+        // Build preview text using individual separators
+        let previewText = '';
+        this.selectedFields.forEach((field, index) => {
+            previewText += sampleData[field.key] || field.label;
+            if (index < this.selectedFields.length - 1) {
+                const sep = this.fieldSeparators[index] || ' ';
+                previewText += sep;
+            }
+        });
 
         preview.innerHTML = `<span class="preview-sample">${previewText}</span>`;
     }
@@ -1273,7 +1313,8 @@ class TemplateBuilder {
         this.customCombinedFields[fieldKey] = {
             name: fieldName,
             fields: this.selectedFields.map(f => f.key),
-            separator: separator,
+            separator: separator, // Keep for backwards compatibility
+            separators: [...this.fieldSeparators], // Array of individual separators
             label: fieldName,
             icon: 'fas fa-compress-alt'
         };
