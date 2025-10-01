@@ -1328,6 +1328,8 @@ class CorrectOrderProcessor:
             slug = slug.replace('__', '_')
             vin_log_table = f'{slug}_vin_log'
 
+            logger.info(f"[BILLING DEBUG] Checking {len(filtered_vin_list)} VINs for duplicates in {vin_log_table}")
+
             # Check each produced VIN against the VIN log
             for vin in filtered_vin_list:
                 check_query = f"SELECT vin FROM {vin_log_table} WHERE vin = %s LIMIT 1"
@@ -1335,6 +1337,9 @@ class CorrectOrderProcessor:
                 if result and len(result) > 0:
                     duplicates_count += 1
                     duplicate_vins.append(vin)
+                    logger.info(f"[BILLING DEBUG] Found duplicate: {vin}")
+
+            logger.info(f"[BILLING DEBUG] Total duplicates found: {duplicates_count}")
         else:
             ordered_count = None
             produced_count = None
@@ -1392,17 +1397,6 @@ class CorrectOrderProcessor:
                         writer.writerow([vehicle_line, vehicle_type, '', '', vin_list[i] if i < len(vin_list) else '', '', '', '', '', '', ''])
                     else:
                         writer.writerow([vehicle_line, vehicle_type, '', '', vin_list[i] if i < len(vin_list) else '', '', ''])
-
-            # Add section for VINs that were NOT produced (LIST orders only)
-            if is_list_order and not_produced_vins:
-                # Add separator rows
-                writer.writerow(['', '', '', '', '', '', '', '', '', '', ''])
-                writer.writerow(['', '', '', '', '', '', '', '', '', '', ''])
-                writer.writerow(['VINs NOT Produced:', '', '', '', '', '', '', '', '', '', ''])
-
-                # List each VIN that was ordered but not produced
-                for not_produced_vin in not_produced_vins:
-                    writer.writerow([not_produced_vin, '', '', '', '', '', '', '', '', '', ''])
 
             # Add section for Duplicate VINs (LIST orders only)
             if is_list_order and duplicate_vins:
