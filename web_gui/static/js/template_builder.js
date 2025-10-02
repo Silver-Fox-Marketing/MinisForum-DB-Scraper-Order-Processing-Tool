@@ -137,32 +137,47 @@ class TemplateBuilder {
     }
 
     setupDropZone() {
+        // Make the entire template canvas accept drops (not just the small dropZone box)
+        const templateCanvas = document.getElementById('templateCanvas');
         const dropZone = document.getElementById('dropZone');
         const templateColumns = document.getElementById('templateColumns');
 
-        [dropZone, templateColumns].forEach(zone => {
-            if (!zone) return;
-
-            zone.addEventListener('dragover', (e) => {
+        // Setup the entire canvas as the drop zone
+        if (templateCanvas) {
+            templateCanvas.addEventListener('dragover', (e) => {
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'copy';
 
-                if (zone.classList.contains('drop-zone')) {
-                    zone.classList.add('drag-over');
+                // Add visual feedback to the entire canvas
+                templateCanvas.classList.add('drag-over');
+
+                // Also add feedback to the small dropZone if it exists (when empty)
+                if (dropZone && dropZone.classList.contains('drop-zone')) {
+                    dropZone.classList.add('drag-over');
                 }
             });
 
-            zone.addEventListener('dragleave', (e) => {
-                if (zone.classList.contains('drop-zone')) {
-                    zone.classList.remove('drag-over');
+            templateCanvas.addEventListener('dragleave', (e) => {
+                // Only remove if we're actually leaving the canvas area
+                const rect = templateCanvas.getBoundingClientRect();
+                if (e.clientX < rect.left || e.clientX >= rect.right ||
+                    e.clientY < rect.top || e.clientY >= rect.bottom) {
+                    templateCanvas.classList.remove('drag-over');
+
+                    if (dropZone && dropZone.classList.contains('drop-zone')) {
+                        dropZone.classList.remove('drag-over');
+                    }
                 }
             });
 
-            zone.addEventListener('drop', (e) => {
+            templateCanvas.addEventListener('drop', (e) => {
                 e.preventDefault();
+                e.stopPropagation();
 
-                if (zone.classList.contains('drop-zone')) {
-                    zone.classList.remove('drag-over');
+                // Remove visual feedback
+                templateCanvas.classList.remove('drag-over');
+                if (dropZone && dropZone.classList.contains('drop-zone')) {
+                    dropZone.classList.remove('drag-over');
                 }
 
                 try {
@@ -172,7 +187,27 @@ class TemplateBuilder {
                     console.error('[TEMPLATE BUILDER] Error dropping field:', error);
                 }
             });
-        });
+        }
+
+        // Also keep the templateColumns as a drop zone for backwards compatibility
+        if (templateColumns) {
+            templateColumns.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+            });
+
+            templateColumns.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                try {
+                    const fieldData = JSON.parse(e.dataTransfer.getData('application/json'));
+                    this.addFieldToTemplate(fieldData);
+                } catch (error) {
+                    console.error('[TEMPLATE BUILDER] Error dropping field:', error);
+                }
+            });
+        }
     }
 
     addFieldToTemplate(fieldData) {
