@@ -1,0 +1,1 @@
+                    <img src="{{ url_for('static', filename='images/car-logo.png') }}" alt="Silver Fox Marketing" class="header-logo">

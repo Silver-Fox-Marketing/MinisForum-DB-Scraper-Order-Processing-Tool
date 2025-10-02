@@ -31,12 +31,18 @@ class CorrectOrderProcessor:
         self.output_base.mkdir(exist_ok=True)
         
         # Map dealership config names to actual data location names
+        # Map dealership config names to actual data location names (for CAO processing)
         self.dealership_name_mapping = {
             'Dave Sinclair Lincoln South': 'Dave Sinclair Lincoln',
-            'BMW of West St. Louis': 'BMW of West St. Louis', 
+            'Dave Sinclair Lincoln St. Peters': 'Dave Sinclair Lincoln St. Peters',  # Exact match, but explicit for clarity
+            'BMW of West St. Louis': 'BMW of West St Louis',  # Config has period, CSV doesn't
             'Columbia Honda': 'Columbia Honda',
-            'South County Dodge Chrysler Jeep RAM': 'South County DCJR',
-            'South County DCJR': 'South County DCJR'
+            'South County DCJR': 'South County Dodge Chrysler Jeep RAM',  # Map config name TO CSV name
+            'Glendale CDJR': 'Glendale Chrysler Jeep Dodge Ram',  # Map config name to CSV name
+            'HW Kia': 'HW Kia of West County',  # Map config name to CSV name
+            'KIA of Columbia': 'Kia of Columbia',  # Config has all caps KIA, scraper has title case Kia
+            'Rusty Drewing Chevy BGMC': 'Rusty Drewing Chevrolet Buick GMC',  # Map short name to full scraper name
+            'CDJR of Columbia': 'Joe Machens Chrysler Dodge Jeep Ram'  # Map config name to scraper data location
         }
         
         # Reverse mapping for VIN history lookups
@@ -46,7 +52,13 @@ class CorrectOrderProcessor:
             'BMW of West St. Louis': ['BMW of West St. Louis'],
             'Columbia Honda': ['Columbia Honda'],
             'Bommarito West County': ['Bommarito West County'],
-            'Bommarito Cadillac': ['Bommarito Cadillac']
+            'Bommarito Cadillac': ['Bommarito Cadillac'],
+            'South County DCJR': ['South County DCJR', 'South County Dodge Chrysler Jeep RAM'],
+            'South County Dodge Chrysler Jeep RAM': ['South County DCJR', 'South County Dodge Chrysler Jeep RAM'],
+            'Glendale CDJR': ['Glendale CDJR', 'Glendale Chrysler Jeep Dodge Ram'],
+            'Glendale Chrysler Jeep Dodge Ram': ['Glendale CDJR', 'Glendale Chrysler Jeep Dodge Ram'],
+            'Rusty Drewing Chevy BGMC': ['Rusty Drewing Chevy BGMC', 'Rusty Drewing Chevrolet Buick GMC'],
+            'Rusty Drewing Chevrolet Buick GMC': ['Rusty Drewing Chevy BGMC', 'Rusty Drewing Chevrolet Buick GMC']
         }
     
     def _get_dealership_vin_log_table(self, dealership_name: str) -> str:
@@ -59,20 +71,183 @@ class CorrectOrderProcessor:
         Returns:
             The PostgreSQL table name for this dealership's VIN log
         """
-        # Create slug from dealership name
+        # CRITICAL FIX: Handle special cases where table names don't follow the standard pattern
+        # After standardization, we should use the standard pattern for all dealerships
+        vin_log_table_overrides = {
+            # Removed HW Kia override - now uses standard hw_kia_vin_log
+            # All dealerships now follow standard pattern: dealership_name_vin_log
+        }
+        
+        # Check for override first
+        if dealership_name in vin_log_table_overrides:
+            table_name = vin_log_table_overrides[dealership_name]
+            logger.info(f"[VIN LOG] Using override mapping: '{dealership_name}' -> '{table_name}'")
+            return table_name
+        
+        # Create slug from dealership name using standard pattern
         slug = dealership_name.lower()
         slug = slug.replace(' ', '_')
         slug = slug.replace('&', 'and')
         slug = slug.replace('.', '')
         slug = slug.replace(',', '')
+        slug = slug.replace("'", '')  # Remove apostrophes (O'Fallon -> OFallon)
         slug = slug.replace('-', '_')
         slug = slug.replace('/', '_')
         slug = slug.replace('__', '_')
-        
+
         table_name = f'{slug}_vin_log'
-        logger.debug(f"Dealership '{dealership_name}' -> table '{table_name}'")
+        logger.info(f"[VIN LOG] Standard mapping: '{dealership_name}' -> '{table_name}'")
         return table_name
-    
+
+    def _get_dealership_template_config(self, dealership_name: str) -> str:
+        """
+        Get the template type from dealership configuration.
+
+        Args:
+            dealership_name: The dealership name
+
+        Returns:
+            Template type string (e.g., 'shortcut_pack', 'shortcut', 'flyout')
+        """
+        try:
+            config_result = db_manager.execute_query(
+                "SELECT output_rules FROM dealership_configs WHERE name = %s",
+                (dealership_name,)
+            )
+            if config_result and len(config_result) > 0:
+                output_rules = config_result[0].get('output_rules', {})
+                template_type = output_rules.get('template_type', 'shortcut_pack')
+                return template_type
+        except Exception as e:
+            logger.warning(f"[CONFIG] Could not fetch template type for {dealership_name}: {e}")
+
+        # Default to shortcut_pack if config not found
+        return 'shortcut_pack'
+
+    def _get_dual_template_config(self, dealership_name: str) -> Optional[Dict[str, str]]:
+        """
+        Check if dealership has custom_templates configured for new/used split output.
+
+        Args:
+            dealership_name: The dealership name
+
+        Returns:
+            Dict with 'new' and 'used' template IDs if configured, None otherwise
+        """
+        try:
+            config_result = db_manager.execute_query(
+                "SELECT output_rules FROM dealership_configs WHERE name = %s",
+                (dealership_name,)
+            )
+            if config_result and len(config_result) > 0:
+                output_rules = config_result[0].get('output_rules', {})
+                custom_templates = output_rules.get('custom_templates')
+
+                if custom_templates and isinstance(custom_templates, dict):
+                    if 'new' in custom_templates and 'used' in custom_templates:
+                        logger.info(f"[DUAL TEMPLATE] {dealership_name} has dual templates: new={custom_templates['new']}, used={custom_templates['used']}")
+                        return {
+                            'new': custom_templates['new'],
+                            'used': custom_templates['used']
+                        }
+
+            return None
+        except Exception as e:
+            logger.warning(f"[DUAL TEMPLATE] Error checking dual template config for {dealership_name}: {e}")
+            return None
+
+    def _generate_dual_template_csvs(self, vehicles: List[Dict], dealership_name: str,
+                                     dual_template_config: Dict[str, str], order_folder: Path,
+                                     qr_paths: Dict) -> Dict[str, any]:
+        """
+        Generate separate CSV files for new and used vehicles using different templates.
+
+        Args:
+            vehicles: All vehicles to process
+            dealership_name: Name of dealership
+            dual_template_config: Dict with 'new' and 'used' template IDs
+            order_folder: Output folder path
+            qr_paths: QR code paths dict
+
+        Returns:
+            Dict with CSV file paths and vehicle counts per condition
+        """
+        logger.info(f"[DUAL TEMPLATE] Splitting {len(vehicles)} vehicles by condition for {dealership_name}")
+
+        # Split vehicles by condition (new vs used/cpo/po/certified/pre-owned)
+        # Also track indices to split QR paths correctly
+        new_vehicles = []
+        used_vehicles = []
+        new_vehicle_indices = []
+        used_vehicle_indices = []
+
+        for idx, vehicle in enumerate(vehicles):
+            condition = vehicle.get('vehicle_condition', '').lower()
+            if condition == 'new':
+                new_vehicles.append(vehicle)
+                new_vehicle_indices.append(idx)
+            else:
+                # All non-new conditions go to used: used, po, cpo, certified, pre-owned
+                used_vehicles.append(vehicle)
+                used_vehicle_indices.append(idx)
+
+        logger.info(f"[DUAL TEMPLATE] Split results: {len(new_vehicles)} NEW, {len(used_vehicles)} USED")
+
+        # Split QR paths to match vehicle splits
+        new_qr_paths = [qr_paths[i] for i in new_vehicle_indices if i < len(qr_paths)]
+        used_qr_paths = [qr_paths[i] for i in used_vehicle_indices if i < len(qr_paths)]
+
+        csv_files = {}
+        primary_csv = None
+
+        # Generate NEW vehicles CSV if any exist
+        if new_vehicles:
+            logger.info(f"[DUAL TEMPLATE] Generating NEW CSV with template {dual_template_config['new']}")
+            new_csv_path = self._generate_adobe_csv(
+                new_vehicles,
+                dealership_name,
+                dual_template_config['new'],
+                order_folder,
+                new_qr_paths,
+                suffix='_NEW'
+            )
+            csv_files['new'] = {
+                'path': str(new_csv_path),
+                'download_url': f"/download_csv/{new_csv_path.name}",
+                'vehicle_count': len(new_vehicles),
+                'template': dual_template_config['new']
+            }
+            if not primary_csv:
+                primary_csv = new_csv_path
+
+        # Generate USED vehicles CSV if any exist
+        if used_vehicles:
+            logger.info(f"[DUAL TEMPLATE] Generating USED CSV with template {dual_template_config['used']}")
+            used_csv_path = self._generate_adobe_csv(
+                used_vehicles,
+                dealership_name,
+                dual_template_config['used'],
+                order_folder,
+                used_qr_paths,
+                suffix='_USED'
+            )
+            csv_files['used'] = {
+                'path': str(used_csv_path),
+                'download_url': f"/download_csv/{used_csv_path.name}",
+                'vehicle_count': len(used_vehicles),
+                'template': dual_template_config['used']
+            }
+            if not primary_csv:
+                primary_csv = used_csv_path
+
+        csv_files['primary_csv'] = primary_csv
+        csv_files['total_vehicles'] = len(vehicles)
+        csv_files['new_count'] = len(new_vehicles)
+        csv_files['used_count'] = len(used_vehicles)
+
+        logger.info(f"[DUAL TEMPLATE] Generated {len([k for k in csv_files if k in ['new', 'used']])} CSV files")
+        return csv_files
+
     def process_cao_order(self, dealership_name: str, template_type: str = "shortcut_pack", skip_vin_logging: bool = False) -> Dict[str, Any]:
         """
         Process CAO (Comparative Analysis Order)
@@ -130,10 +305,17 @@ class CorrectOrderProcessor:
             
             # Step 4: Generate QR codes for vehicle URLs
             qr_paths = self._generate_qr_codes(new_vehicles, dealership_name, qr_folder)
-            
-            # Step 5: Generate Adobe CSV in EXACT format we need
+
+            # Step 5: Generate Adobe CSV for review stage
+            # Check if dealership has dual templates for later use in Complete stage
+            dual_template_config = self._get_dual_template_config(dealership_name)
+            if dual_template_config:
+                logger.info(f"[CAO] Dealership {dealership_name} has dual templates (NEW={dual_template_config['new']}, USED={dual_template_config['used']}) - will split in Complete stage")
+
+            # Always use the regular template_type for review (standard format for frontend)
             csv_path = self._generate_adobe_csv(new_vehicles, dealership_name, template_type, order_folder, qr_paths)
-            
+            csv_files = None
+
             # Step 5.5: Generate billing sheet CSV automatically after QR codes
             billing_csv_path = self._generate_billing_sheet_csv(new_vehicles, dealership_name, order_folder, timestamp)
             
@@ -144,13 +326,14 @@ class CorrectOrderProcessor:
             else:
                 vin_logging_result = self._log_processed_vins_to_history(new_vehicles, dealership_name, 'CAO_ORDER')
             
-            return {
+            result = {
                 'success': True,
                 'dealership': dealership_name,
                 'template_type': template_type,
                 'total_vehicles': len(current_vehicles),
                 'new_vehicles': len(new_vehicles),
                 'vehicle_count': len(new_vehicles),
+                'vehicles_data': new_vehicles,  # Include actual vehicle data for maintenance orders
                 'qr_codes_generated': len(qr_paths),
                 'qr_folder': str(qr_folder),
                 'csv_file': str(csv_path),
@@ -163,42 +346,145 @@ class CorrectOrderProcessor:
                 'duplicate_vins_skipped': vin_logging_result['duplicates_skipped'],
                 'vin_logging_success': vin_logging_result['success']
             }
+
+            # Store dual template config for later use (after review stage)
+            if dual_template_config:
+                result['dual_template_config'] = dual_template_config
+                logger.info(f"[CAO] Stored dual template config for {dealership_name} to use after review")
+
+            return result
             
         except Exception as e:
             logger.error(f"Error processing CAO order: {e}")
             return {'success': False, 'error': str(e)}
-    
+    def prepare_list_data(self, dealership_name: str, vin_list: List[str]) -> Dict[str, Any]:
+        """
+        PHASE 1: Prepare and validate LIST order VINs against scraper data.
+        Returns valid VINs (with data), invalid VINs (no data), and vehicle data for review.
+
+        Args:
+            dealership_name: Name of dealership
+            vin_list: List of VINs entered by user
+
+        Returns:
+            Dict with success, valid_vins, invalid_vins, vehicles_data
+        """
+        try:
+            logger.info(f"[PREPARE LIST] Validating {len(vin_list)} VINs for {dealership_name}")
+
+            # Map dealership config name to actual data location name
+            actual_location_name = self.dealership_name_mapping.get(dealership_name, dealership_name)
+
+            valid_vehicles = []
+            invalid_vins = []
+
+            for vin in vin_list:
+                # Check if VIN exists in active scraper data
+                vehicle_data = db_manager.execute_query("""
+                    SELECT nvd.*, rvd.status as raw_status, rvd.stock as raw_stock, rvd.vehicle_url as vehicle_url
+                    FROM normalized_vehicle_data nvd
+                    JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
+                    JOIN scraper_imports si ON rvd.import_id = si.import_id
+                    WHERE nvd.vin = %s
+                    AND nvd.location = %s
+                    AND si.status = 'active'
+                    ORDER BY rvd.import_timestamp DESC
+                    LIMIT 1
+                """, (vin, actual_location_name))
+
+                if vehicle_data and len(vehicle_data) > 0:
+                    # VIN found in scraper data
+                    valid_vehicles.append(vehicle_data[0])
+                    logger.info(f"[PREPARE LIST] Valid VIN: {vin}")
+                else:
+                    # VIN not found in scraper data
+                    invalid_vins.append(vin)
+                    logger.warning(f"[PREPARE LIST] Invalid VIN (no scraper data): {vin}")
+
+            logger.info(f"[PREPARE LIST] Results: {len(valid_vehicles)} valid, {len(invalid_vins)} invalid")
+
+            return {
+                'success': True,
+                'dealership_name': dealership_name,
+                'valid_vins': len(valid_vehicles),
+                'invalid_vins': len(invalid_vins),
+                'invalid_vin_list': invalid_vins,
+                'vehicles_data': valid_vehicles,
+                'order_type': 'list'
+            }
+
+        except Exception as e:
+            logger.error(f"[PREPARE LIST] Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'success': False,
+                'error': str(e),
+                'valid_vins': 0,
+                'invalid_vins': 0,
+                'invalid_vin_list': [],
+                'vehicles_data': [],
+                'order_type': 'list'
+            }
+
     def process_list_order(self, dealership_name: str, vin_list: List[str], template_type: str = "shortcut_pack", skip_vin_logging: bool = False) -> Dict[str, Any]:
         """
         Process List Order (transcribed VINs from installers)
         """
-        
+
         logger.info(f"[LIST] Processing {dealership_name} with {len(vin_list)} VINs")
-        
+
         try:
-            # Get vehicles by specific VIN list
+            # Map dealership config name to actual data location name
+            actual_location_name = self.dealership_name_mapping.get(dealership_name, dealership_name)
+            logger.info(f"[LIST DEBUG] Mapping {dealership_name} -> {actual_location_name}")
+
+            # LIST orders: Create vehicle records from user-provided VINs
+            # No inventory lookup or filtering needed - process whatever VINs user provides
             vehicles = []
             for vin in vin_list:
+                # Try to get vehicle data from inventory first (including vehicle_url for QR codes)
                 vehicle_data = db_manager.execute_query("""
-                    SELECT * FROM raw_vehicle_data
-                    WHERE vin = %s AND location = %s
-                    ORDER BY import_timestamp DESC
+                    SELECT rvd.*, rvd.vehicle_url as vehicle_url
+                    FROM raw_vehicle_data rvd
+                    JOIN scraper_imports si ON rvd.import_id = si.import_id
+                    WHERE rvd.vin = %s AND rvd.location = %s
+                    AND si.status = 'active'
+                    ORDER BY rvd.import_timestamp DESC
                     LIMIT 1
-                """, (vin, dealership_name))
+                """, (vin, actual_location_name))
                 
                 if vehicle_data:
+                    # Use existing vehicle data if found
                     vehicles.append(vehicle_data[0])
+                else:
+                    # Create placeholder vehicle record for user-provided VIN
+                    placeholder_vehicle = {
+                        'vin': vin,
+                        'year': 'Unknown',
+                        'make': 'Unknown', 
+                        'model': 'Unknown',
+                        'trim': 'Unknown',
+                        'stock_number': f'LIST_{vin[-6:]}',  # Use last 6 chars of VIN
+                        'type': 'Used',  # Default to Used for LIST orders
+                        'mileage': 0,
+                        'price': 0,
+                        'dealership': dealership_name,
+                        'location': dealership_name
+                    }
+                    vehicles.append(placeholder_vehicle)
+                    logger.info(f"Created placeholder record for LIST VIN: {vin}")
             
-            logger.info(f"Found {len(vehicles)} vehicles from VIN list")
+            logger.info(f"Created {len(vehicles)} vehicle records for LIST processing")
             
-            # Apply dealership filtering to LIST orders as well
-            filtered_vehicles = self._apply_dealership_filters(vehicles, dealership_name)
-            logger.info(f"After filtering: {len(filtered_vehicles)} vehicles match dealership criteria")
+            # LIST orders: Skip dealership filtering - process all provided VINs
+            filtered_vehicles = vehicles  # No filtering for LIST orders
+            logger.info(f"LIST processing: Using all {len(filtered_vehicles)} provided VINs")
             
             if not filtered_vehicles:
                 return {
                     'success': False, 
-                    'error': f'No vehicles match dealership filtering criteria. Found {len(vehicles)} vehicles but none match the configured filters (new/used/certified).'
+                    'error': f'No VINs provided for LIST processing.'
                 }
             
             # Create output folders
@@ -214,9 +500,18 @@ class CorrectOrderProcessor:
             
             # Generate Adobe CSV - use filtered vehicles
             csv_path = self._generate_adobe_csv(filtered_vehicles, dealership_name, template_type, order_folder, qr_paths)
-            
+
             # Generate billing sheet CSV automatically after QR codes
-            billing_csv_path = self._generate_billing_sheet_csv(filtered_vehicles, dealership_name, order_folder, timestamp)
+            # For LIST orders: Pass original VIN list (what user ordered) and filtered VIN list (what was produced)
+            filtered_vin_list = [v.get('vin', '') for v in filtered_vehicles]
+            billing_csv_path = self._generate_billing_sheet_csv(
+                filtered_vehicles,
+                dealership_name,
+                order_folder,
+                timestamp,
+                original_vin_list=vin_list,  # What user ordered
+                filtered_vin_list=filtered_vin_list  # What we actually produced
+            )
             
             # CRITICAL: Log processed vehicle VINs to history database for future order accuracy - use filtered vehicles (unless testing)
             if skip_vin_logging:
@@ -249,7 +544,81 @@ class CorrectOrderProcessor:
         except Exception as e:
             logger.error(f"Error processing list order: {e}")
             return {'success': False, 'error': str(e)}
-    
+
+    def process_maintenance_order(self, dealership_name: str, vin_list: List[str], skip_vin_logging: bool = False) -> Dict[str, Any]:
+        """
+        Process Maintenance Order - combines CAO + LIST approach
+        - CAO portion: Find NEW vehicles from inventory (applies VIN log filtering)
+        - LIST portion: Process provided VINs (typically USED, ignores VIN log)
+
+        For Auffenberg:
+        - NEW vehicles -> shortcut_pack template (from CAO)
+        - USED vehicles -> shortcut template (from LIST)
+        """
+
+        logger.info(f"[MAINTENANCE] Processing {dealership_name} - CAO for NEW vehicles + LIST for {len(vin_list)} provided VINs")
+
+        try:
+            # Step 1: Run CAO to get NEW vehicles (applies VIN log)
+            cao_result = self.process_cao_order(dealership_name, template_type="shortcut_pack", skip_vin_logging=skip_vin_logging)
+
+            cao_vehicles = []
+            cao_count = 0
+            if cao_result.get('success'):
+                cao_vehicles = cao_result.get('vehicles_data', [])
+                cao_count = len(cao_vehicles)
+                logger.info(f"[MAINTENANCE] CAO returned {cao_count} NEW vehicles")
+            else:
+                logger.warning(f"[MAINTENANCE] CAO failed: {cao_result.get('error', 'Unknown error')}")
+
+            # Step 2: Run LIST to process provided VINs (ignores VIN log)
+            list_vehicles = []
+            list_count = 0
+            if vin_list and len(vin_list) > 0:
+                list_result = self.process_list_order(dealership_name, vin_list, template_type="shortcut", skip_vin_logging=skip_vin_logging)
+
+                if list_result.get('success'):
+                    list_vehicles = list_result.get('vehicles_data', [])
+                    # Filter out placeholder/not found vehicles (they have 'Unknown' make or year='Unknown')
+                    list_vehicles = [v for v in list_vehicles if v.get('make') != 'Unknown' and v.get('year') != 'Unknown']
+                    list_count = len(list_vehicles)
+                    logger.info(f"[MAINTENANCE] LIST returned {list_count} valid vehicles from {len(vin_list)} provided VINs")
+                else:
+                    logger.warning(f"[MAINTENANCE] LIST failed: {list_result.get('error', 'Unknown error')}")
+
+            # Step 3: Remove duplicates - LIST VINs take priority over CAO VINs
+            list_vins = set(v['vin'] for v in list_vehicles)
+            cao_vehicles_deduplicated = [v for v in cao_vehicles if v['vin'] not in list_vins]
+
+            duplicates_removed = cao_count - len(cao_vehicles_deduplicated)
+            if duplicates_removed > 0:
+                logger.info(f"[MAINTENANCE] Removed {duplicates_removed} duplicate VINs from CAO that were in LIST")
+
+            # Combine results - LIST first, then unique CAO vehicles
+            total_vehicles = list_vehicles + cao_vehicles_deduplicated
+            total_count = len(total_vehicles)
+
+            logger.info(f"[MAINTENANCE] Total: {total_count} unique vehicles ({len(cao_vehicles_deduplicated)} from CAO + {list_count} from LIST)")
+
+            return {
+                'success': True,
+                'dealership': dealership_name,
+                'cao_count': cao_count,
+                'list_count': list_count,
+                'total_count': total_count,
+                'vehicles_data': total_vehicles,  # DEDUPLICATED combined vehicles (LIST + unique CAO)
+                'vehicle_count': total_count,  # Use total count, not just CAO
+                'new_vehicles': total_count,  # Use total count
+                'vehicles': total_vehicles,  # Use DEDUPLICATED vehicles, not just CAO
+                'order_type': 'maintenance',
+                'cao_result': cao_result,
+                'list_result': list_result if vin_list else None
+            }
+
+        except Exception as e:
+            logger.error(f"[MAINTENANCE] Error processing maintenance order: {e}")
+            return {'success': False, 'error': str(e)}
+
     def _log_processed_vins_to_history(self, vehicles: List[Dict], dealership_name: str, order_type: str) -> Dict[str, Any]:
         """
         Log VINs of vehicles that were actually processed in the order output.
@@ -338,8 +707,10 @@ class CorrectOrderProcessor:
     
     def _get_dealership_vehicles(self, dealership_name: str) -> List[Dict]:
         """Get all vehicles for dealership with filtering"""
-        
+
         # Map dealership config name to actual data location name
+        logger.info(f"[CAO DEBUG] Looking up mapping for: '{dealership_name}' (repr: {repr(dealership_name)})")
+        logger.info(f"[CAO DEBUG] Available mappings: {list(self.dealership_name_mapping.keys())}")
         actual_location_name = self.dealership_name_mapping.get(dealership_name, dealership_name)
         logger.info(f"[CAO DEBUG] Mapping {dealership_name} -> {actual_location_name}")
         
@@ -360,11 +731,12 @@ class CorrectOrderProcessor:
         # Build query with filters - use actual location name for data lookup
         # CRITICAL: Only process vehicles from the ACTIVE scraper import that are physically on the lot
         # Use normalized_vehicle_data for proper vehicle type filtering (po, cpo, new instead of raw values)
+        # ENHANCEMENT: Include raw_status for UI review stage and date_in_stock for seasoning
         query = """
-            SELECT nvd.* FROM normalized_vehicle_data nvd
+            SELECT nvd.*, rvd.status as raw_status, rvd.stock as raw_stock, rvd.date_in_stock FROM normalized_vehicle_data nvd
             JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
             JOIN scraper_imports si ON rvd.import_id = si.import_id
-            WHERE nvd.location = %s 
+            WHERE nvd.location = %s
             AND nvd.on_lot_status IN ('onlot', 'on lot')
             AND si.status = 'active'
         """
@@ -375,17 +747,21 @@ class CorrectOrderProcessor:
         if vehicle_types and 'all' not in vehicle_types:
             # Build conditions for normalized vehicle_condition values
             allowed_conditions = []
+            includes_used = False  # Track if 'used' is requested
+
             for vtype in vehicle_types:
                 if vtype == 'new':
                     allowed_conditions.append('new')
                 elif vtype == 'used':
-                    # UMBRELLA TERM: "used" includes both po (Pre-Owned) AND cpo (Certified Pre-Owned)
-                    allowed_conditions.extend(['po', 'cpo'])
+                    # CRITICAL FIX: "used" is an UMBRELLA term that includes 'used', 'po', and 'cpo'
+                    # When dealer wants "used", they want ALL used vehicle types
+                    allowed_conditions.extend(['used', 'po', 'cpo'])
+                    includes_used = True  # Mark that we're including all used types
                 elif vtype in ['certified', 'cpo']:
                     allowed_conditions.append('cpo')
                 elif vtype in ['po', 'pre-owned']:
                     allowed_conditions.append('po')
-            
+
             if allowed_conditions:
                 # Remove duplicates
                 allowed_conditions = list(set(allowed_conditions))
@@ -393,7 +769,31 @@ class CorrectOrderProcessor:
                 placeholders = ', '.join(['%s'] * len(allowed_conditions))
                 query += f" AND nvd.vehicle_condition IN ({placeholders})"
                 params.extend(allowed_conditions)
-        
+
+        # Apply exclude_conditions filter (exclude specific vehicle conditions)
+        # CRITICAL FIX: Don't apply exclude_conditions if they contradict vehicle_types
+        # If dealer wants 'used' vehicles, don't exclude 'po' or 'cpo' (they ARE used)
+        exclude_conditions = filtering_rules.get('exclude_conditions')
+        if exclude_conditions:
+            # Check if we're including 'used' vehicles - if so, ignore po/cpo exclusions
+            if includes_used:
+                # Filter out po/cpo from exclude_conditions since they're part of "used"
+                if isinstance(exclude_conditions, list):
+                    exclude_conditions = [c for c in exclude_conditions if c not in ['po', 'cpo']]
+                elif exclude_conditions in ['po', 'cpo']:
+                    exclude_conditions = None  # Don't exclude if it's just po/cpo
+
+            if exclude_conditions:
+                if isinstance(exclude_conditions, list):
+                    for condition in exclude_conditions:
+                        query += " AND nvd.vehicle_condition != %s"
+                        params.append(condition)
+                    logger.info(f"[EXCLUDE CONDITIONS FILTER] Applying exclude conditions filter for {dealership_name}: {exclude_conditions}")
+                else:
+                    query += " AND nvd.vehicle_condition != %s"
+                    params.append(exclude_conditions)
+                    logger.info(f"[EXCLUDE CONDITIONS FILTER] Applying exclude conditions filter for {dealership_name}: {exclude_conditions}")
+
         # Apply year filter
         min_year = filtering_rules.get('min_year')
         if min_year:
@@ -430,10 +830,34 @@ class CorrectOrderProcessor:
             query += " AND nvd.stock IS NOT NULL AND nvd.stock != %s AND nvd.stock != %s"
             params.extend(['', '*'])
             
-        # Apply price filter - ONLY for Glendale by default
+        # Apply price filter - Exclude blank and placeholder price values
         if filtering_rules.get('exclude_missing_price', False):
-            query += " AND price IS NOT NULL AND price > 0"
-        
+            logger.info(f"[PRICE FILTER] Applying missing price filter for {dealership_name}")
+            # Simple price filtering: exclude only blank fields and common placeholders
+            # Use CAST to text to handle any data type issues, and check for various placeholder patterns
+            query += """ AND rvd.price IS NOT NULL
+                AND CAST(rvd.price AS TEXT) NOT IN ('*', '', 'Call', 'TBD', 'N/A', 'call', 'tbd', 'n/a')
+                AND LENGTH(TRIM(CAST(rvd.price AS TEXT))) > 0
+                AND TRIM(CAST(rvd.price AS TEXT)) != '*'"""
+            logger.info(f"[PRICE FILTER] Filter conditions added to query")
+
+        # Apply brand filter (required_brands)
+        required_brands = filtering_rules.get('required_brands')
+        if required_brands:
+            if isinstance(required_brands, list):
+                if len(required_brands) == 1:
+                    query += " AND nvd.make = %s"
+                    params.append(required_brands[0])
+                else:
+                    placeholders = ', '.join(['%s'] * len(required_brands))
+                    query += f" AND nvd.make IN ({placeholders})"
+                    params.extend(required_brands)
+                logger.info(f"[BRAND FILTER] Applying brand filter for {dealership_name}: {required_brands}")
+            else:
+                query += " AND nvd.make = %s"
+                params.append(required_brands)
+                logger.info(f"[BRAND FILTER] Applying brand filter for {dealership_name}: {required_brands}")
+
         query += " ORDER BY created_at DESC"
         
         logger.info(f"[CAO DEBUG] Final Query: {query}")
@@ -445,28 +869,108 @@ class CorrectOrderProcessor:
             logger.info(f"[CAO DEBUG] Final query params as tuple: {query_params}")
             result = db_manager.execute_query(query, query_params)
             logger.info(f"[CAO DEBUG] Query returned {len(result)} vehicles for {dealership_name}")
-            
+
             if result:
                 logger.info(f"[CAO DEBUG] Sample VINs from query: {[v['vin'] for v in result[:5]]}")
+
+                # Special logging for Glendale CDJR to diagnose price filter issue
+                if dealership_name == "Glendale CDJR" and filtering_rules.get('exclude_missing_price', False):
+                    logger.info(f"[GLENDALE DEBUG] Checking prices for returned vehicles...")
+                    for v in result[:10]:  # Check first 10 vehicles
+                        logger.info(f"[GLENDALE DEBUG] VIN: {v.get('vin')} | Price: {v.get('price')} | Raw Status: {v.get('raw_status', 'N/A')}")
             
             return result
         except Exception as e:
             logger.error(f"Database query failed: {e}")
             logger.error("Attempting simplified query without problematic constraints...")
-            # Try a simplified query without filtering if the main query fails
+            # Try a simplified query without complex filtering if the main query fails
             # CRITICAL: Still only process vehicles from ACTIVE import that are on the lot
             # Use normalized_vehicle_data for consistent data structure
-            simplified_query = """
-                SELECT nvd.* FROM normalized_vehicle_data nvd
+            # IMPORTANT: Include VIN log comparison and basic filtering even in simplified query
+            vin_log_table = self._get_dealership_vin_log_table(dealership_name)
+
+            # Build simplified query with basic filtering
+            simplified_query = f"""
+                SELECT nvd.*, rvd.status as raw_status, rvd.stock as raw_stock FROM normalized_vehicle_data nvd
                 JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
                 JOIN scraper_imports si ON rvd.import_id = si.import_id
-                WHERE nvd.location = %s 
+                WHERE nvd.location = %s
                 AND nvd.on_lot_status IN ('onlot', 'on lot')
                 AND si.status = 'active'
-                ORDER BY nvd.updated_at DESC
+                AND nvd.vin NOT IN (SELECT vin FROM {vin_log_table} WHERE vin IS NOT NULL)
             """
+
+            simplified_params = [actual_location_name]
+
+            # Apply vehicle type filtering in simplified query
+            vehicle_types = filtering_rules.get('vehicle_types', ['used'])
+            if vehicle_types and vehicle_types != ['all']:
+                type_conditions = []
+                for vtype in vehicle_types:
+                    if vtype == 'used':
+                        type_conditions.extend(['used', 'po', 'cpo', 'certified', 'pre-owned'])
+                    elif vtype == 'new':
+                        type_conditions.append('new')
+                    else:
+                        type_conditions.append(vtype)
+
+                if type_conditions:
+                    placeholders = ', '.join(['%s'] * len(type_conditions))
+                    simplified_query += f" AND nvd.vehicle_condition IN ({placeholders})"
+                    simplified_params.extend(type_conditions)
+
+            # Apply stock number filter in simplified query
+            if filtering_rules.get('exclude_missing_stock', True):
+                simplified_query += " AND nvd.stock IS NOT NULL AND nvd.stock != %s AND nvd.stock != %s"
+                simplified_params.extend(['', '*'])
+
+            # Apply exclude_conditions filter in simplified query
+            exclude_conditions = filtering_rules.get('exclude_conditions')
+            if exclude_conditions:
+                if isinstance(exclude_conditions, list):
+                    for condition in exclude_conditions:
+                        simplified_query += " AND nvd.vehicle_condition != %s"
+                        simplified_params.append(condition)
+                    logger.info(f"[FALLBACK EXCLUDE CONDITIONS FILTER] Applying exclude conditions filter for {dealership_name}: {exclude_conditions}")
+                else:
+                    simplified_query += " AND nvd.vehicle_condition != %s"
+                    simplified_params.append(exclude_conditions)
+                    logger.info(f"[FALLBACK EXCLUDE CONDITIONS FILTER] Applying exclude conditions filter for {dealership_name}: {exclude_conditions}")
+
+            # Apply price filter in simplified query - Exclude blank and placeholder price values
+            if filtering_rules.get('exclude_missing_price', False):
+                logger.info(f"[FALLBACK PRICE FILTER] Applying missing price filter for {dealership_name}")
+                # Use CAST to text to handle any data type issues, and check for various placeholder patterns
+                simplified_query += """ AND rvd.price IS NOT NULL
+                    AND CAST(rvd.price AS TEXT) NOT IN ('*', '', 'Call', 'TBD', 'N/A', 'call', 'tbd', 'n/a')
+                    AND LENGTH(TRIM(CAST(rvd.price AS TEXT))) > 0
+                    AND TRIM(CAST(rvd.price AS TEXT)) != '*'"""
+                logger.info(f"[FALLBACK PRICE FILTER] Filter conditions added to simplified query")
+
+            # Apply brand filter in simplified query
+            required_brands = filtering_rules.get('required_brands')
+            if required_brands:
+                if isinstance(required_brands, list):
+                    if len(required_brands) == 1:
+                        simplified_query += " AND nvd.make = %s"
+                        simplified_params.append(required_brands[0])
+                    else:
+                        placeholders = ', '.join(['%s'] * len(required_brands))
+                        simplified_query += f" AND nvd.make IN ({placeholders})"
+                        simplified_params.extend(required_brands)
+                    logger.info(f"[FALLBACK BRAND FILTER] Applying brand filter for {dealership_name}: {required_brands}")
+                else:
+                    simplified_query += " AND nvd.make = %s"
+                    simplified_params.append(required_brands)
+                    logger.info(f"[FALLBACK BRAND FILTER] Applying brand filter for {dealership_name}: {required_brands}")
+
+            simplified_query += " ORDER BY nvd.updated_at DESC"
+
+            logger.info(f"[FALLBACK DEBUG] Simplified query: {simplified_query}")
+            logger.info(f"[FALLBACK DEBUG] Simplified params: {simplified_params}")
+
             try:
-                result = db_manager.execute_query(simplified_query, (actual_location_name,))
+                result = db_manager.execute_query(simplified_query, tuple(simplified_params))
                 logger.info(f"Simplified query returned {len(result)} vehicles")
                 return result
             except Exception as e2:
@@ -542,17 +1046,35 @@ class CorrectOrderProcessor:
                 min_year = filtering_rules.get('min_year')
                 if min_year and vehicle.get('year', 0) < min_year:
                     continue
-                    
+
                 # Price filter
                 min_price = filtering_rules.get('min_price')
                 max_price = filtering_rules.get('max_price')
                 vehicle_price = vehicle.get('price', 0)
-                
+
                 if min_price and vehicle_price < min_price:
                     continue
                 if max_price and vehicle_price > max_price:
                     continue
-                
+
+                # Seasoning filter - check if vehicle has been on lot long enough using date_in_stock
+                seasoning_days = filtering_rules.get('seasoning_days')
+                if seasoning_days:
+                    date_in_stock = vehicle.get('date_in_stock')
+                    if date_in_stock:
+                        from datetime import datetime, date
+                        # Convert to date if it's a datetime
+                        if isinstance(date_in_stock, datetime):
+                            date_in_stock = date_in_stock.date()
+                        days_on_lot = (date.today() - date_in_stock).days
+                        if days_on_lot < seasoning_days:
+                            logger.info(f"[SEASONING] Filtered out VIN {vehicle.get('vin')[-8:]}: {days_on_lot} days on lot < {seasoning_days} days required (in stock since: {date_in_stock})")
+                            continue
+                    else:
+                        # If no date_in_stock, filter it out to be safe
+                        logger.info(f"[SEASONING] Filtered out VIN {vehicle.get('vin')[-8:]}: No date_in_stock available")
+                        continue
+
                 # If all filters pass, include the vehicle
                 filtered_vehicles.append(vehicle)
         
@@ -593,10 +1115,15 @@ class CorrectOrderProcessor:
     
     def _generate_qr_codes(self, vehicles: List[Dict], dealership_name: str, output_folder: Path) -> List[str]:
         """Generate QR codes for vehicle-specific information"""
-        
+
         qr_paths = []
         clean_name = dealership_name.replace(' ', '_')
-        
+
+        logger.info(f"[QR GENERATION] Starting for {len(vehicles)} vehicles")
+        if vehicles:
+            logger.info(f"[QR GENERATION] Sample vehicle keys: {list(vehicles[0].keys())}")
+            logger.info(f"[QR GENERATION] Sample vehicle_url value: {vehicles[0].get('vehicle_url', 'NOT FOUND')}")
+
         for idx, vehicle in enumerate(vehicles, 1):
             try:
                 # Get vehicle details
@@ -606,7 +1133,9 @@ class CorrectOrderProcessor:
                 make = vehicle.get('make', '')
                 model = vehicle.get('model', '')
                 url = vehicle.get('vehicle_url', '')
-                
+
+                logger.info(f"[QR {idx}] VIN: {vin}, vehicle_url in dict: {url}")
+
                 # Determine the best QR content to use
                 qr_content = self._get_vehicle_qr_content(vehicle, dealership_name)
                 
@@ -643,48 +1172,93 @@ class CorrectOrderProcessor:
         logger.info(f"Generated {len(qr_paths)} QR codes")
         return qr_paths
     
+    def _add_utm_parameters(self, url: str) -> str:
+        """Add Silver Fox Marketing UTM tracking parameters to a URL"""
+        if not url or not url.startswith('http'):
+            return url
+
+        from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+
+        parsed = urlparse(url)
+        query_params = parse_qs(parsed.query)
+
+        # Add Silver Fox Marketing UTM parameters - EXACT specifications
+        utm_params = {
+            'utm_source': 'SilverFox',
+            'utm_medium': 'VDP_ShortCut'
+        }
+
+        # Add UTM parameters (don't override if they already exist)
+        for key, value in utm_params.items():
+            if key not in query_params:
+                query_params[key] = [value]
+
+        # Rebuild query string
+        new_query = urlencode(query_params, doseq=True)
+
+        # Rebuild URL
+        new_url = urlunparse((
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            new_query,
+            parsed.fragment
+        ))
+
+        return new_url
+
     def _get_vehicle_qr_content(self, vehicle: Dict, dealership_name: str) -> str:
         """
-        Determine the best QR content for a vehicle.
-        Priority: Vehicle-specific URL > Stock-based URL > VIN > Stock number
+        Generate QR content for a vehicle.
+        Priority: Vehicle URL from database with UTM > Raw VIN fallback
         """
-        
+
         vin = vehicle.get('vin', '').strip()
-        stock = vehicle.get('stock', '').strip()
-        url = vehicle.get('vehicle_url', '').strip()
         year = vehicle.get('year', '')
         make = vehicle.get('make', '')
-        model = vehicle.get('model', '')
-        
-        # Priority 1: Check if URL is vehicle-specific (contains VIN, stock, or inventory path)
-        if url and self._is_vehicle_specific_url(url, vin, stock):
-            logger.debug(f"Using vehicle-specific URL: {url}")
-            return url
-        
-        # Priority 2: Try to construct a vehicle-specific URL based on dealership patterns
-        specific_url = self._construct_vehicle_url(dealership_name, vehicle)
-        if specific_url:
-            logger.debug(f"Constructed vehicle URL: {specific_url}")
-            return specific_url
-        
-        # Priority 3: Use VIN if available (most unique identifier)
-        if vin:
-            logger.debug(f"Using VIN as QR content: {vin}")
-            return vin
-            
-        # Priority 4: Use stock number if available
-        if stock:
-            logger.debug(f"Using stock number as QR content: {stock}")
-            return stock
-            
-        # Priority 5: Fallback to vehicle description
-        if year and make and model:
-            description = f"{year} {make} {model}"
-            logger.debug(f"Using vehicle description as QR content: {description}")
-            return description
-            
-        logger.warning("No suitable QR content found for vehicle")
-        return ""
+
+        # Strip prefix (NEW - , USED - , CPO - , CERTIFIED PRE OWNED - , etc.) from VIN
+        raw_vin = vin
+        if ' - ' in vin:
+            raw_vin = vin.split(' - ')[-1]
+
+        # Additional fallback: strip common vehicle type prefixes if still present
+        vehicle_type_prefixes = ['NEW', 'USED', 'CPO', 'CERTIFIED PRE OWNED', 'CERTIFIED', 'PRE-OWNED', 'PRE OWNED', 'PO']
+        for prefix in vehicle_type_prefixes:
+            if raw_vin.upper().startswith(prefix + ' '):
+                raw_vin = raw_vin[len(prefix):].strip()
+                break
+            if raw_vin.upper().startswith(prefix + '-'):
+                raw_vin = raw_vin[len(prefix)+1:].strip()
+                break
+
+        # Priority 1: Query database for vehicle_url
+        if raw_vin:
+            try:
+                from database_connection import db_manager
+                url_result = db_manager.execute_query(
+                    "SELECT vehicle_url FROM normalized_vehicle_data WHERE vin = %s LIMIT 1",
+                    (raw_vin,)
+                )
+                if url_result and len(url_result) > 0:
+                    url = url_result[0].get('vehicle_url', '').strip()
+                    if url and url.startswith('http'):
+                        # Add UTM tracking parameters
+                        url_with_utm = self._add_utm_parameters(url)
+                        logger.info(f"QR Code URL for {year} {make} {raw_vin}: {url_with_utm}")
+                        return url_with_utm
+            except Exception as e:
+                logger.warning(f"Could not fetch vehicle_url from database for {raw_vin}: {e}")
+
+        # Priority 2: Fallback to raw VIN if no URL available
+        if raw_vin:
+            logger.warning(f"No vehicle_url found for {year} {make} {raw_vin}, using VIN as fallback")
+            return raw_vin
+
+        # Priority 3: Final fallback
+        logger.warning(f"No URL or VIN for vehicle, using description")
+        return f"{year} {make}"
     
     def _is_vehicle_specific_url(self, url: str, vin: str = "", stock: str = "") -> bool:
         """Check if a URL appears to be vehicle-specific rather than a generic homepage"""
@@ -765,13 +1339,22 @@ class CorrectOrderProcessor:
             
         return ""
     
-    def _generate_adobe_csv(self, vehicles: List[Dict], dealership_name: str, template_type: str, 
-                           output_folder: Path, qr_paths: List[str]) -> Path:
-        """Generate Adobe CSV in EXACT format from reference examples"""
-        
+    def _generate_adobe_csv(self, vehicles: List[Dict], dealership_name: str, template_type: str,
+                           output_folder: Path, qr_paths: List[str], suffix: str = '') -> Path:
+        """Generate Adobe CSV in EXACT format from reference examples
+
+        Args:
+            vehicles: List of vehicle dicts
+            dealership_name: Name of dealership
+            template_type: Template type ID
+            output_folder: Output folder path
+            qr_paths: List of QR code paths
+            suffix: Optional suffix for filename (e.g., '_NEW', '_USED')
+        """
+
         clean_name = dealership_name.replace(' ', '_')
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"{clean_name}_{template_type}_{timestamp}.csv"
+        filename = f"{clean_name}_{template_type}{suffix}_{timestamp}.csv"
         csv_path = output_folder / filename
         
         with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
@@ -806,8 +1389,10 @@ class CorrectOrderProcessor:
                     make = vehicle.get('make', '')
                     model = vehicle.get('model', '')
                     trim = vehicle.get('trim', '')
-                    stock = vehicle.get('stock', '')
+                    # Use raw_stock as fallback if normalized stock is empty
+                    stock = vehicle.get('stock', '') or vehicle.get('raw_stock', '')
                     vin = vehicle.get('vin', '')
+                    raw_status = vehicle.get('raw_status', 'N/A')  # Get raw_status from database query
                     type_prefix = self._get_type_prefix(vehicle.get('vehicle_condition', ''))
                     
                     qr_path = qr_paths[idx] if idx < len(qr_paths) else ''
@@ -832,7 +1417,99 @@ class CorrectOrderProcessor:
                         yearmake, model, trim, stock_field, vin_field, qr_path,
                         qryearmodel, qrstock, qr_path, misc
                     ])
-        
+
+            else:
+                # Custom template - load template configuration from database
+                if template_type.startswith('custom_'):
+                    template_id = template_type.replace('custom_', '')
+                    logger.info(f"[CUSTOM TEMPLATE CSV] Processing custom template ID: {template_id}")
+
+                    try:
+                        from order_queue_manager import OrderQueueManager
+                        queue_manager = OrderQueueManager()
+                        template_config = queue_manager.get_template_by_id(template_id)
+
+                        if not template_config:
+                            logger.error(f"[CUSTOM TEMPLATE CSV] Template ID {template_id} not found - using shortcut_pack fallback")
+                            # Use shortcut_pack as fallback
+                            writer = csv.writer(csvfile)
+                            writer.writerow(['YEARMAKE', 'MODEL', 'TRIM', 'STOCK', 'VIN', '@QR', 'QRYEARMODEL', 'QRSTOCK', '@QR2', 'MISC'])
+                            for idx, vehicle in enumerate(vehicles):
+                                year = vehicle.get('year', '')
+                                make = vehicle.get('make', '')
+                                model = vehicle.get('model', '')
+                                trim = vehicle.get('trim', '')
+                                stock = vehicle.get('stock', '') or vehicle.get('raw_stock', '')
+                                vin = vehicle.get('vin', '')
+                                type_prefix = self._get_type_prefix(vehicle.get('vehicle_condition', ''))
+                                qr_path = qr_paths[idx] if idx < len(qr_paths) else ''
+                                yearmake = f"{year} {make}"
+                                stock_field = f"{year} {model} - {stock}"
+                                vin_field = f"{type_prefix} - {vin}"
+                                qryearmodel = f"{year} {model} - {stock}"
+                                qrstock = f"{type_prefix} - {vin}"
+                                misc = f"{year} {model} - {stock} - {type_prefix} - {vin}"
+                                writer.writerow([yearmake, model, trim, stock_field, vin_field, qr_path, qryearmodel, qrstock, qr_path, misc])
+                        else:
+                            # Use custom template configuration
+                            template_fields = template_config.get('fields', [])
+                            logger.info(f"[CUSTOM TEMPLATE CSV] Found {len(template_fields)} fields in template")
+
+                            writer = csv.writer(csvfile)
+
+                            # Create headers
+                            headers = [field.get('name', '').strip() for field in template_fields if field.get('name', '').strip()]
+                            if headers:
+                                writer.writerow(headers)
+                                logger.info(f"[CUSTOM TEMPLATE CSV] Wrote headers: {headers}")
+
+                            # Create QR path mapping
+                            qr_path_map = {}
+                            for idx, qr_path in enumerate(qr_paths):
+                                if idx < len(vehicles):
+                                    vehicle_vin = vehicles[idx].get('vin', '')
+                                    if vehicle_vin:
+                                        raw_vin = vehicle_vin.split(' - ')[-1] if ' - ' in vehicle_vin else vehicle_vin
+                                        qr_path_map[vehicle_vin] = qr_path
+                                        qr_path_map[raw_vin] = qr_path
+
+                            # Write data rows
+                            for idx, vehicle in enumerate(vehicles):
+                                row_data = []
+                                for field in template_fields:
+                                    field_mapping = field.get('mapping', '').strip()
+                                    if field_mapping:
+                                        if field_mapping == 'teststock':
+                                            value = vehicle.get('stock', '') or vehicle.get('raw_stock', '')
+                                        elif field_mapping == 'year_model':
+                                            yearmake = vehicle.get('yearmake', '')
+                                            model = vehicle.get('model', '')
+                                            value = f"{yearmake} {model}".strip()
+                                        elif field_mapping == 'year_model_stock':
+                                            yearmake = vehicle.get('yearmake', '')
+                                            model = vehicle.get('model', '')
+                                            stock = vehicle.get('stock', '') or vehicle.get('raw_stock', '')
+                                            year = yearmake.split()[0] if yearmake else ''
+                                            value = f"{year} {model} - {stock}".strip()
+                                        elif field_mapping == 'vin_prefix':
+                                            vin = vehicle.get('vin', '')
+                                            type_prefix = self._get_type_prefix(vehicle.get('vehicle_condition', ''))
+                                            value = f"{type_prefix} - {vin}"
+                                        elif field_mapping == '@qr':
+                                            vin = vehicle.get('vin', '')
+                                            value = qr_path_map.get(vin, qr_paths[idx] if idx < len(qr_paths) else '')
+                                        else:
+                                            value = vehicle.get(field_mapping, '')
+                                    else:
+                                        value = ''
+                                    row_data.append(value)
+                                writer.writerow(row_data)
+
+                    except Exception as e:
+                        logger.error(f"[CUSTOM TEMPLATE CSV] Error loading template: {e}")
+                        # Fallback to empty CSV
+                        pass
+
         logger.info(f"Generated Adobe CSV: {csv_path}")
         return csv_path
     
@@ -846,8 +1523,18 @@ class CorrectOrderProcessor:
         else:
             return 'USED'
     
-    def _generate_billing_sheet_csv(self, vehicles: List[Dict], dealership_name: str, output_folder: Path, timestamp: str) -> Path:
-        """Generate billing sheet CSV automatically after QR codes - matches exact format from examples"""
+    def _generate_billing_sheet_csv(self, vehicles: List[Dict], dealership_name: str, output_folder: Path, timestamp: str,
+                                    original_vin_list: List[str] = None, filtered_vin_list: List[str] = None) -> Path:
+        """Generate billing sheet CSV automatically after QR codes - matches exact format from examples
+
+        Args:
+            vehicles: List of vehicle dictionaries
+            dealership_name: Name of dealership
+            output_folder: Output folder path
+            timestamp: Timestamp string
+            original_vin_list: Optional list of original VINs (for LIST orders)
+            filtered_vin_list: Optional list of filtered VINs (for LIST orders)
+        """
         
         # File naming pattern: [DEALERSHIP NAME] [DATE] - BILLING.csv
         clean_name = dealership_name.upper().replace(' ', '')
@@ -872,17 +1559,35 @@ class CorrectOrderProcessor:
             stock = vehicle.get('stock', '')
             vin = vehicle.get('vin', '')
             vtype = vehicle.get('vehicle_condition', '').lower()
-            
-            # Determine vehicle type for billing
-            if 'new' in vtype:
+
+            # If vehicle_condition is missing, try to look it up from the database
+            if not vtype and vin:
+                query = "SELECT vehicle_condition FROM normalized_vehicle_data WHERE vin = %s LIMIT 1"
+                result = db_manager.execute_query(query, (vin,))
+                if result and len(result) > 0:
+                    vtype = (result[0].get('vehicle_condition') or '').lower()
+                    logger.info(f"[BILLING DEBUG] Looked up vehicle_condition for VIN {vin}: '{vtype}'")
+
+            # DEBUG: Log first 3 vehicles to see what vehicle_condition values we're getting
+            if len(vehicle_lines) < 3:
+                logger.info(f"[BILLING DEBUG] Vehicle: {year} {make} {model}, vehicle_condition: '{vtype}', full vehicle data keys: {list(vehicle.keys())}")
+
+            # Determine vehicle type for billing using _get_type_prefix logic
+            type_prefix = self._get_type_prefix(vtype)
+
+            if type_prefix == 'NEW':
                 billing_type = 'New'
                 new_count += 1
-            elif 'certified' in vtype or 'cpo' in vtype or 'pre-owned' in vtype:
-                billing_type = 'Pre-Owned'
+            elif type_prefix == 'CERTIFIED':
+                billing_type = 'CPO'
                 cpo_count += 1
-            else:
-                billing_type = 'Used'
+            else:  # USED
+                billing_type = 'PO'
                 used_count += 1
+
+            # DEBUG: Log the categorization
+            if len(vehicle_lines) < 3:
+                logger.info(f"[BILLING DEBUG] Type prefix: {type_prefix}, Billing type: {billing_type}")
             
             # Format vehicle line: "Year Make Model - Stock - VIN"
             vehicle_line = f"{year} {make} {model} - {stock} - {vin}"
@@ -890,42 +1595,541 @@ class CorrectOrderProcessor:
             vin_list.append(vin)
         
         total_vehicles = len(vehicles)
-        
-        # Write billing CSV in exact format from examples
+
+        # Determine if this is a LIST order (has original_vin_list)
+        is_list_order = original_vin_list is not None and filtered_vin_list is not None
+
+        # DEBUG: Log the LIST order detection
+        logger.info(f"[BILLING DEBUG] is_list_order={is_list_order}, original_vin_list={'None' if original_vin_list is None else f'{len(original_vin_list)} VINs'}, filtered_vin_list={'None' if filtered_vin_list is None else f'{len(filtered_vin_list)} VINs'}")
+
+        # Calculate ordered vs produced for LIST orders
+        if is_list_order:
+            ordered_count = len(original_vin_list)
+            produced_count = len(filtered_vin_list)
+
+            # Strip prefixes from filtered_vin_list for comparison
+            # filtered_vin_list has "NEW - VIN" or "USED - VIN" format
+            filtered_vins_clean = []
+            for vin in filtered_vin_list:
+                clean_vin = vin.split(' - ')[-1] if ' - ' in vin else vin
+                filtered_vins_clean.append(clean_vin)
+
+            # Find VINs that were NOT produced (ordered but not in output)
+            # Compare raw VINs from original_vin_list against cleaned filtered VINs
+            not_produced_vins = [vin for vin in original_vin_list if vin not in filtered_vins_clean]
+
+            logger.info(f"[BILLING DEBUG] original_vin_list: {original_vin_list}")
+            logger.info(f"[BILLING DEBUG] filtered_vins_clean: {filtered_vins_clean}")
+            logger.info(f"[BILLING DEBUG] not_produced_vins: {not_produced_vins}")
+
+            # Check for duplicates by comparing produced VINs against VIN log
+            duplicates_count = 0
+            duplicate_vins = []
+
+            # Get VIN log table name using centralized method (ensures consistency)
+            vin_log_table = self._get_dealership_vin_log_table(dealership_name)
+
+            logger.info(f"[BILLING DEBUG] Checking {len(filtered_vin_list)} VINs for duplicates in {vin_log_table}")
+            logger.info(f"[BILLING DEBUG] filtered_vin_list contents: {filtered_vin_list}")
+
+            # Check each produced VIN against the VIN log
+            for vin in filtered_vin_list:
+                # Strip prefix (NEW -, USED -, etc.) to get raw VIN
+                clean_vin = vin.split(' - ')[-1] if ' - ' in vin else vin
+
+                check_query = f"SELECT vin FROM {vin_log_table} WHERE vin = %s LIMIT 1"
+                logger.info(f"[BILLING DEBUG] Executing query: {check_query} with VIN={clean_vin} (original: {vin})")
+                result = db_manager.execute_query(check_query, (clean_vin,))
+                logger.info(f"[BILLING DEBUG] Query result for {clean_vin}: {result}")
+                if result and len(result) > 0:
+                    duplicates_count += 1
+                    duplicate_vins.append(vin)
+                    logger.info(f"[BILLING DEBUG] Found duplicate: {vin}")
+
+            logger.info(f"[BILLING DEBUG] Total duplicates found: {duplicates_count}")
+        else:
+            ordered_count = None
+            produced_count = None
+            not_produced_vins = []
+            duplicates_count = 0
+            duplicate_vins = []
+
+        # Write billing CSV in NEW format matching template
         with open(billing_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
-            
-            # Header row - matches format from examples
-            writer.writerow(['Printed Vehicles:', '', 'TOTALS:', '', 'VINLOG:', '', 'Duplicates:'])
-            
-            # Vehicle lines with summary statistics in right columns
+
+            # Build duplicate vehicle details for right column display
+            duplicate_vehicle_details = []
+            if is_list_order and duplicate_vins:
+                for dup_vin in duplicate_vins:
+                    # Find vehicle details for this duplicate VIN
+                    for vehicle in vehicles:
+                        if vehicle.get('vin') == dup_vin:
+                            duplicate_vehicle_details.append({
+                                'vin': dup_vin,
+                                'year': vehicle.get('year', ''),
+                                'make': vehicle.get('make', ''),
+                                'model': vehicle.get('model', ''),
+                                'stock': vehicle.get('stock', '').split(' - ')[-1] if ' - ' in vehicle.get('stock', '') else vehicle.get('stock', ''),
+                                'type': vehicle.get('vehicle_condition', 'used').upper()
+                            })
+                            break
+
+            # Row 1: Header row with Duplicates count
+            logger.info(f"[BILLING DEBUG] Writing header row with duplicates_count={duplicates_count}")
+            writer.writerow(['Printed Vehicles:', '', '', '', '', 'TOTALS:', '', '', 'Duplicates:', duplicates_count, '', '', '', ''])
+
+            # Rows 2-8: Vehicle data with totals on right
             for i, (vehicle_line, vehicle_type) in enumerate(vehicle_lines):
-                if i == 0:
-                    # First row includes New count
-                    writer.writerow([vehicle_line, vehicle_type, 'New:', new_count, vin_list[i] if i < len(vin_list) else '', '', 'No Dupes'])
-                elif i == 1:
-                    # Second row includes Used count
-                    writer.writerow([vehicle_line, vehicle_type, 'Used:', used_count, vin_list[i] if i < len(vin_list) else '', '', ''])
-                elif i == 2:
-                    # Third row includes Pre-Owned count
-                    writer.writerow([vehicle_line, vehicle_type, 'Pre-Owned:', cpo_count, vin_list[i] if i < len(vin_list) else '', '', ''])
-                elif i == 3:
-                    # Fourth row includes Total
-                    writer.writerow([vehicle_line, vehicle_type, 'Total:', total_vehicles, vin_list[i] if i < len(vin_list) else '', '', ''])
-                elif i == 4:
-                    # Fifth row includes Duplicates count (always 0 for new orders)
-                    writer.writerow([vehicle_line, vehicle_type, 'Duplicates:', 0, vin_list[i] if i < len(vin_list) else '', '', ''])
+                # Get the actual vehicle data to extract correct fields
+                vehicle = vehicles[i] if i < len(vehicles) else {}
+
+                vehicle_vin = vehicle.get('vin', '')
+
+                # Strip type prefix from VIN if present (e.g., "USED - 1C4RJYB67PC669752" -> "1C4RJYB67PC669752")
+                if ' - ' in vehicle_vin:
+                    vehicle_vin = vehicle_vin.split(' - ')[-1].strip()
+
+                year = vehicle.get('year', '')
+                make = vehicle.get('make', '')
+                model = vehicle.get('model', '')
+
+                # Extract just the stock number from the formatted stock field
+                # Stock format: "2021 Wrangler - 9257" -> extract "9257"
+                stock_field = vehicle.get('stock', '')
+                if ' - ' in stock_field:
+                    stock = stock_field.split(' - ')[-1].strip()
                 else:
-                    # Remaining rows just have vehicle info and VIN
-                    writer.writerow([vehicle_line, vehicle_type, '', '', vin_list[i] if i < len(vin_list) else '', '', ''])
-            
-            # Add empty rows if needed (billing sheets typically have some padding)
-            for _ in range(3):
-                writer.writerow(['', '', '', '', '', '', ''])
+                    stock = stock_field.strip()
+
+                # Vehicle description: "Year Make Model"
+                vehicle_desc = f"{year} {make} {model}"
+
+                # Build left side: VIN, Vehicle Description, Stock, Type, Empty
+                row = [vehicle_vin, vehicle_desc, stock, vehicle_type, '']
+
+                # Add totals column based on row number
+                if i == 0:
+                    row.extend(['New:', new_count, ''])
+                elif i == 1:
+                    row.extend(['PO:', used_count, ''])
+                elif i == 2:
+                    row.extend(['CPO:', cpo_count, ''])
+                elif i == 3:
+                    row.extend(['Total:', total_vehicles, ''])
+                elif i == 4 and is_list_order:
+                    row.extend(['Ordered:', ordered_count, ''])
+                elif i == 5 and is_list_order:
+                    row.extend(['Produced:', produced_count, ''])
+                else:
+                    row.extend(['', '', ''])
+
+                # Add duplicate details on right side (starting column J)
+                # Only add if we have duplicate data and it's within range
+                dup_index = i - 1  # Duplicates start on row 2 (index 1)
+                if dup_index >= 0 and dup_index < len(duplicate_vehicle_details):
+                    dup = duplicate_vehicle_details[dup_index]
+                    row.extend([dup['vin'], dup['year'], dup['make'], dup['model'], dup['stock'], dup['type']])
+                else:
+                    row.extend(['', '', '', '', '', ''])
+
+                writer.writerow(row)
+
+            # Continue with remaining vehicles if any (after summary rows)
+            remaining_start = 6 if is_list_order else 4
+            for i in range(remaining_start, len(vehicle_lines)):
+                vehicle_line, vehicle_type = vehicle_lines[i]
+
+                # Get the actual vehicle data
+                vehicle = vehicles[i] if i < len(vehicles) else {}
+
+                vehicle_vin = vehicle.get('vin', '')
+
+                # Strip type prefix from VIN if present
+                if ' - ' in vehicle_vin:
+                    vehicle_vin = vehicle_vin.split(' - ')[-1].strip()
+
+                year = vehicle.get('year', '')
+                make = vehicle.get('make', '')
+                model = vehicle.get('model', '')
+
+                # Extract just the stock number
+                stock_field = vehicle.get('stock', '')
+                if ' - ' in stock_field:
+                    stock = stock_field.split(' - ')[-1].strip()
+                else:
+                    stock = stock_field.strip()
+
+                vehicle_desc = f"{year} {make} {model}"
+
+                row = [vehicle_vin, vehicle_desc, stock, vehicle_type, '', '', '', '']
+
+                # Add duplicate details if available
+                dup_index = i - 1
+                if dup_index >= 0 and dup_index < len(duplicate_vehicle_details):
+                    dup = duplicate_vehicle_details[dup_index]
+                    row.extend([dup['vin'], dup['year'], dup['make'], dup['model'], dup['stock'], dup['type']])
+                else:
+                    row.extend(['', '', '', '', '', ''])
+
+                writer.writerow(row)
+
+            # Add "Not on Website" section at bottom (for LIST orders with VINs not in scraper)
+            if is_list_order and not_produced_vins:
+                # Add separator rows
+                writer.writerow(['', '', '', '', '', '', '', '', '', '', '', '', '', ''])
+
+                # Start "Not on Website" section
+                for idx, not_produced_vin in enumerate(not_produced_vins):
+                    if idx == 0:
+                        # First row has the header
+                        writer.writerow(['', '', '', '', '', 'Not on Website:', not_produced_vin, '', '', '', '', '', '', ''])
+                    else:
+                        # Subsequent rows just have the VIN
+                        writer.writerow(['', '', '', '', '', '', not_produced_vin, '', '', '', '', '', '', ''])
         
         logger.info(f"Generated billing sheet CSV: {billing_path}")
         return billing_path
-    
+
+    def _process_concatenated_formula(self, formula: str, vehicle: Dict) -> str:
+        """
+        Dynamically process a concatenated field formula.
+
+        Formula uses placeholders like:
+        - {yearmake} - direct field access
+        - {model} - direct field access
+        - {stock_number} - extracts number from stock field
+        - {year} - extracts year from yearmake
+        - etc.
+
+        Example: "{yearmake} - {stock_number}" becomes "2026 Porsche - TLB40309"
+        """
+        import re
+
+        result = formula
+
+        # Find all placeholders in the formula
+        placeholders = re.findall(r'\{(\w+)\}', formula)
+
+        for placeholder in placeholders:
+            value = ''
+
+            # Special handlers for computed fields
+            if placeholder == 'stock_number':
+                # Extract just the stock number from the full stock field
+                stock = vehicle.get('stock', '') or vehicle.get('raw_stock', '')
+                if ' - ' in stock:
+                    value = stock.split(' - ')[-1]
+                else:
+                    value = stock
+            elif placeholder == 'year':
+                # Extract year from yearmake (e.g., "2026 Porsche" -> "2026")
+                yearmake = vehicle.get('yearmake', '')
+                if yearmake:
+                    value = yearmake.split()[0] if yearmake.split() else ''
+            elif placeholder == 'make':
+                # Extract make from yearmake (e.g., "2026 Porsche" -> "Porsche")
+                yearmake = vehicle.get('yearmake', '')
+                parts = yearmake.split()
+                value = ' '.join(parts[1:]) if len(parts) > 1 else ''
+            else:
+                # Direct field access
+                value = vehicle.get(placeholder, '')
+
+            # Replace placeholder with value
+            result = result.replace(f'{{{placeholder}}}', str(value))
+
+        return result.strip()
+
+    def _generate_custom_template_csv(self, vehicles: List[Dict], template_type: str,
+                                    csvfile, qr_paths: List[str], dealership_name: str):
+        """Generate custom template CSV data directly to an open file handle"""
+        import csv
+
+        # Check if template_type starts with "custom_" to extract template ID
+        if template_type.startswith('custom_'):
+            template_id = template_type.replace('custom_', '')
+            logger.info(f"[CUSTOM TEMPLATE] Processing custom template ID: {template_id} for {dealership_name}")
+
+            # Load custom template configuration from template builder
+            try:
+                # Import here to avoid circular dependencies
+                from order_queue_manager import OrderQueueManager
+                queue_manager = OrderQueueManager()
+
+                # Get the custom template configuration
+                template_config = queue_manager.get_template_by_id(template_id)
+                if not template_config:
+                    logger.error(f"[CUSTOM TEMPLATE] Template ID {template_id} not found")
+                    # Fallback to standard shortcut format
+                    self._write_shortcut_format(csvfile, vehicles, qr_paths)
+                    return
+
+                # Extract fields from template configuration (now correctly formatted)
+                template_fields = template_config.get('fields', [])
+                logger.info(f"[CUSTOM TEMPLATE] Found {len(template_fields)} fields in template")
+                logger.info(f"[CUSTOM TEMPLATE DEBUG] Template fields: {template_fields}")
+
+                # Write custom template CSV based on the field configuration
+                writer = csv.writer(csvfile)
+
+                # Create header row from template fields
+                headers = []
+                for field in template_fields:
+                    field_name = field.get('name', '').strip()
+                    if field_name:
+                        headers.append(field_name)
+
+                if headers:
+                    writer.writerow(headers)
+                    logger.info(f"[CUSTOM TEMPLATE] Wrote headers: {headers}")
+
+                # Create QR path mapping for quick lookup
+                qr_path_map = {}
+                if qr_paths:
+                    for idx, qr_path in enumerate(qr_paths):
+                        if idx < len(vehicles):
+                            vehicle_vin = vehicles[idx].get('vin', '')
+                            if vehicle_vin:
+                                # Strip prefix (NEW - , USED - , etc.) from VIN for mapping
+                                raw_vin = vehicle_vin
+                                if ' - ' in vehicle_vin:
+                                    raw_vin = vehicle_vin.split(' - ')[-1]
+                                # Map both prefixed and raw VIN to the same QR path
+                                qr_path_map[vehicle_vin] = qr_path  # Keep original for backward compatibility
+                                qr_path_map[raw_vin] = qr_path      # Add raw VIN mapping
+
+                # Write data rows
+                for idx, vehicle in enumerate(vehicles):
+                    if idx == 0:  # Debug first vehicle only
+                        logger.info(f"[CUSTOM TEMPLATE DEBUG] First vehicle data: {dict(vehicle)}")
+
+                    row_data = []
+                    for field in template_fields:
+                        field_name = field.get('name', '').strip()
+                        field_mapping = field.get('mapping', '').strip()
+                        field_type = field.get('type', '').strip()
+
+                        if field_mapping:
+                            # DYNAMIC CONCATENATED FIELD PROCESSING
+                            # If field type is 'concatenated' and has a formula, use dynamic processing
+                            if field_type == 'concatenated' and field.get('formula'):
+                                formula = field.get('formula', '')
+                                value = self._process_concatenated_formula(formula, vehicle)
+                            # Handle composite and calculated fields based on actual vehicle data structure
+                            elif field_mapping == 'teststock':
+                                # STOCK field concatenated format: uses the pre-formatted stock field
+                                # This already contains "YEAR MODEL - STOCK#" format (e.g., "2026 Camry - T41990")
+                                value = vehicle.get('stock', '') or vehicle.get('raw_stock', '')
+                            elif field_mapping == 'year_model':
+                                # Use yearmake + model (e.g., "2021 Jeep Wrangler")
+                                yearmake = vehicle.get('yearmake', '')
+                                model = vehicle.get('model', '')
+                                value = f"{yearmake} {model}".strip()
+                            elif field_mapping == 'year_make_stock':
+                                # Similar to year_model_stock but with make instead of model
+                                yearmake = vehicle.get('yearmake', '')  # "2026 Porsche"
+                                # Use raw_stock as fallback if normalized stock is empty
+                                stock = vehicle.get('stock', '') or vehicle.get('raw_stock', '')  # "2026 Macan - TLB40309"
+
+                                # Extract just the stock number from the stock field
+                                if ' - ' in stock:
+                                    stock_number = stock.split(' - ')[-1]
+                                else:
+                                    stock_number = stock
+
+                                value = f"{yearmake} - {stock_number}".strip()
+                            elif field_mapping == 'year_model_stock':
+                                # Extract year from yearmake and combine with model and stock number
+                                yearmake = vehicle.get('yearmake', '')  # "2021 Jeep"
+                                model = vehicle.get('model', '')        # "Wrangler"
+                                # Use raw_stock as fallback if normalized stock is empty
+                                stock = vehicle.get('stock', '') or vehicle.get('raw_stock', '')  # "2021 Wrangler - 9257"
+
+                                # Extract just the stock number from the stock field
+                                # stock typically looks like "2021 Wrangler - 9257", we want just "9257"
+                                if ' - ' in stock:
+                                    stock_number = stock.split(' - ')[-1]
+                                else:
+                                    stock_number = stock
+
+                                value = f"{yearmake} {model} - {stock_number}".strip()
+                            elif field_mapping == 'type_vin':
+                                # vin field already contains "USED - VIN", just use it directly
+                                vin = vehicle.get('vin', '')
+                                value = vin.strip()
+                            elif field_mapping == 'price_with_markup':
+                                # Handle price with markup calculation
+                                try:
+                                    # Get MSRP from database since it's not in the vehicle dict
+                                    msrp = 0
+                                    vin = vehicle.get('vin', '')
+
+                                    # Extract raw VIN (remove "NEW - " or "USED - " prefix)
+                                    raw_vin = vin
+                                    if ' - ' in vin:
+                                        raw_vin = vin.split(' - ')[-1]
+
+                                    logger.info(f"[PRICE DEBUG] Looking up MSRP for VIN: {raw_vin}")
+
+                                    try:
+                                        from database_connection import db_manager
+                                        # Query for MSRP and price from normalized_vehicle_data
+                                        # Use MSRP if available, otherwise fall back to price
+                                        price_result = db_manager.execute_query(
+                                            "SELECT msrp, price FROM normalized_vehicle_data WHERE vin = %s LIMIT 1",
+                                            (raw_vin,)
+                                        )
+                                        if price_result and len(price_result) > 0:
+                                            msrp = price_result[0].get('msrp')
+                                            price = price_result[0].get('price', 0)
+
+                                            # Use MSRP if available, otherwise use price
+                                            if msrp is not None:
+                                                logger.info(f"[PRICE DEBUG] Using MSRP from database: {msrp}")
+                                                base_price = msrp
+                                            else:
+                                                logger.info(f"[PRICE DEBUG] MSRP is null, using price instead: {price}")
+                                                base_price = price
+
+                                            if isinstance(base_price, str):
+                                                # Remove currency symbols and commas
+                                                base_price = base_price.replace('$', '').replace(',', '')
+                                                msrp = float(base_price) if base_price else 0
+                                            else:
+                                                msrp = float(base_price) if base_price else 0
+                                        else:
+                                            logger.warning(f"[PRICE DEBUG] No price data found for VIN: {raw_vin}")
+                                    except Exception as e:
+                                        logger.warning(f"[CUSTOM TEMPLATE] Could not fetch price from database: {e}")
+                                        msrp = 0
+
+                                    logger.info(f"[PRICE DEBUG] Final MSRP value: {msrp}")
+
+                                    # Get markup from dealership config in database
+                                    markup = 1000  # default
+                                    try:
+                                        config_result = db_manager.execute_query(
+                                            "SELECT output_rules FROM dealership_configs WHERE name = %s",
+                                            (dealership_name,)
+                                        )
+                                        if config_result and len(config_result) > 0:
+                                            output_rules = config_result[0].get('output_rules', {})
+                                            markup = output_rules.get('price_markup', 1000)
+                                            logger.info(f"[PRICE DEBUG] Markup from config: {markup}")
+                                    except Exception as e:
+                                        logger.warning(f"[CUSTOM TEMPLATE] Could not fetch dealership markup: {e}")
+                                        markup = field.get('markup_amount', 1000)
+
+                                    price_with_markup = msrp + markup
+                                    logger.info(f"[PRICE DEBUG] Final calculation: {msrp} + {markup} = {price_with_markup}")
+                                    value = f"${price_with_markup:,.0f}" if price_with_markup > 0 else '$1,000'
+                                    logger.info(f"[PRICE DEBUG] Final value: {value}")
+                                except (ValueError, TypeError) as e:
+                                    logger.warning(f"[CUSTOM TEMPLATE] Error calculating price_with_markup: {e}")
+                                    value = '$1,000'
+                            elif field_mapping in ['qr_code', 'qr_path']:
+                                vin = vehicle.get('vin', '')
+                                logger.info(f"[QR DEBUG] Looking for QR path for VIN: {vin}")
+                                logger.info(f"[QR DEBUG] Available keys in qr_path_map: {list(qr_path_map.keys())[:5]}")
+                                # Try to get QR path using the VIN as-is first
+                                value = qr_path_map.get(vin, '')
+                                logger.info(f"[QR DEBUG] Found with full VIN: {value}")
+                                # If not found, try stripping the prefix
+                                if not value and ' - ' in vin:
+                                    raw_vin = vin.split(' - ')[-1]
+                                    value = qr_path_map.get(raw_vin, '')
+                                    logger.info(f"[QR DEBUG] Found with raw VIN ({raw_vin}): {value}")
+                                logger.info(f"[QR DEBUG] Final QR path: {value}")
+                            # Handle direct field mappings using actual vehicle data structure
+                            elif field_mapping == 'yearmake':
+                                value = vehicle.get('yearmake', '')
+                            elif field_mapping == 'model':
+                                value = vehicle.get('model', '')
+                            elif field_mapping == 'stock':
+                                # Use raw_stock as fallback if normalized stock is empty
+                                value = vehicle.get('stock', '') or vehicle.get('raw_stock', '')
+                            elif field_mapping == 'vin':
+                                value = vehicle.get('vin', '')
+                            elif field_mapping == 'price':
+                                value = vehicle.get('price', '')
+                            elif field_mapping == 'trim':
+                                value = vehicle.get('trim', '')
+                            elif field_mapping == 'ext_color':
+                                value = vehicle.get('ext_color', '')
+                            # Legacy mappings for backwards compatibility
+                            elif field_mapping == 'year':
+                                # Extract year from yearmake field
+                                yearmake = vehicle.get('yearmake', '')
+                                value = yearmake.split()[0] if yearmake else ''
+                            elif field_mapping == 'make':
+                                # Extract make from yearmake field
+                                yearmake = vehicle.get('yearmake', '')
+                                parts = yearmake.split()
+                                value = ' '.join(parts[1:]) if len(parts) > 1 else ''
+                            elif field_mapping == 'year_make_model':
+                                yearmake = vehicle.get('yearmake', '')
+                                model = vehicle.get('model', '')
+                                value = f"{yearmake} {model}".strip()
+                            else:
+                                # Try direct field access for any other mappings
+                                value = vehicle.get(field_mapping, '')
+                        else:
+                            value = ''
+
+                        # Use "*" as placeholder for empty fields to prevent Adobe import misalignment
+                        row_data.append(str(value) if value else '*')
+
+                    writer.writerow(row_data)
+
+                logger.info(f"[CUSTOM TEMPLATE] Generated CSV with {len(vehicles)} vehicles using custom template {template_id}")
+
+            except Exception as e:
+                logger.error(f"[CUSTOM TEMPLATE] Error processing custom template: {e}")
+                # Fallback to standard shortcut format
+                self._write_shortcut_format(csvfile, vehicles, qr_paths)
+        else:
+            # Handle standard template types
+            if template_type == "shortcut":
+                self._write_shortcut_format(csvfile, vehicles, qr_paths)
+            elif template_type == "flyout":
+                self._write_flyout_format(csvfile, vehicles, qr_paths)
+            else:
+                logger.warning(f"[CUSTOM TEMPLATE] Unknown template type: {template_type}, using shortcut format")
+                self._write_shortcut_format(csvfile, vehicles, qr_paths)
+
+    def _write_shortcut_format(self, csvfile, vehicles: List[Dict], qr_paths: List[str]):
+        """Write shortcut format CSV"""
+        import csv
+        writer = csv.writer(csvfile)
+        writer.writerow(['QRYEARMODEL', 'QRSTOCK', '@QR2'])
+
+        for idx, vehicle in enumerate(vehicles):
+            year = vehicle.get('year', '')
+            make = vehicle.get('make', '')
+            model = vehicle.get('model', '')
+            stock = vehicle.get('stock', '')
+            qr_path = qr_paths[idx] if idx < len(qr_paths) else ''
+
+            year_make_model = f"{year} {make} {model}".strip()
+            writer.writerow([year_make_model, stock, qr_path])
+
+    def _write_flyout_format(self, csvfile, vehicles: List[Dict], qr_paths: List[str]):
+        """Write flyout format CSV"""
+        import csv
+        writer = csv.writer(csvfile)
+        writer.writerow(['QRYEARMODEL', 'QRPRICE', '@QR2'])
+
+        for idx, vehicle in enumerate(vehicles):
+            year = vehicle.get('year', '')
+            make = vehicle.get('make', '')
+            model = vehicle.get('model', '')
+            price = vehicle.get('price', '')
+            qr_path = qr_paths[idx] if idx < len(qr_paths) else ''
+
+            year_make_model = f"{year} {make} {model}".strip()
+            writer.writerow([year_make_model, price, qr_path])
+
     def _update_vin_history(self, dealership_name: str, vins: List[str]):
         """Update VIN history for next comparison"""
         try:
@@ -1220,6 +2424,158 @@ class CorrectOrderProcessor:
             logger.error(f"Error regenerating QR codes with URLs: {e}")
             return {'success': False, 'error': str(e)}
 
+    def generate_final_files(self, dealership_name: str, vehicles_data: List[Dict],
+                            order_number: str, template_type: str = None,
+                            custom_templates: Dict = None, skip_vin_logging: bool = False) -> Dict[str, Any]:
+        """
+        Generate final output files (CSV, QR codes, billing sheet) from reviewed vehicle data.
+        This is called after user reviews and confirms vehicles in the modal wizard.
+
+        Args:
+            dealership_name: Name of the dealership
+            vehicles_data: List of vehicle dictionaries (from review stage)
+            order_number: Order number entered by user
+            template_type: Template type to use
+            custom_templates: Custom template configuration dict
+            skip_vin_logging: Whether to skip VIN log updates
+
+        Returns:
+            Dict with success status, file paths, and generation details
+        """
+        try:
+            logger.info(f"[GENERATE FINAL FILES] Starting for {dealership_name} with order {order_number}")
+            logger.info(f"[GENERATE FINAL FILES] Processing {len(vehicles_data)} vehicles")
+
+            # Create output folder with order number
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            dealership_slug = dealership_name.replace(' ', '_').replace("'", '')
+            output_folder = self.output_base / dealership_name / f"{timestamp}_{order_number}"
+            output_folder.mkdir(parents=True, exist_ok=True)
+
+            logger.info(f"[GENERATE FINAL FILES] Output folder: {output_folder}")
+
+            # Step 1: Generate QR codes
+            qr_folder = output_folder / "qr_codes"
+            qr_folder.mkdir(exist_ok=True)
+            qr_paths = self._generate_qr_codes(vehicles_data, dealership_name, qr_folder)
+            logger.info(f"[GENERATE FINAL FILES] Generated {len(qr_paths)} QR codes")
+
+            # Step 2: Check for dual template configuration
+            dual_template_config = None
+            if custom_templates and isinstance(custom_templates, dict):
+                if 'new' in custom_templates and 'used' in custom_templates:
+                    dual_template_config = custom_templates
+                    logger.info(f"[GENERATE FINAL FILES] Dual template detected: NEW={custom_templates['new']}, USED={custom_templates['used']}")
+
+            # Step 3: Generate Adobe CSV(s) - split by condition if dual template config exists
+            csv_paths = []
+            if dual_template_config:
+                # Generate separate CSVs for NEW and USED vehicles
+                logger.info(f"[GENERATE FINAL FILES] Generating separate NEW and USED CSVs")
+
+                # Split vehicles by condition
+                new_vehicles = []
+                used_vehicles = []
+                new_qr_paths = []
+                used_qr_paths = []
+
+                for idx, vehicle in enumerate(vehicles_data):
+                    condition = str(vehicle.get('condition', '')).lower()
+                    if condition == 'new':
+                        new_vehicles.append(vehicle)
+                        new_qr_paths.append(qr_paths[idx])
+                    else:
+                        used_vehicles.append(vehicle)
+                        used_qr_paths.append(qr_paths[idx])
+
+                logger.info(f"[GENERATE FINAL FILES] Split: {len(new_vehicles)} NEW, {len(used_vehicles)} USED")
+
+                # Generate NEW CSV if there are new vehicles
+                if new_vehicles:
+                    new_csv_path = self._generate_adobe_csv(
+                        new_vehicles,
+                        dealership_name,
+                        dual_template_config['new'],
+                        output_folder,
+                        new_qr_paths,
+                        suffix='_NEW'
+                    )
+                    csv_paths.append(new_csv_path)
+                    logger.info(f"[GENERATE FINAL FILES] Generated NEW CSV: {new_csv_path}")
+
+                # Generate USED CSV if there are used vehicles
+                if used_vehicles:
+                    used_csv_path = self._generate_adobe_csv(
+                        used_vehicles,
+                        dealership_name,
+                        dual_template_config['used'],
+                        output_folder,
+                        used_qr_paths,
+                        suffix='_USED'
+                    )
+                    csv_paths.append(used_csv_path)
+                    logger.info(f"[GENERATE FINAL FILES] Generated USED CSV: {used_csv_path}")
+
+                # Set primary CSV path for backward compatibility
+                csv_path = csv_paths[0] if csv_paths else None
+            else:
+                # Single template - generate one CSV
+                if not template_type:
+                    if custom_templates:
+                        # Use custom template for 'used' vehicles (CAO primarily processes used)
+                        template_type = custom_templates.get('used', '') or custom_templates.get('new', '')
+                        if not template_type:
+                            template_type = self._get_dealership_template_config(dealership_name)
+                    else:
+                        template_type = self._get_dealership_template_config(dealership_name)
+
+                logger.info(f"[GENERATE FINAL FILES] Using template type: {template_type}")
+
+                csv_path = self._generate_adobe_csv(
+                    vehicles_data,
+                    dealership_name,
+                    template_type,
+                    output_folder,
+                    qr_paths
+                )
+                csv_paths = [csv_path]
+                logger.info(f"[GENERATE FINAL FILES] Generated CSV: {csv_path}")
+
+            # Step 4: Generate billing sheet CSV
+            billing_path = self._generate_billing_sheet_csv(
+                vehicles_data,
+                dealership_name,
+                output_folder,
+                timestamp
+            )
+            logger.info(f"[GENERATE FINAL FILES] Generated billing sheet: {billing_path}")
+
+            # Step 5: Update VIN log with order number (if not skipping)
+            if not skip_vin_logging:
+                vins = [v.get('vin', '') for v in vehicles_data if v.get('vin')]
+                if vins:
+                    self._update_vin_history(dealership_name, vins)
+                    logger.info(f"[GENERATE FINAL FILES] Updated VIN log for {len(vins)} vehicles")
+
+            return {
+                'success': True,
+                'output_folder': str(output_folder),
+                'csv_path': str(csv_path) if csv_path else None,
+                'csv_paths': [str(p) for p in csv_paths] if csv_paths else [],
+                'billing_path': str(billing_path),
+                'qr_folder': str(qr_folder),
+                'qr_paths': qr_paths,
+                'qr_codes_generated': len(qr_paths),
+                'order_number': order_number,
+                'dealership_name': dealership_name
+            }
+
+        except Exception as e:
+            logger.error(f"[GENERATE FINAL FILES] Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {'success': False, 'error': str(e)}
+
 # Test the correct processor
 if __name__ == "__main__":
     processor = CorrectOrderProcessor()
@@ -1227,3 +2583,4 @@ if __name__ == "__main__":
     # Test CAO order with Dave Sinclair Lincoln
     result = processor.process_cao_order("Dave Sinclair Lincoln", "shortcut_pack")
     print(json.dumps(result, indent=2))
+

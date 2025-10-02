@@ -1,0 +1,1689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MinisForum Database Control - Silver Fox Marketing</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=2025081920&cache-bust={{ range(1000, 9999) | random }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/vin_log_update.css') }}?v=2025081903">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Inline CSS to force display fixes -->
+    <style>
+        .dealership-item {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+            border: 2px solid #e2e8f0 !important;
+            border-radius: 12px !important;
+            padding: 16px 20px !important;
+            margin-bottom: 8px !important;
+            cursor: pointer !important;
+            display: flex;
+            align-items: center !important;
+            justify-content: space-between !important;
+            min-height: 60px !important;
+            overflow: visible !important;
+        }
+        
+        .dealership-name {
+            font-weight: 600 !important;
+            flex: 1 !important;
+            color: #1e293b !important;
+            font-size: 1rem !important;
+            line-height: 1.4 !important;
+            padding-right: 12px !important;
+        }
+        
+        .dealership-type {
+            font-size: 0.75rem !important;
+            font-weight: 600 !important;
+            background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%) !important;
+            color: #475569 !important;
+            padding: 4px 12px !important;
+            border-radius: 20px !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.5px !important;
+            border: 1px solid #cbd5e1 !important;
+            min-width: 50px !important;
+            text-align: center !important;
+        }
+        
+        .dealership-type.cao {
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%) !important;
+            color: #1e40af !important;
+            border-color: #bfdbfe !important;
+        }
+        
+        .dealership-type.list {
+            background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%) !important;
+            color: #16a34a !important;
+            border-color: #bbf7d0 !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <button class="mobile-menu-toggle" id="mobileMenuToggle">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="header-content">
+                <div class="logo-section">
+                    <img src="{{ url_for('static', filename='images/Asset_58.svg') }}?v={{ range(1000, 9999) | random }}&logo-fix" alt="Silver Fox Marketing" class="header-logo">
+                    <div class="title-section">
+                        <div class="title-with-logo">
+                            <div class="title-text">
+                                <h1 class="app-title">Database and Order Processing Toolkit</h1>
+                                <span class="company-name">Silver Fox Marketing</span>
+                            </div>
+                            <img src="{{ url_for('static', filename='images/car_logo_orange.png') }}?v=123" alt="LotSherpa" class="car-logo">
+                        </div>
+                    </div>
+                </div>
+                <div class="status-section">
+                    <div class="status-indicator" id="systemStatus">
+                        <i class="fas fa-circle status-icon"></i>
+                        <span class="status-text">System Ready</span>
+                    </div>
+                    <div class="last-scrape" id="lastScrape">
+                        Last Scrape: Never
+                    </div>
+                    <!-- TEST: Asset 58 Logo -->
+                    <div style="margin: 0 20px;">
+                        <img src="{{ url_for('static', filename='images/Asset_58.svg') }}?test=123" alt="Test Asset 58" style="height: 40px; width: auto;">
+                    </div>
+                    
+                    <!-- Dark Mode Toggle -->
+                    <div class="theme-toggle-container">
+                        <label class="theme-toggle" for="darkModeToggle" title="Toggle Dark Mode">
+                            <input type="checkbox" id="darkModeToggle" class="theme-toggle-input">
+                            <div class="theme-toggle-slider">
+                                <i class="fas fa-sun theme-icon light-icon"></i>
+                                <i class="fas fa-moon theme-icon dark-icon"></i>
+                                <div class="theme-toggle-thumb"></div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <div class="main-content">
+            <!-- Dynamic Sidebar Navigation -->
+            <aside class="sidebar-navigation">
+                <!-- Expand button for collapsed state - positioned at top -->
+                <button class="sidebar-expand" id="sidebarExpand" title="Expand Sidebar">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+                
+                <div class="sidebar-header">
+                    <h3 class="sidebar-title">
+                        <i class="fas fa-layer-group"></i>
+                        Control Center
+                    </h3>
+                    <button class="sidebar-toggle" id="sidebarToggle" title="Toggle Sidebar">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                </div>
+                
+                <nav class="sidebar-nav">
+                    <!-- ORDER PROCESSING SECTION - First and primary -->
+                    <div class="sidebar-section primary">
+                        <h4 class="sidebar-section-title">
+                            <i class="fas fa-cogs"></i>
+                            Order Processing
+                        </h4>
+                        <button class="sidebar-tab active" data-tab="queue-management">
+                            <i class="fas fa-tasks"></i>
+                            <span class="tab-label">Order Queue</span>
+                            <div class="tab-indicator"></div>
+                        </button>
+                    </div>
+                    
+                    <div class="sidebar-divider"></div>
+                    
+                    <!-- ANALYTICS SECTION -->
+                    <div class="sidebar-section">
+                        <h4 class="sidebar-section-title">
+                            <i class="fas fa-chart-bar"></i>
+                            Analytics
+                        </h4>
+                        <button class="sidebar-tab" data-tab="dealership-settings">
+                            <i class="fas fa-cog"></i>
+                            <span class="tab-label">Dealership Settings</span>
+                            <div class="tab-indicator"></div>
+                        </button>
+                        <button class="sidebar-tab" data-tab="data-search">
+                            <i class="fas fa-search"></i>
+                            <span class="tab-label">Data Search</span>
+                            <div class="tab-indicator"></div>
+                        </button>
+                    </div>
+                    
+                    <div class="sidebar-divider"></div>
+                    
+                    <!-- SYSTEM TOOLS SECTION -->
+                    <div class="sidebar-section">
+                        <h4 class="sidebar-section-title">
+                            <i class="fas fa-tools"></i>
+                            System Tools
+                        </h4>
+                        <button class="sidebar-tab external" onclick="window.open('/stress-test', '_blank')">
+                            <i class="fas fa-vial"></i>
+                            <span class="tab-label">System Tests</span>
+                            <i class="fas fa-external-link-alt external-icon"></i>
+                        </button>
+                        <button class="sidebar-tab external" onclick="window.open('/websocket-test', '_blank')" title="Test WebSocket Connection">
+                            <i class="fas fa-wifi"></i>
+                            <span class="tab-label">WebSocket Test</span>
+                            <i class="fas fa-external-link-alt external-icon"></i>
+                        </button>
+                        <button class="sidebar-tab" data-tab="system-status">
+                            <i class="fas fa-chart-line"></i>
+                            <span class="tab-label">System Status</span>
+                            <div class="tab-indicator"></div>
+                        </button>
+                    </div>
+                </nav>
+                
+                <div class="sidebar-footer">
+                    <div class="sidebar-status">
+                        <i class="fas fa-circle status-dot"></i>
+                        <span class="status-label">All Systems Online</span>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Content Area -->
+            <div class="content-area">
+                <div class="tab-content">
+                    <!-- Data Search Tab -->
+                    <div class="tab-panel" id="data-search-panel">
+                        <div class="panel-header">
+                            <h2>Data Management</h2>
+                            <div class="control-buttons">
+                                <button class="btn btn-secondary" id="exportSearchResults" style="display: none;">
+                                    <i class="fas fa-download"></i>
+                                    Export Results
+                                </button>
+                                <button class="btn btn-primary" id="refreshDataSearch">
+                                    <i class="fas fa-sync"></i>
+                                    Refresh
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Sub-tab Navigation -->
+                        <div class="sub-tab-navigation">
+                            <button class="sub-tab-button active" data-subtab="scraper-view">
+                                <i class="fas fa-spider"></i>
+                                Scraper View
+                            </button>
+                            <button class="sub-tab-button" data-subtab="vin-history">
+                                <i class="fas fa-history"></i>
+                                VIN History Logs
+                            </button>
+                        </div>
+                        
+                        <!-- Sub-tab Panels -->
+                        <div class="sub-tab-panels">
+                            <!-- Scraper View Sub-panel -->
+                            <div class="sub-tab-panel active" id="scraper-view-panel">
+                                <!-- CSV Import Section -->
+                                <div class="csv-import-section">
+                                    <div class="import-header">
+                                        <h3>
+                                            <i class="fas fa-file-csv"></i>
+                                            Import Scraper Data
+                                        </h3>
+                                        <div class="import-actions">
+                                            <input type="file" id="csvFileInput" accept=".csv" style="display: none;">
+                                            <button class="btn btn-primary" id="selectCsvBtn">
+                                                <i class="fas fa-upload"></i>
+                                                Select CSV File
+                                            </button>
+                                            <button class="btn btn-secondary" id="importCsvBtn" disabled>
+                                                <i class="fas fa-download"></i>
+                                                Import Data
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="import-status" id="importStatus" style="display: none;">
+                                        <div class="status-message" id="importStatusMessage"></div>
+                                        <div class="progress-bar" id="importProgressBar" style="display: none;">
+                                            <div class="progress-fill" id="importProgressFill"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Scraper History Table -->
+                                <div class="scraper-history-section">
+                                    <div class="history-header">
+                                        <h3>
+                                            <i class="fas fa-history"></i>
+                                            Scraper Import History
+                                        </h3>
+                                        <button class="btn btn-secondary" id="refreshScraperHistory">
+                                            <i class="fas fa-sync"></i>
+                                            Refresh
+                                        </button>
+                                    </div>
+                                    
+                                    <div class="scraper-table-container" id="scraperTableContainer">
+                                        <div class="loading">
+                                            <i class="fas fa-spinner fa-spin"></i>
+                                            Loading scraper history...
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- VIN History Sub-panel -->
+                            <div class="sub-tab-panel" id="vin-history-panel" style="display: none;">
+                                <div class="vin-history-interface">
+                                    <!-- VIN History Search Bar -->
+                                    <div class="dealership-search-container">
+                                        <input type="text" 
+                                               class="search-input" 
+                                               id="vinHistoryDealershipSearchInput" 
+                                               placeholder="Search dealerships by name...">
+                                        <button class="search-btn" id="searchDealershipsBtn">
+                                            <i class="fas fa-search"></i>
+                                        </button>
+                                    </div>
+                                    
+                                    <!-- Dealership Cards Grid -->
+                                    <div class="dealership-cards-grid" id="dealershipCardsGrid">
+                                        <div class="loading">
+                                            <i class="fas fa-spinner fa-spin"></i>
+                                            Loading dealership VIN logs...
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <!-- System Status Tab -->
+                    <div class="tab-panel" id="system-status-panel">
+                        <div class="panel-header">
+                            <h2>Silver Fox System Status</h2>
+                            <div class="control-buttons">
+                                <button class="btn btn-secondary" onclick="window.open('/test', '_blank')">
+                                    <i class="fas fa-external-link-alt"></i>
+                                    Detailed Status
+                                </button>
+                                <button class="btn btn-primary" id="refreshSystemStatus">
+                                    <i class="fas fa-sync"></i>
+                                    Refresh
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="system-metrics" id="systemMetrics">
+                            <div class="metrics-grid">
+                                <div class="metric-card">
+                                    <div class="metric-icon">
+                                        <i class="fas fa-spider"></i>
+                                    </div>
+                                    <div class="metric-content">
+                                        <h3>Active Scrapers</h3>
+                                        <div class="metric-value" id="activeScrapers">Loading...</div>
+                                        <div class="metric-label">Real-time scrapers ready</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="metric-card">
+                                    <div class="metric-icon">
+                                        <i class="fas fa-database"></i>
+                                    </div>
+                                    <div class="metric-content">
+                                        <h3>Database Health</h3>
+                                        <div class="metric-value" id="databaseHealth">Loading...</div>
+                                        <div class="metric-label">Connection performance</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="metric-card">
+                                    <div class="metric-icon">
+                                        <i class="fas fa-clipboard-list"></i>
+                                    </div>
+                                    <div class="metric-content">
+                                        <h3>Order Processing</h3>
+                                        <div class="metric-value" id="orderProcessingStatus">Loading...</div>
+                                        <div class="metric-label">CAO & List orders ready</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="metric-card">
+                                    <div class="metric-icon">
+                                        <i class="fas fa-car"></i>
+                                    </div>
+                                    <div class="metric-content">
+                                        <h3>Vehicle Inventory</h3>
+                                        <div class="metric-value" id="vehicleCount">Loading...</div>
+                                        <div class="metric-label">Total vehicles in database</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="system-actions">
+                                <h3>Quick Actions</h3>
+                                <div class="action-buttons">
+                                    <button class="btn btn-primary" onclick="app.switchTab('queue-management')">
+                                        <i class="fas fa-tasks"></i>
+                                        Open Queue Manager
+                                    </button>
+                                    <button class="btn btn-secondary" onclick="window.open('/stress-test', '_blank')">
+                                        <i class="fas fa-vial"></i>
+                                        Run System Tests
+                                    </button>
+                                    <button class="btn btn-secondary" id="exportSystemReport">
+                                        <i class="fas fa-download"></i>
+                                        Export Report
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- System Console - Landscape Layout -->
+                            <div class="system-console">
+                                <div class="console-header">
+                                    <h3>
+                                        <i class="fas fa-terminal"></i>
+                                        System Output Console
+                                    </h3>
+                                    <button class="btn btn-secondary btn-sm" id="clearTerminalStatus">
+                                        <i class="fas fa-trash"></i>
+                                        Clear
+                                    </button>
+                                </div>
+                                <div class="console-content" id="terminalOutputStatus">
+                                    <div class="terminal-line">
+                                        <span class="timestamp">[Starting]</span>
+                                        <span class="message">System initialized and ready</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Active Scrapers Status -->
+                        <div class="active-scrapers-panel">
+                            <h3>Active Scrapers</h3>
+                            <div class="active-scrapers-list" id="activeScrapersList">
+                                <div class="empty-state">
+                                    <i class="fas fa-robot"></i>
+                                    <p>No active scrapers</p>
+                                    <p class="help-text">Start a scraper from the dealership grid above to see real-time progress</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dealership Settings Tab -->
+                    <div class="tab-panel" id="dealership-settings-panel">
+                        <div class="panel-header">
+                            <h2>Dealership Settings</h2>
+                            <div class="control-buttons">
+                                <button class="btn btn-secondary" id="refreshDealershipSettings">
+                                    <i class="fas fa-sync"></i>
+                                    Refresh
+                                </button>
+                                <button class="btn btn-primary" id="saveDealershipSettings">
+                                    <i class="fas fa-save"></i>
+                                    Save All Changes
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- SEARCH BAR - FORCED VISIBILITY -->
+                        <div style="background: #ff0000; padding: 20px; margin: 10px 0; border-radius: 8px;">
+                            <h3 style="color: white; margin: 0 0 10px 0;">🔍 DEALERSHIP SEARCH</h3>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <input type="text" 
+                                       style="flex: 1; padding: 12px; border: none; border-radius: 4px; font-size: 16px;"
+                                       id="dealershipSettingsSearchInput" 
+                                       placeholder="Type to search dealerships...">
+                                <button style="padding: 12px 20px; background: white; color: #ff0000; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;" 
+                                        id="dealershipSettingsSearchBtn">
+                                    SEARCH
+                                </button>
+                                <button style="padding: 12px; background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 4px; cursor: pointer; display: none;" 
+                                        id="clearDealershipSettingsSearchBtn">
+                                    ✕
+                                </button>
+                            </div>
+                            <div id="dealershipSettingsSearchInfo" style="margin-top: 10px; color: white; font-weight: bold; display: none;">
+                                <span class="results-count">0 dealerships found</span>
+                            </div>
+                        </div>
+                        
+                        <div class="dealership-settings-container">
+                            <div class="settings-grid" id="dealershipSettingsGrid">
+                                <div class="loading">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                    Loading dealership settings...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Order Queue Management Tab -->
+                    <div class="tab-panel active" id="queue-management-panel">
+                        <div class="panel-header">
+                            <h2>Order Queue Management</h2>
+                            <div class="control-buttons">
+                                <div class="wizard-mode-toggle">
+                                    <label class="toggle-label">
+                                        <span class="toggle-text">Wizard Mode:</span>
+                                        <div class="toggle-switch">
+                                            <input type="checkbox" id="useModalWizard" checked>
+                                            <span class="toggle-slider"></span>
+                                        </div>
+                                        <span class="toggle-option-text">
+                                            <span class="modal-option">Modal</span>
+                                            <span class="page-option">New Tab</span>
+                                        </span>
+                                    </label>
+                                </div>
+                                
+                                <button class="btn btn-secondary" id="clearQueueBtn">
+                                    <i class="fas fa-trash"></i>
+                                    Clear Queue
+                                </button>
+                                <button class="btn btn-primary" id="refreshQueueBtn">
+                                    <i class="fas fa-sync"></i>
+                                    Refresh
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Operations Sub-navigation -->
+                        <div class="sub-tab-navigation">
+                            <button class="sub-tab-button active" data-subtab="order-queue">
+                                <i class="fas fa-clipboard-list"></i>
+                                Order Queue
+                            </button>
+                            <button class="sub-tab-button" data-subtab="scraper-data">
+                                <i class="fas fa-spider"></i>
+                                Scraper Control
+                            </button>
+                        </div>
+                        
+                        <!-- Sub-tab Panels -->
+                        <div class="sub-tab-panels">
+                            <!-- Order Queue Sub-panel -->
+                            <div class="sub-tab-panel active" id="order-queue-panel">
+                                <div class="queue-layout">
+                                    <!-- Left Panel - Selection Interface -->
+                                    <div class="selection-panel">
+                                <!-- Day Buttons -->
+                                <div class="day-selection">
+                                    <h3>Scheduled Days</h3>
+                                    <div class="day-buttons">
+                                        <button class="day-btn" data-day="monday">
+                                            <i class="fas fa-calendar-day"></i>
+                                            Monday
+                                        </button>
+                                        <button class="day-btn" data-day="tuesday">
+                                            <i class="fas fa-calendar-day"></i>
+                                            Tuesday
+                                        </button>
+                                        <button class="day-btn" data-day="wednesday">
+                                            <i class="fas fa-calendar-day"></i>
+                                            Wednesday
+                                        </button>
+                                        <button class="day-btn" data-day="thursday">
+                                            <i class="fas fa-calendar-day"></i>
+                                            Thursday
+                                        </button>
+                                        <button class="day-btn" data-day="friday">
+                                            <i class="fas fa-calendar-day"></i>
+                                            Friday
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Individual Dealerships -->
+                                <div class="dealership-selection">
+                                    <h3>Individual Dealerships</h3>
+                                    
+                                    <!-- Dealership Search -->
+                                    <div class="dealership-search">
+                                        <input type="text" id="dealershipSearchInput" placeholder="Search dealerships..." class="search-input">
+                                        <button class="search-btn" id="dealershipSearchBtn">
+                                            <i class="fas fa-search"></i>
+                                        </button>
+                                        <button class="clear-search-btn" id="clearDealershipSearchBtn" style="display: none;">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                    
+                                    <div class="dealership-list" id="dealershipList">
+                                        <!-- Will be populated dynamically -->
+                                        <div class="loading">Loading dealerships...</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Right Panel - Processing Queue -->
+                            <div class="queue-panel">
+                                <h3>Processing Queue</h3>
+                                <div class="queue-items" id="queueItems">
+                                    <div class="empty-queue">
+                                        <i class="fas fa-clipboard-list"></i>
+                                        <p>No dealerships in queue</p>
+                                        <p class="help-text">Select dealerships or day buttons to add to queue</p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Queue actions moved outside to enable fixed positioning -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Scraper Control Sub-panel -->
+                    <div class="sub-tab-panel" id="scraper-data-panel" style="display: none;">
+                        <div class="scraper-control-container">
+                            <div class="control-buttons-section">
+                                <div class="control-buttons">
+                                    <button class="btn btn-secondary" id="selectDealershipsBtn">
+                                        <i class="fas fa-list-check"></i>
+                                        Select Dealerships
+                                    </button>
+                                    <button class="btn btn-secondary" id="scheduleBtn">
+                                        <i class="fas fa-clock"></i>
+                                        Schedule
+                                    </button>
+                                    <button class="btn btn-primary" id="startScrapeBtn">
+                                        <i class="fas fa-play"></i>
+                                        Start Scrape (All)
+                                    </button>
+                                    <button class="btn btn-secondary" id="testWebSocketBtn" title="Test WebSocket Connection">
+                                        <i class="fas fa-wifi"></i>
+                                        Test Connection
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Live Scraper Console -->
+                            <div class="system-console">
+                                <div class="console-header">
+                                    <h3>
+                                        <i class="fas fa-terminal"></i>
+                                        Live Scraper Console
+                                    </h3>
+                                    
+                                    <!-- Progress Indicators -->
+                                    <div class="progress-indicators">
+                                        <div class="indicator">
+                                            <i class="fas fa-building"></i>
+                                            <span class="indicator-value" id="dealershipsProcessed">0</span>
+                                        </div>
+                                        <div class="indicator">
+                                            <i class="fas fa-car"></i>
+                                            <span class="indicator-value" id="vehiclesProcessed">0</span>
+                                        </div>
+                                        <div class="indicator">
+                                            <i class="fas fa-exclamation-triangle"></i>
+                                            <span class="indicator-value" id="errorsCount">0</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="console-controls">
+                                        <button class="terminal-clear" onclick="app.clearScraperConsole()">
+                                            <i class="fas fa-broom"></i>
+                                            Clear
+                                        </button>
+                                        <button class="terminal-clear" onclick="app.pauseScraperConsole()">
+                                            <i class="fas fa-pause" id="pauseIcon"></i>
+                                            <span id="pauseText">Pause</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="console-content" id="scraperConsoleOutput">
+                                    <div class="terminal-line">
+                                        <span class="timestamp">[00:00:00]</span>
+                                        <span class="message">Scraper console ready - waiting for scraper activity...</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Scraper Status -->
+                            <div class="scraper-status" id="scraperStatus" style="display: none;">
+                                <div class="status-header">
+                                    <h3>Scraper Progress</h3>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" id="progressFill"></div>
+                                    </div>
+                                </div>
+                                <div class="status-details" id="statusDetails">
+                                    <!-- Progress details will be shown here -->
+                                </div>
+                            </div>
+
+                            <!-- Active Scrapers Panel -->
+                            <div class="active-scrapers-panel">
+                                <h3>Active Scrapers</h3>
+                                <div class="active-scrapers-list" id="activeScrapersList">
+                                    <div class="empty-state">
+                                        <i class="fas fa-robot"></i>
+                                        <p>No active scrapers</p>
+                                        <p class="help-text">Start a scraper from the controls above to see real-time progress</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <footer class="app-footer">
+            <div class="footer-content">
+                <img src="{{ url_for('static', filename='images/Asset_67.svg') }}" alt="Silver Fox Asset" class="footer-logo">
+            </div>
+        </footer>
+    </div>
+
+    <!-- Modals -->
+    <!-- Dealership Settings Modal -->
+    <div class="modal" id="dealershipModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Dealership Settings</h3>
+                <button class="modal-close" id="closeModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="dealershipForm" class="modern-form">
+                    
+                    <!-- Order Processing Type Section -->
+                    <div class="form-section">
+                        <div class="section-header">
+                            <i class="fas fa-route"></i>
+                            <h4>Order Processing Method</h4>
+                        </div>
+                        <div class="modern-toggle-container">
+                            <div class="toggle-option" data-value="cao">
+                                <input type="radio" id="orderTypeCao" name="order_type" value="cao" checked>
+                                <label for="orderTypeCao" class="modern-radio-label">
+                                    <div class="radio-indicator"></div>
+                                    <div class="radio-content">
+                                        <i class="fas fa-search"></i>
+                                        <span class="radio-title">CAO</span>
+                                        <span class="radio-desc">Automatic comparison</span>
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="toggle-option" data-value="list">
+                                <input type="radio" id="orderTypeList" name="order_type" value="list">
+                                <label for="orderTypeList" class="modern-radio-label">
+                                    <div class="radio-indicator"></div>
+                                    <div class="radio-content">
+                                        <i class="fas fa-list"></i>
+                                        <span class="radio-title">LIST</span>
+                                        <span class="radio-desc">Manual VIN entry</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Vehicle Types Section -->
+                    <div class="form-section">
+                        <div class="section-header">
+                            <i class="fas fa-car"></i>
+                            <h4>Vehicle Types</h4>
+                        </div>
+                        <div class="modern-checkbox-grid">
+                            <div class="modern-checkbox-item">
+                                <input type="checkbox" id="vehicleNew" name="vehicle_types" value="new" checked>
+                                <label for="vehicleNew" class="modern-checkbox-label">
+                                    <div class="checkbox-indicator">
+                                        <i class="fas fa-check"></i>
+                                    </div>
+                                    <div class="checkbox-content">
+                                        <i class="fas fa-star"></i>
+                                        <span>New Vehicles</span>
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="modern-checkbox-item">
+                                <input type="checkbox" id="vehicleUsed" name="vehicle_types" value="used" checked>
+                                <label for="vehicleUsed" class="modern-checkbox-label">
+                                    <div class="checkbox-indicator">
+                                        <i class="fas fa-check"></i>
+                                    </div>
+                                    <div class="checkbox-content">
+                                        <i class="fas fa-history"></i>
+                                        <span>Used Vehicles</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filters Section -->
+                    <div class="form-section">
+                        <div class="section-header">
+                            <i class="fas fa-filter"></i>
+                            <h4>Inventory Filters</h4>
+                        </div>
+                        <div class="filter-grid">
+                            <div class="filter-item">
+                                <label for="minPrice" class="modern-input-label">
+                                    <i class="fas fa-dollar-sign"></i>
+                                    Minimum Price
+                                </label>
+                                <input type="number" id="minPrice" name="min_price" min="0" placeholder="$0" class="modern-input">
+                            </div>
+                            <div class="filter-item">
+                                <label for="maxPrice" class="modern-input-label">
+                                    <i class="fas fa-dollar-sign"></i>
+                                    Maximum Price
+                                </label>
+                                <input type="number" id="maxPrice" name="max_price" min="0" placeholder="No limit" class="modern-input">
+                            </div>
+                            <div class="filter-item">
+                                <label for="minYear" class="modern-input-label">
+                                    <i class="fas fa-calendar-alt"></i>
+                                    Minimum Year
+                                </label>
+                                <input type="number" id="minYear" name="min_year" min="1900" max="2030" placeholder="Any year" class="modern-input">
+                            </div>
+                        </div>
+                    </div>
+                    
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelSettings">Cancel</button>
+                <button class="btn btn-primary" id="saveSettings">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vehicle History Modal -->
+    <div class="modal" id="vehicleHistoryModal">
+        <div class="modal-content vehicle-history-modal">
+            <div class="modal-header">
+                <h3 id="vehicleHistoryTitle">Vehicle History</h3>
+                <button class="modal-close" id="closeVehicleHistoryModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Vehicle Summary Section -->
+                <div class="vehicle-summary" id="vehicleSummary">
+                    <div class="vehicle-info">
+                        <div class="info-group">
+                            <label>VIN:</label>
+                            <span id="modalVin" class="vin-display">-</span>
+                        </div>
+                        <div class="info-group">
+                            <label>Vehicle:</label>
+                            <span id="modalVehicle">-</span>
+                        </div>
+                        <div class="info-group">
+                            <label>Total Scrapes:</label>
+                            <span id="modalTotalScrapes" class="scrape-badge">-</span>
+                        </div>
+                        <div class="info-group">
+                            <label>Current Location:</label>
+                            <span id="modalCurrentLocation">-</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- History Timeline -->
+                <div class="history-section">
+                    <h4>Complete Vehicle History</h4>
+                    <div class="history-timeline" id="historyTimeline">
+                        <div class="loading-spinner">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            Loading vehicle history...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Schedule Modal -->
+    <div class="modal" id="scheduleModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Scraper Schedule</h3>
+                <button class="modal-close" id="closeScheduleModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="scheduleForm">
+                    <div class="form-group">
+                        <label for="scheduleTime">Daily Scrape Time:</label>
+                        <input type="time" id="scheduleTime" name="schedule_time" value="02:00">
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="enableSchedule" name="enable_schedule">
+                            <span class="checkmark"></span>
+                            Enable Automatic Scheduling
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelSchedule">Cancel</button>
+                <button class="btn btn-primary" id="saveSchedule">Save Schedule</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dealership Selection Modal -->
+    <div class="modal" id="dealershipSelectionModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Select Dealerships to Scrape</h3>
+                <button class="modal-close" id="closeDealershipSelectionModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="selection-actions">
+                    <button class="btn btn-secondary btn-sm" id="selectAllBtnModal">Select All</button>
+                    <button class="btn btn-secondary btn-sm" id="selectNoneBtnModal">Select None</button>
+                </div>
+                <div class="dealership-checkbox-grid" id="dealershipCheckboxGridModal">
+                    <!-- Will be populated dynamically -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelDealershipSelection">Cancel</button>
+                <button class="btn btn-primary" id="saveDealershipSelection">Start Selected Scrapers</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIN Log Modal -->
+    <div class="modal" id="vinLogModal">
+        <div class="modal-content vin-log-modal modern-modal">
+            <div class="modal-header modern-modal-header">
+                <div class="modal-header-logo-section">
+                    <img src="{{ url_for('static', filename='images/LS_GLYPH-PRIMARY.svg') }}" alt="Silver Fox" class="modal-wizard-logo">
+                    <div class="modal-header-text">
+                        <h3 id="vinLogModalTitle" class="modal-wizard-title">VIN History Log</h3>
+                    </div>
+                </div>
+                <button class="modal-close modern-close-btn" id="closeVinLogModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body modern-modal-body">
+                
+                <!-- Stats Section -->
+                <div class="form-section">
+                    <div class="section-header">
+                        <i class="fas fa-chart-bar"></i>
+                        <h4>VIN Statistics</h4>
+                    </div>
+                    <div class="vin-stats-grid">
+                        <div class="modern-stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-hashtag"></i>
+                            </div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="modalTotalVins">0</div>
+                                <div class="stat-label">Total VINs</div>
+                            </div>
+                        </div>
+                        <div class="modern-stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-clipboard-list"></i>
+                            </div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="modalOrderNumbers">0</div>
+                                <div class="stat-label">Unique Orders</div>
+                            </div>
+                        </div>
+                        <div class="modern-stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-calendar-alt"></i>
+                            </div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="modalDateRange">--</div>
+                                <div class="stat-label">Date Range</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Search Section -->
+                <div class="form-section">
+                    <div class="section-header">
+                        <i class="fas fa-search"></i>
+                        <h4>Search & Filter</h4>
+                    </div>
+                    <div class="modern-search-container">
+                        <div class="search-input-wrapper">
+                            <i class="fas fa-search search-icon"></i>
+                            <input type="text" id="vinLogSearch" placeholder="Search by VIN, Order, or Date..." class="modern-search-input">
+                            <button class="modern-search-btn" id="vinLogSearchBtn">
+                                <i class="fas fa-filter"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Data Section -->
+                <div class="form-section">
+                    <div class="section-header">
+                        <i class="fas fa-table"></i>
+                        <h4>VIN History Data</h4>
+                    </div>
+                    <div class="modern-table-container" id="vinLogTableContainer">
+                        <div class="loading-spinner modern-loading">
+                            <div class="spinner-icon">
+                                <i class="fas fa-spinner fa-spin"></i>
+                            </div>
+                            <p>Loading VIN history...</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Modern Pagination -->
+                    <div class="modern-pagination" id="vinLogPagination" style="display: none;">
+                        <button class="pagination-btn prev-btn" id="vinLogPrevBtn" disabled>
+                            <i class="fas fa-chevron-left"></i>
+                            Previous
+                        </button>
+                        <span class="page-info" id="vinLogPageInfo">Page 1 of 1</span>
+                        <button class="pagination-btn next-btn" id="vinLogNextBtn" disabled>
+                            Next
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+                
+            </div>
+            <div class="modal-footer modern-modal-footer">
+                <button class="modern-modal-btn export-btn" id="exportVinLogData">
+                    <i class="fas fa-download"></i>
+                    Export Data
+                </button>
+                <button class="modern-modal-btn update-btn" id="updateVinLogBtn">
+                    <i class="fas fa-upload"></i>
+                    Update VIN Log
+                </button>
+                <button class="modern-modal-btn close-btn" id="closeVinLogModalBtn">
+                    <i class="fas fa-times-circle"></i>
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIN Log Update Modal -->
+    <div class="modal" id="vinLogUpdateModal">
+        <div class="modal-content vin-log-update-modal">
+            <div class="modal-header">
+                <h3 id="vinLogUpdateTitle">Update VIN Log</h3>
+                <button class="modal-close" id="closeVinLogUpdateModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="update-info">
+                    <p><strong>Import Order History CSV</strong></p>
+                    <p>Upload a CSV file with VIN and order number data to update the <span id="updateDealershipName">dealership</span> VIN log.</p>
+                    
+                    <div class="csv-format-info">
+                        <h4><i class="fas fa-info-circle"></i> Required CSV Format - Grouped Order Format:</h4>
+                        <div class="format-example">
+                            <code>ORDER_NUMBER,VIN</code><br>
+                            <code>SF24001,1HGBH41JXMN109186</code><br>
+                            <code>,2FMDK3GC4DBA54321</code><br>
+                            <code>,1FTFW1ET5CFC12345</code><br>
+                            <code></code><br>
+                            <code>SF24002,3FAHP0JA4CR123456</code><br>
+                            <code>,5NPEB4AC7BH987654</code>
+                        </div>
+                        <ul class="format-requirements">
+                            <li><strong>ORDER_NUMBER:</strong> Unique order identifier in first column, first row of each group only</li>
+                            <li><strong>VIN:</strong> 17-character vehicle identification number in second column</li>
+                            <li><strong>Group Format:</strong> Order number followed by associated VINs, then empty row to separate groups</li>
+                            <li><strong>Multiple VINs:</strong> Leave order number column empty for additional VINs in same order</li>
+                        </ul>
+                        <div class="format-note">
+                            <i class="fas fa-lightbulb"></i>
+                            <strong>Note:</strong> The system automatically detects both grouped format (shown above) and standard columnar format for flexibility.
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Import Method Selection -->
+                <div class="import-method-selection">
+                    <div class="method-tabs">
+                        <button class="method-tab active" id="csvImportTab" data-method="csv">
+                            <i class="fas fa-file-csv"></i>
+                            CSV Import
+                        </button>
+                        <button class="method-tab" id="manualEntryTab" data-method="manual">
+                            <i class="fas fa-keyboard"></i>
+                            Manual Entry
+                        </button>
+                    </div>
+                </div>
+
+                <!-- CSV Import Section -->
+                <div class="import-section" id="csvImportSection">
+                    <div class="file-upload-section">
+                        <div class="file-upload-area" id="vinLogFileUpload">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <p>Click to select CSV file or drag and drop</p>
+                            <input type="file" id="vinLogFileInput" accept=".csv" style="display: none;">
+                        </div>
+                        <div class="file-info" id="vinLogFileInfo" style="display: none;">
+                            <i class="fas fa-file-csv"></i>
+                            <span id="vinLogFileName">No file selected</span>
+                            <button class="remove-file" id="removeVinLogFile">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Manual Entry Section -->
+                <div class="import-section" id="manualEntrySection" style="display: none;">
+                    <div class="manual-entry-container">
+                        <div class="manual-entry-header">
+                            <h4><i class="fas fa-plus-circle"></i> Add Recent Orders</h4>
+                            <p>Enter order details in the same grouped format. Each order group should start with an order number, followed by VIN numbers.</p>
+                        </div>
+                        
+                        <div class="manual-entry-form">
+                            <div class="entry-instructions">
+                                <div class="instruction-item">
+                                    <i class="fas fa-1"></i>
+                                    <span>Enter <strong>Order Number</strong> (e.g., SF24001)</span>
+                                </div>
+                                <div class="instruction-item">
+                                    <i class="fas fa-2"></i>
+                                    <span>Add <strong>VIN Numbers</strong> one per line</span>
+                                </div>
+                                <div class="instruction-item">
+                                    <i class="fas fa-3"></i>
+                                    <span>Leave <strong>blank line</strong> to start new order</span>
+                                </div>
+                            </div>
+                            
+                            <div class="manual-input-area">
+                                <textarea id="manualOrderEntry" placeholder="SF24001
+1HGBH41JXMN109186
+2FMDK3GC4DBA54321
+1FTFW1ET5CFC12345
+
+SF24002
+3FAHP0JA4CR123456
+5NPEB4AC7BH987654" rows="12"></textarea>
+                                
+                                <div class="entry-stats" id="manualEntryStats">
+                                    <div class="stat-item">
+                                        <span class="stat-label">Orders:</span>
+                                        <span class="stat-value" id="manualOrderCount">0</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span class="stat-label">VINs:</span>
+                                        <span class="stat-value" id="manualVinCount">0</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="manual-entry-actions">
+                                <button class="manual-action-btn validate-btn" id="validateManualEntry">
+                                    <i class="fas fa-check-circle"></i>
+                                    Validate Format
+                                </button>
+                                <button class="manual-action-btn clear-btn" id="clearManualEntry">
+                                    <i class="fas fa-eraser"></i>
+                                    Clear All
+                                </button>
+                            </div>
+                            
+                            <!-- Validation Results -->
+                            <div class="validation-results" id="manualValidationResults" style="display: none;">
+                                <div class="validation-header">
+                                    <i class="fas fa-clipboard-check"></i>
+                                    <span>Validation Results</span>
+                                </div>
+                                <div class="validation-content" id="manualValidationContent">
+                                    <!-- Dynamic validation results -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Import Options -->
+                <div class="import-options">
+                    <div class="option-group">
+                        <input type="checkbox" id="skipDuplicates" checked>
+                        <label for="skipDuplicates">Skip duplicate VINs (recommended)</label>
+                    </div>
+                    <div class="option-group">
+                        <input type="checkbox" id="updateExisting">
+                        <label for="updateExisting">Update existing VIN records with new order numbers</label>
+                    </div>
+                </div>
+                
+                <!-- Progress Section -->
+                <div class="import-progress" id="vinLogImportProgress" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="vinLogProgressFill"></div>
+                    </div>
+                    <div class="progress-text" id="vinLogProgressText">Preparing import...</div>
+                </div>
+                
+                <!-- Results Section -->
+                <div class="import-results" id="vinLogImportResults" style="display: none;">
+                    <h4>Import Results</h4>
+                    <div class="results-stats">
+                        <div class="result-stat">
+                            <span class="stat-label">Processed:</span>
+                            <span class="stat-value" id="processedCount">0</span>
+                        </div>
+                        <div class="result-stat">
+                            <span class="stat-label">Added:</span>
+                            <span class="stat-value success" id="addedCount">0</span>
+                        </div>
+                        <div class="result-stat">
+                            <span class="stat-label">Updated:</span>
+                            <span class="stat-value info" id="updatedCount">0</span>
+                        </div>
+                        <div class="result-stat">
+                            <span class="stat-label">Skipped:</span>
+                            <span class="stat-value warning" id="skippedCount">0</span>
+                        </div>
+                        <div class="result-stat">
+                            <span class="stat-label">Errors:</span>
+                            <span class="stat-value error" id="errorCount">0</span>
+                        </div>
+                    </div>
+                    <div class="results-log" id="resultsLog">
+                        <h5>Details:</h5>
+                        <div class="log-container" id="importLogContainer">
+                            <!-- Log entries will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelVinLogUpdate">
+                    Cancel
+                </button>
+                <button class="btn btn-primary" id="startVinLogImport" disabled>
+                    <i class="fas fa-upload" id="importButtonIcon"></i>
+                    <span id="importButtonText">Import CSV</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Dealerships Modal -->
+    <div class="modal" id="importDealershipsModal">
+        <div class="modal-content import-dealerships-modal">
+            <div class="modal-header">
+                <h3 id="importDealershipsTitle">Dealerships in Import</h3>
+                <button class="modal-close" id="closeImportDealershipsModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="dealerships-list" id="importDealershipsList">
+                    <div class="loading">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        Loading dealerships...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scraper Data Modal -->
+    <div class="modal" id="scraperDataModal">
+        <div class="modal-content scraper-data-modal">
+            <div class="modal-header">
+                <h3 id="scraperDataModalTitle">Scraper Data</h3>
+                
+                <!-- Data Type Toggle Switch -->
+                <div class="data-type-toggle-container">
+                    <span class="toggle-label">Raw</span>
+                    <label class="data-type-toggle-switch">
+                        <input type="checkbox" id="dataTypeToggle" checked>
+                        <span class="toggle-slider">
+                            <span class="toggle-thumb"></span>
+                        </span>
+                    </label>
+                    <span class="toggle-label active">Normalized</span>
+                </div>
+                
+                <button class="modal-close" id="closeScraperDataModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Import Info -->
+                <div class="import-info" id="importInfo">
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <label>Import ID:</label>
+                            <span id="modalImportId">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Import Date:</label>
+                            <span id="modalImportDate">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Source:</label>
+                            <span id="modalImportSource">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Total Vehicles:</label>
+                            <span id="modalTotalVehicles">-</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Vehicle Search within Modal -->
+                <div class="modal-search">
+                    <!-- Dealership filter tag -->
+                    <div class="filter-tags" id="scraperDataFilterTags" style="display: none;">
+                        <span class="dealership-filter-tag" id="dealershipFilterTag">
+                            Dealership: <span id="dealershipFilterName"></span>
+                            <button onclick="app.clearDealershipFilter()" title="Clear filter">×</button>
+                        </span>
+                    </div>
+                    <div class="scraper-data-search-bar">
+                        <input type="text" id="scraperDataSearch" placeholder="Search vehicles in this scrape..." class="search-input">
+                        <button class="search-btn" id="scraperDataSearchBtn">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Vehicle Data Table -->
+                <div class="scraper-data-table-container" id="scraperDataTableContainer">
+                    <div class="loading-spinner">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        Loading vehicle data...
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="exportScraperData">
+                    <i class="fas fa-download"></i>
+                    Export Data
+                </button>
+                <button class="btn btn-primary" id="closeScraperDataModalBtn">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Order Processing Wizard Modal -->
+    <div class="modal" id="orderWizardModal">
+        <div class="modal-content wizard-modal">
+            <div class="modal-header">
+                <div class="modal-header-logo-section">
+                    <img src="{{ url_for('static', filename='images/LS_GLYPH-PRIMARY.svg') }}" alt="LotSherpa" class="modal-wizard-logo">
+                    <div class="modal-header-text">
+                        <h3 class="modal-wizard-title">Order Processing System</h3>
+                    </div>
+                </div>
+                <button class="modal-close" id="closeOrderWizardModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Wizard Progress Indicator -->
+                <div class="wizard-progress" id="modalWizardProgress">
+                    <div class="progress-step active" id="modal-step-initialize">
+                        <i class="fas fa-play"></i>
+                        <span>Initialize</span>
+                    </div>
+                    <div class="progress-step" id="modal-step-cao">
+                        <i class="fas fa-robot"></i>
+                        <span>Auto Process</span>
+                    </div>
+                    <div class="progress-step" id="modal-step-list">
+                        <i class="fas fa-list"></i>
+                        <span>VIN Entry</span>
+                    </div>
+                    <div class="progress-step" id="modal-step-review">
+                        <i class="fas fa-eye"></i>
+                        <span>Review</span>
+                    </div>
+                    <div class="progress-step" id="modal-step-order">
+                        <i class="fas fa-hashtag"></i>
+                        <span>Order #</span>
+                    </div>
+                    <div class="progress-step" id="modal-step-complete">
+                        <i class="fas fa-check"></i>
+                        <span>Complete</span>
+                    </div>
+                </div>
+
+                <!-- Wizard Content Container -->
+                <div class="wizard-content" id="modalWizardContent">
+                    <!-- Step 1: Initialize -->
+                    <div class="wizard-step active" id="modalInitializeStep">
+                        <div class="step-header">
+                            <h2 class="step-title">Processing Queue Initialized</h2>
+                            <p class="step-description">Ready to process <span id="modalTotalDealerships">0</span> dealerships from your queue</p>
+                        </div>
+                        
+                        <div class="queue-summary" id="modalQueueSummary">
+                            <!-- Queue items will be populated here -->
+                        </div>
+                        
+                        <div class="testing-mode-notice" style="margin: 20px 0; padding: 15px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px;">
+                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                <input type="checkbox" id="modalSkipVinLogging" style="width: 20px; height: 20px;">
+                                <div>
+                                    <strong>Testing Mode</strong>
+                                    <p style="margin: 5px 0 0 0; font-size: 0.9rem; color: #92400e;">
+                                        When enabled, VIN logs will NOT be updated. Use this for testing orders without affecting your VIN history.
+                                    </p>
+                                </div>
+                            </label>
+                        </div>
+                        
+                        <div class="wizard-actions">
+                            <div></div>
+                            <button class="btn-wizard primary" onclick="window.modalWizard.startProcessing()">
+                                <i class="fas fa-play"></i>
+                                Start Processing
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: CAO Processing -->
+                    <div class="wizard-step" id="modalCaoStep">
+                        <div class="step-header">
+                            <h2 class="step-title">Auto-Processing CAO Orders</h2>
+                            <p class="step-description">Automatic processing of CAO dealerships (no user input required)</p>
+                        </div>
+                        
+                        <div class="cao-progress" id="modalCaoProgress">
+                            <!-- CAO progress will be shown here -->
+                        </div>
+                        
+                        <div class="wizard-actions">
+                            <button class="btn-wizard secondary" onclick="window.modalWizard.previousStep()">
+                                <i class="fas fa-arrow-left"></i>
+                                Back
+                            </button>
+                            <button class="btn-wizard primary" onclick="window.modalWizard.nextStep()">
+                                <i class="fas fa-arrow-right"></i>
+                                Continue
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: List Processing -->
+                    <div class="wizard-step" id="modalListStep">
+                        <div class="step-header">
+                            <h2 class="step-title">VIN Entry for List Orders</h2>
+                            <p class="step-description">Enter VINs for list-based dealership orders</p>
+                        </div>
+
+                        <div class="list-dealerships" id="modalListDealerships">
+                            <!-- List dealerships and VIN entry will be shown here -->
+                        </div>
+                        
+                        <div class="wizard-actions">
+                            <button class="btn-wizard secondary" onclick="window.modalWizard.previousStep()">
+                                <i class="fas fa-arrow-left"></i>
+                                Back
+                            </button>
+                            <button class="btn-wizard primary" onclick="window.modalWizard.processListVins()">
+                                <i class="fas fa-arrow-right"></i>
+                                Process VINs
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: Review -->
+                    <div class="wizard-step" id="modalReviewStep">
+                        <div class="step-header">
+                            <h2 class="step-title">Review Order Data</h2>
+                            <p class="step-description">Review and verify the vehicle data before generating QR codes</p>
+                        </div>
+
+                        <div class="review-summary" id="modalReviewSummary">
+                            <!-- Vehicle Data Preview Section -->
+                            <div class="vehicle-preview-section">
+                                <div class="section-header">
+                                    <h3><i class="fas fa-car"></i> Vehicle Data Preview</h3>
+                                    <div class="preview-stats">
+                                        <span class="vehicle-count-badge">
+                                            <i class="fas fa-list-ol"></i>
+                                            <span id="modalVehicleCount">0</span>
+                                        </span>
+                                        <button class="btn btn-secondary btn-sm" id="modalDownloadCsv" style="display: none;">
+                                            <i class="fas fa-download"></i>
+                                            Download CSV
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="vehicle-data-table-container">
+                                    <table class="vehicle-data-table" id="modalVehicleDataTable">
+                                        <thead>
+                                            <tr>
+                                                <th>Actions</th>
+                                                <th>Year/Make</th>
+                                                <th>Model</th>
+                                                <th>Trim</th>
+                                                <th>Stock</th>
+                                                <th>VIN</th>
+                                                <th>QR</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="modalVehicleDataBody">
+                                            <!-- Vehicle data rows will be populated here -->
+                                        </tbody>
+                                    </table>
+                                    
+                                    <div class="no-data-placeholder" id="modalNoDataPlaceholder" style="display: none;">
+                                        <div class="placeholder-content">
+                                            <i class="fas fa-inbox"></i>
+                                            <h4>No Vehicle Data</h4>
+                                            <p>No vehicles found for this order</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="wizard-actions">
+                            <button class="btn-wizard secondary" onclick="window.modalWizard.previousStep()">
+                                <i class="fas fa-arrow-left"></i>
+                                Back
+                            </button>
+                            <button class="btn-wizard primary" onclick="window.modalWizard.proceedToQRGeneration()">
+                                <i class="fas fa-qrcode"></i>
+                                Generate QR Codes
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 5: Order Number Input -->
+                    <div class="wizard-step" id="modalOrderNumberStep">
+                        <div class="step-header">
+                            <h2 class="step-title">Enter Order Number</h2>
+                            <p class="step-description">Provide the order number for file organization and tracking</p>
+                        </div>
+
+                        <div class="order-number-input">
+                            <div class="form-group">
+                                <label for="modalOrderNumber">Order Number:</label>
+                                <input type="text" id="modalOrderNumber" class="form-control" 
+                                       placeholder="e.g., SF24001, Order123, etc." 
+                                       maxlength="20" required>
+                            </div>
+                        </div>
+                        
+                        <div class="wizard-actions">
+                            <button class="btn-wizard secondary" onclick="window.modalWizard.previousStep()">
+                                <i class="fas fa-arrow-left"></i>
+                                Back
+                            </button>
+                            <button class="btn-wizard primary" onclick="window.modalWizard.generateFinalOutput()">
+                                <i class="fas fa-check"></i>
+                                Complete Order
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 6: Complete -->
+                    <div class="wizard-step" id="modalCompleteStep">
+                        <div class="completion-summary">
+                            <div class="completion-icon">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <h2>Order Processing Complete!</h2>
+                            <p>Your order has been successfully processed and files have been generated.</p>
+                            
+                            <div class="completion-details" id="modalCompletionDetails">
+                                <!-- Completion details will be shown here -->
+                            </div>
+                        </div>
+                        
+                        <div class="wizard-actions">
+                            <button class="btn-wizard secondary" onclick="window.modalWizard.viewOrderFolder()">
+                                <i class="fas fa-folder-open"></i>
+                                View Folder
+                            </button>
+                            <button class="btn-wizard primary" onclick="window.modalWizard.startNewOrder()">
+                                <i class="fas fa-plus"></i>
+                                New Order
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manual Data Entry Modal for Review Stage -->
+    <div id="manualDataEntryModal" class="modal" style="display: none;">
+        <div class="modal-content large-modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-edit"></i> Edit Vehicle Data</h3>
+                <span class="close-modal" onclick="closeManualDataModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="vehicleEditForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="editYear">Year:</label>
+                            <input type="number" id="editYear" name="year" class="form-control" min="1900" max="2030">
+                        </div>
+                        <div class="form-group">
+                            <label for="editMake">Make:</label>
+                            <input type="text" id="editMake" name="make" class="form-control" maxlength="50">
+                        </div>
+                        <div class="form-group">
+                            <label for="editModel">Model:</label>
+                            <input type="text" id="editModel" name="model" class="form-control" maxlength="50">
+                        </div>
+                        <div class="form-group">
+                            <label for="editTrim">Trim:</label>
+                            <input type="text" id="editTrim" name="trim" class="form-control" maxlength="50">
+                        </div>
+                        <div class="form-group">
+                            <label for="editStock">Stock Number:</label>
+                            <input type="text" id="editStock" name="stock" class="form-control" maxlength="20">
+                        </div>
+                        <div class="form-group">
+                            <label for="editVin">VIN:</label>
+                            <input type="text" id="editVin" name="vin" class="form-control" maxlength="17" style="text-transform: uppercase;">
+                        </div>
+                        <div class="form-group">
+                            <label for="editPrice">Price:</label>
+                            <input type="number" id="editPrice" name="price" class="form-control" min="0" step="0.01">
+                        </div>
+                        <div class="form-group">
+                            <label for="editType">Vehicle Type:</label>
+                            <select id="editType" name="type" class="form-control">
+                                <option value="New">New</option>
+                                <option value="Pre-Owned">Pre-Owned</option>
+                                <option value="Certified Pre-Owned">Certified Pre-Owned</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="editColor">Exterior Color:</label>
+                            <input type="text" id="editColor" name="ext_color" class="form-control" maxlength="30">
+                        </div>
+                        <div class="form-group">
+                            <label for="editMileage">Mileage:</label>
+                            <input type="number" id="editMileage" name="mileage" class="form-control" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="editFuelType">Fuel Type:</label>
+                            <input type="text" id="editFuelType" name="fuel_type" class="form-control" maxlength="20">
+                        </div>
+                        <div class="form-group">
+                            <label for="editTransmission">Transmission:</label>
+                            <input type="text" id="editTransmission" name="transmission" class="form-control" maxlength="30">
+                        </div>
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="editVehicleUrl">Vehicle URL:</label>
+                        <input type="url" id="editVehicleUrl" name="vehicle_url" class="form-control">
+                    </div>
+                    <input type="hidden" id="editRowIndex" name="rowIndex">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeManualDataModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveVehicleEdit()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Queue Actions Panel - Moved outside main container for fixed positioning -->
+    <div class="queue-actions" id="floatingQueueActions" style="display: none;">
+        <!-- Testing Mode Toggle -->
+        <div class="testing-mode-toggle">
+            <label style="display: flex; align-items: center; cursor: pointer; margin: 0;">
+                <input type="checkbox" id="queueTestingMode" style="margin-right: 10px; width: 18px; height: 18px; cursor: pointer;">
+                <span style="font-weight: 500;">
+                    <i class="fas fa-flask" style="margin-right: 5px;"></i>
+                    Testing Mode
+                </span>
+            </label>
+            <p style="margin: 8px 0 0 28px; font-size: 12px; line-height: 1.3;">
+                Skip VIN history logging for testing
+            </p>
+        </div>
+        
+        <button class="btn btn-primary btn-large" id="processQueueBtn" disabled>
+            <i class="fas fa-play"></i>
+            Process Queue
+        </button>
+    </div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=2025082502"></script>
+    
+</body>
+</html>

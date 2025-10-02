@@ -14,6 +14,7 @@ import os
 import sys
 import json
 import logging
+import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, send_file, flash, redirect, url_for
@@ -34,11 +35,8 @@ try:
     from qr_code_generator import QRCodeGenerator
     from data_exporter import DataExporter
     from order_queue_manager import OrderQueueManager
+    from automated_normalization_manager import AutomatedNormalizationManager, normalize_active_import, validate_normalization_status
     print("OK Basic modules imported successfully")
-    
-    print("Attempting to import OrderProcessingWorkflow...")
-    from order_processing_workflow import OrderProcessingWorkflow
-    print("OK OrderProcessingWorkflow imported successfully")
     
     print("Attempting to import CorrectOrderProcessor...")
     from correct_order_processing import CorrectOrderProcessor
@@ -73,6 +71,16 @@ except ImportError as e:
 # Flask app setup
 app = Flask(__name__)
 app.secret_key = 'silver_fox_marketing_minisforum_2025'
+# Disable template caching for development
+app.config['TEMPLATES_AUTO_RELOAD'] = True
+app.jinja_env.auto_reload = True
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+
+# Force template recompilation
+from flask import Flask
+app.jinja_env.cache = {}
+app.jinja_env.auto_reload = True
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 socketio = SocketIO(app, 
                    cors_allowed_origins="*", 
                    async_mode='threading',
@@ -148,15 +156,92 @@ class ScraperController:
             logger.error(f"Failed to get dealership configs: {e}")
             return []
     
-    def update_dealership_config(self, dealership_name, filtering_rules, is_active=True):
+    def get_dealership_last_order_dates(self):
+        """Get last order date for each dealership from their VIN log tables"""
+        try:
+            # First get list of active dealership names
+            dealerships = db_manager.execute_query("""
+                SELECT name FROM dealership_configs 
+                WHERE is_active = true
+                ORDER BY name
+            """)
+            
+            last_order_dates = {}
+            
+            for dealership in dealerships:
+                dealership_name = dealership['name']
+                # Convert dealership name to table name format: DEALERSHIP_NAME_VIN_LOG
+                clean_name = dealership_name.lower().replace(' ', '_').replace('-', '_').replace('.', '').replace("'", '')
+                table_name = f"{clean_name}_vin_log"
+                
+                try:
+                    # Check which date column exists in this table
+                    columns = db_manager.execute_query(f"""
+                        SELECT column_name FROM information_schema.columns 
+                        WHERE table_name = '{table_name}' AND column_name IN ('order_date', 'processed_date')
+                    """)
+                    
+                    if not columns:
+                        last_order_dates[dealership_name] = 'No orders yet'
+                        continue
+                    
+                    # Use the appropriate date column
+                    date_column = columns[0]['column_name']
+                    result = db_manager.execute_query(f"""
+                        SELECT MAX({date_column}) as last_order_date
+                        FROM {table_name}
+                    """)
+                    
+                    if result and result[0]['last_order_date']:
+                        last_order_value = result[0]['last_order_date']
+                        
+                        # Handle different date formats
+                        if hasattr(last_order_value, 'strftime'):
+                            # It's already a date/datetime object
+                            last_order_dates[dealership_name] = last_order_value.strftime('%b %d, %Y')
+                        elif isinstance(last_order_value, str):
+                            # It's a string, try to parse it
+                            try:
+                                from datetime import datetime
+                                parsed_date = datetime.strptime(last_order_value, '%Y-%m-%d').date()
+                                last_order_dates[dealership_name] = parsed_date.strftime('%b %d, %Y')
+                            except ValueError:
+                                # If parsing fails, just use the string as-is
+                                last_order_dates[dealership_name] = last_order_value
+                        else:
+                            # Unknown format, convert to string
+                            last_order_dates[dealership_name] = str(last_order_value)
+                    else:
+                        last_order_dates[dealership_name] = 'No orders yet'
+                        
+                except Exception as table_e:
+                    # If table doesn't exist or query fails, set default
+                    logger.warning(f"Could not get last order date for {dealership_name}: {table_e}")
+                    last_order_dates[dealership_name] = 'No orders yet'
+            
+            return last_order_dates
+        except Exception as e:
+            logger.error(f"Failed to get last order dates: {e}")
+            return {}
+    
+    def update_dealership_config(self, dealership_name, filtering_rules, output_rules=None, is_active=True):
         """Update dealership configuration"""
         try:
-            db_manager.execute_query("""
-                UPDATE dealership_configs 
-                SET filtering_rules = %s, is_active = %s, updated_at = CURRENT_TIMESTAMP
-                WHERE name = %s
-            """, (json.dumps(filtering_rules), is_active, dealership_name))
-            
+            if output_rules is not None:
+                # Update both filtering_rules and output_rules
+                db_manager.execute_query("""
+                    UPDATE dealership_configs
+                    SET filtering_rules = %s, output_rules = %s, is_active = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE name = %s
+                """, (json.dumps(filtering_rules), json.dumps(output_rules), is_active, dealership_name))
+            else:
+                # Update only filtering_rules
+                db_manager.execute_query("""
+                    UPDATE dealership_configs
+                    SET filtering_rules = %s, is_active = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE name = %s
+                """, (json.dumps(filtering_rules), is_active, dealership_name))
+
             return True
         except Exception as e:
             logger.error(f"Failed to update dealership config: {e}")
@@ -188,6 +273,24 @@ class ScraperController:
                     self.scrape_results['csv_vehicles'] = import_result.get('processed', 0)
                     self.scrape_results['missing_vins'] = import_result.get('missing_vins', 0)
                     logger.info(f"CSV import successful: {import_result['processed']} vehicles")
+                    
+                    # CRITICAL: Automatically run normalization after CSV import
+                    logger.info("🔄 AUTOMATION: Running automated normalization after CSV import...")
+                    try:
+                        normalization_result = normalize_active_import()
+                        if normalization_result.get('success'):
+                            normalized_count = normalization_result.get('normalized_records', 0)
+                            completion_rate = normalization_result.get('validation', {}).get('completion_rate', 0)
+                            logger.info(f"✅ AUTOMATION: Normalized {normalized_count} records ({completion_rate}% complete)")
+                            self.scrape_results['normalized_vehicles'] = normalized_count
+                            self.scrape_results['normalization_complete'] = completion_rate == 100
+                        else:
+                            error_msg = normalization_result.get('error', 'Unknown normalization error')
+                            logger.error(f"❌ AUTOMATION: Normalization failed: {error_msg}")
+                            self.scrape_results['normalization_error'] = error_msg
+                    except Exception as e:
+                        logger.error(f"❌ AUTOMATION: Normalization exception: {e}")
+                        self.scrape_results['normalization_error'] = str(e)
             
             # Step 2: Run REAL scrapers for selected dealerships only
             logger.info("🎯 Running REAL scrapers to fetch live data...")
@@ -389,10 +492,113 @@ order_processor = CorrectOrderProcessor()
 # Global queue manager
 queue_manager = OrderQueueManager()
 
-@app.route('/')
-def index():
-    """Main dashboard page"""
-    return render_template('index.html')
+# ===== FILENAME-BASED CACHE BUSTING SYSTEM =====
+def generate_unique_js_files():
+    """
+    Creates timestamped copies of JavaScript files with unique filenames.
+    This bypasses browser cache more effectively than query parameters.
+    Returns dictionary mapping original names to unique filenames.
+    """
+    timestamp = int(time.time())
+    js_files = {}
+    static_js_path = Path(__file__).parent / 'static' / 'js'
+    
+    try:
+        # Generate unique filename for app.js
+        original_app_js = static_js_path / 'app.js'
+        if original_app_js.exists():
+            unique_app_js = f'app.{timestamp}.js'
+            unique_app_path = static_js_path / unique_app_js
+            shutil.copy2(original_app_js, unique_app_path)
+            js_files['app.js'] = unique_app_js
+            print(f"OK Created cache-busting file: {unique_app_js}")
+        
+        # Generate unique filename for order_wizard.js
+        original_wizard_js = static_js_path / 'order_wizard.js'
+        if original_wizard_js.exists():
+            unique_wizard_js = f'order_wizard.{timestamp}.js'
+            unique_wizard_path = static_js_path / unique_wizard_js
+            shutil.copy2(original_wizard_js, unique_wizard_path)
+            js_files['order_wizard.js'] = unique_wizard_js
+            print(f"OK Created cache-busting file: {unique_wizard_js}")
+
+        # Generate unique filename for template_builder.js
+        original_template_js = static_js_path / 'template_builder.js'
+        if original_template_js.exists():
+            unique_template_js = f'template_builder.{timestamp}.js'
+            unique_template_path = static_js_path / unique_template_js
+            shutil.copy2(original_template_js, unique_template_path)
+            js_files['template_builder.js'] = unique_template_js
+            print(f"OK Created cache-busting file: {unique_template_js}")
+            
+        # Clean up old timestamped files (keep only latest 3)
+        cleanup_old_js_files(static_js_path)
+        
+        return js_files
+    except Exception as e:
+        print(f"ERROR generating unique JS files: {e}")
+        # Return original filenames as fallback
+        return {'app.js': 'app.js', 'order_wizard.js': 'order_wizard.js', 'template_builder.js': 'template_builder.js'}
+
+def cleanup_old_js_files(js_dir):
+    """Remove old timestamped JavaScript files to prevent accumulation"""
+    try:
+        # Find all timestamped app.js files
+        app_files = list(js_dir.glob('app.*.js'))
+        wizard_files = list(js_dir.glob('order_wizard.*.js'))
+        
+        # Keep only the 3 newest of each type
+        for file_list in [app_files, wizard_files]:
+            if len(file_list) > 3:
+                # Sort by modification time, keep newest 3
+                file_list.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                for old_file in file_list[3:]:
+                    old_file.unlink()
+                    print(f"CLEANUP Removed old JS file: {old_file.name}")
+    except Exception as e:
+        print(f"WARNING Error cleaning up old JS files: {e}")
+
+# Generate unique JS files on startup
+UNIQUE_JS_FILES = generate_unique_js_files()
+
+def _convert_paths_to_strings(obj):
+    """
+    Recursively convert all Path objects to strings for JSON serialization.
+    This is needed for mixed template processing that returns Path objects.
+    """
+    if isinstance(obj, Path):
+        return str(obj)
+    elif isinstance(obj, dict):
+        return {key: _convert_paths_to_strings(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [_convert_paths_to_strings(item) for item in obj]
+    else:
+        return obj
+
+
+@app.route('/logotest')
+def logotest():
+    """Simple logo test"""
+    return '''<html><body><h1>Logo Test</h1><img src="/static/images/Asset_58.svg" height="60"><br><img src="/static/images/LS_MAIN-PRIMARY.svg" height="60"><p><a href="/">Back</a></p></body></html>'''
+
+@app.route('/template-test')
+def template_test():
+    """Test if template changes are working"""
+    return '''
+    <html>
+    <head><title>Template Test</title></head>
+    <body style="padding: 20px; font-family: Arial;">
+        <h1>Template Cache Test</h1>
+        <div style="background: red; color: white; padding: 20px; margin: 10px 0;">
+            <h2>🔍 TEST SEARCH BAR</h2>
+            <input type="text" placeholder="Search test..." style="padding: 10px; margin: 10px; width: 300px;">
+            <button style="padding: 10px 20px; background: white; color: red; border: none;">SEARCH</button>
+        </div>
+        <p><a href="/">Back to Main Site</a></p>
+        <p>If you can see this red search bar, then Flask routing works but template caching is the issue.</p>
+    </body>
+    </html>
+    '''
 
 @app.route('/websocket-test')
 def websocket_test():
@@ -435,16 +641,34 @@ def get_dealerships():
         configs = scraper_controller.get_dealership_configs()
         return jsonify(configs)
 
+@app.route('/api/dealerships/last-orders')
+def get_dealership_last_orders():
+    """API endpoint to get last order dates for all dealerships"""
+    if DEMO_MODE:
+        # Return demo data when database is not available
+        demo_last_orders = {
+            'Bommarito Cadillac West County': 'Aug 15, 2025',
+            'Spirit Lexus of St. Louis': 'Sep 3, 2025',
+            'BMW of West St. Louis': 'Aug 28, 2025',
+            'Mercedes-Benz of St. Louis': 'Sep 1, 2025',
+            'Audi West County': 'No orders yet'
+        }
+        return jsonify(demo_last_orders)
+    else:
+        last_order_dates = scraper_controller.get_dealership_last_order_dates()
+        return jsonify(last_order_dates)
+
 @app.route('/api/dealerships/<dealership_name>', methods=['POST'])
 def update_dealership(dealership_name):
     """API endpoint to update dealership configuration"""
     data = request.get_json()
-    
+
     filtering_rules = data.get('filtering_rules', {})
+    output_rules = data.get('output_rules', None)
     is_active = data.get('is_active', True)
-    
-    success = scraper_controller.update_dealership_config(dealership_name, filtering_rules, is_active)
-    
+
+    success = scraper_controller.update_dealership_config(dealership_name, filtering_rules, output_rules, is_active)
+
     if success:
         return jsonify({'success': True, 'message': 'Dealership updated successfully'})
     else:
@@ -631,6 +855,177 @@ def get_order_processing():
         logger.error(f"Failed to get order processing data: {e}")
         return jsonify({'error': str(e)}), 500
 
+# AUTOMATED NORMALIZATION API ENDPOINTS
+@app.route('/api/normalization/run', methods=['POST'])
+def run_automated_normalization():
+    """API endpoint to run automated normalization on active import"""
+    try:
+        print("AUTOMATION: Starting automated normalization via API")
+        result = normalize_active_import()
+        
+        print(f"AUTOMATION: Normalization result: {result.get('success', False)}")
+        
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'message': f"Successfully normalized {result['normalized_records']} records",
+                'import_id': result['import_id'],
+                'normalized_records': result['normalized_records'],
+                'dealerships_processed': result['dealerships_processed'],
+                'validation': result.get('validation', {}),
+                'completion_rate': result.get('validation', {}).get('completion_rate', 0)
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.get('error', 'Unknown normalization error'),
+                'stats': result.get('stats', {})
+            }), 500
+            
+    except Exception as e:
+        print(f"AUTOMATION: API normalization failed: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/normalization/validate')
+def validate_normalization():
+    """API endpoint to validate normalization status"""
+    try:
+        result = validate_normalization_status()
+        
+        if 'error' in result:
+            return jsonify({
+                'success': False,
+                'error': result['error']
+            }), 500
+        
+        return jsonify({
+            'success': True,
+            'validation': result,
+            'is_complete': result.get('is_complete', False),
+            'raw_records': result.get('raw_records', 0),
+            'normalized_records': result.get('normalized_records', 0),
+            'completion_rate': result.get('completion_rate', 0)
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/normalization/status')
+def get_normalization_status():
+    """API endpoint to get current normalization status overview"""
+    try:
+        # Get active import info
+        active_import = db_manager.execute_query(
+            "SELECT import_id, import_date, total_vehicles FROM scraper_imports WHERE status = 'active' LIMIT 1"
+        )
+        
+        if not active_import:
+            return jsonify({
+                'success': False,
+                'error': 'No active import found'
+            })
+        
+        import_info = active_import[0]
+        
+        # Get normalization statistics
+        validation_result = validate_normalization_status()
+        
+        return jsonify({
+            'success': True,
+            'active_import': import_info,
+            'normalization': validation_result if 'error' not in validation_result else None,
+            'needs_normalization': not validation_result.get('is_complete', False) if 'error' not in validation_result else True
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# DEALERSHIP SCHEDULE API ENDPOINTS
+@app.route('/api/dealership-schedule', methods=['GET'])
+def get_dealership_schedule():
+    """API endpoint to get current dealership schedule configuration"""
+    try:
+        # Try to load existing schedule from a configuration file or database
+        schedule_file = Path(__file__).parent / 'dealership_schedule.json'
+
+        if schedule_file.exists():
+            with open(schedule_file, 'r') as f:
+                schedule_data = json.load(f)
+            return jsonify({
+                'success': True,
+                'schedule': schedule_data
+            })
+        else:
+            # Return empty schedule if file doesn't exist
+            empty_schedule = {
+                'monday': [],
+                'tuesday': [],
+                'wednesday': [],
+                'thursday': [],
+                'friday': []
+            }
+            return jsonify({
+                'success': True,
+                'schedule': empty_schedule
+            })
+    except Exception as e:
+        logger.error(f"Failed to get dealership schedule: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/dealership-schedule', methods=['POST'])
+def save_dealership_schedule():
+    """API endpoint to save dealership schedule configuration"""
+    try:
+        data = request.get_json()
+        schedule_data = data.get('schedule', {})
+
+        # Validate schedule data structure
+        required_days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+        for day in required_days:
+            if day not in schedule_data:
+                return jsonify({
+                    'success': False,
+                    'error': f'Missing schedule data for {day}'
+                }), 400
+
+            if not isinstance(schedule_data[day], list):
+                return jsonify({
+                    'success': False,
+                    'error': f'Schedule data for {day} must be a list'
+                }), 400
+
+        # Save schedule to configuration file
+        schedule_file = Path(__file__).parent / 'dealership_schedule.json'
+
+        with open(schedule_file, 'w') as f:
+            json.dump(schedule_data, f, indent=2)
+
+        logger.info(f"Saved dealership schedule configuration: {len(schedule_data)} days configured")
+
+        return jsonify({
+            'success': True,
+            'message': 'Dealership schedule saved successfully'
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to save dealership schedule: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/order-form')
 def order_form():
     """Order processing form page"""
@@ -649,6 +1044,76 @@ def order_wizard():
     response.headers['Expires'] = '0'
     response.headers['Last-Modified'] = '0'
     response.headers['ETag'] = f'wizard-final-{cache_buster}'
+    return response
+
+@app.route('/bypass')
+def index_bypass():
+    """CRITICAL EMERGENCY BYPASS: Completely manual JavaScript loading"""
+    import time
+    from flask import make_response
+    cache_buster = int(time.time())
+    
+    # Get the unique JavaScript filename  
+    unique_app_js = UNIQUE_JS_FILES.get('app.js', 'app.js')
+    
+    print(f"CRITICAL BYPASS: Using JavaScript file: {unique_app_js}")
+    
+    # Create minimal HTML with the correct JavaScript
+    html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EMERGENCY BYPASS TEST</title>
+</head>
+<body>
+    <h1>EMERGENCY BYPASS TEST</h1>
+    <p>JavaScript Loading Test: {unique_app_js}</p>
+    <div id="manualOrderEntry" style="width: 400px; height: 200px; border: 1px solid black;">Test VIN Entry Area</div>
+    <button onclick="validateManualEntryInline()">Test Validate</button>
+    <button onclick="clearManualEntryInline()">Test Clear</button>
+    
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="/static/js/{unique_app_js}"></script>
+    <script>
+        console.log('EMERGENCY BYPASS: JavaScript loaded successfully');
+        console.log('Available functions:', typeof updateManualEntryStatsInline, typeof validateManualEntryInline);
+    </script>
+</body>
+</html>"""
+    
+    response = make_response(html_content)
+    response.headers['Content-Type'] = 'text/html; charset=utf-8'
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '-1'
+    response.headers['Last-Modified'] = '0'
+    response.headers['ETag'] = f'emergency-bypass-{cache_buster}'
+    response.headers['Vary'] = '*'
+    
+    return response
+
+@app.route('/')
+def index():
+    """Main index page"""
+    return render_template('index.html', js_files=UNIQUE_JS_FILES)
+
+@app.route('/fresh')
+def fresh_app():
+    """FRESH APPLICATION BYPASS - Uses filename-based cache busting"""
+    import time
+    from flask import make_response
+    cache_buster = int(time.time())
+    # Use unique JavaScript filenames instead of query parameters
+    unique_app_js = UNIQUE_JS_FILES.get('app.js', 'app.js')
+    unique_template_builder_js = UNIQUE_JS_FILES.get('template_builder.js', 'template_builder.js')
+    response = make_response(render_template('index.html', v=cache_buster, unique_app_js=unique_app_js, unique_template_builder_js=unique_template_builder_js))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache' 
+    response.headers['Expires'] = '-1'
+    response.headers['Last-Modified'] = '0'
+    response.headers['ETag'] = f'fresh-{cache_buster}'
+    response.headers['Vary'] = '*'
     return response
 
 @app.route('/wizard-new')
@@ -787,25 +1252,200 @@ def process_cao_orders():
         data = request.get_json()
         dealerships = data.get('dealerships', [])
         vehicle_types = data.get('vehicle_types', ['new', 'cpo', 'used'])
+        # Get skip_vin_logging from request or default to False
         skip_vin_logging = data.get('skip_vin_logging', False)
-        
+
+        # DEBUG: Log what we're receiving for skip_vin_logging
+        logger.info(f"[CAO PROCESS DEBUG] Received skip_vin_logging={skip_vin_logging} from request data={data}")
+
         results = []
         for dealership in dealerships:
             # CorrectOrderProcessor uses template_type and skip_vin_logging parameters
             # The filtering is handled automatically using dealership configs in the database
-            result = order_processor.process_cao_order(dealership, template_type="shortcut_pack", skip_vin_logging=skip_vin_logging)
+            # Template type will be determined from dealership config
+            result = order_processor.process_cao_order(dealership, skip_vin_logging=skip_vin_logging)
             
+            # DEBUG: Log the actual result being returned
+            logger.info(f"CAO result for {dealership}: success={result.get('success')}, vehicle_count={result.get('vehicle_count')}, new_vehicles={result.get('new_vehicles')}")
+
             # Transform result for web interface compatibility
             if result.get('success') and result.get('csv_file'):
-                # Extract filename from full path for download URL
-                csv_path = Path(result['csv_file'])
-                result['download_csv'] = f"/download_csv/{csv_path.name}"
+                # Handle both simple path strings and dict responses from mixed template processing
+                csv_file = result['csv_file']
+
+                if isinstance(csv_file, dict):
+                    # Mixed template processing - get primary CSV file
+                    primary_csv = csv_file.get('primary_csv')
+                    if primary_csv:
+                        result['download_csv'] = f"/download_csv/{Path(primary_csv).name}"
+                    else:
+                        logger.error(f"Mixed template result missing primary_csv for {dealership}")
+                else:
+                    # Standard single CSV file path
+                    csv_path = Path(csv_file)
+                    result['download_csv'] = f"/download_csv/{csv_path.name}"
                 
+            # Convert all Path objects to strings for JSON serialization
+            result = _convert_paths_to_strings(result)
             results.append(result)
-        
+
         return jsonify(results)
     except Exception as e:
         logger.error(f"Error processing CAO orders: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/orders/prepare-cao', methods=['POST'])
+def prepare_cao_data():
+    """PHASE 1: Prepare CAO data for review (no file generation)"""
+    try:
+        data = request.get_json()
+        dealerships = data.get('dealerships', [])
+        skip_vin_logging = data.get('skip_vin_logging', False)
+
+        logger.info(f"[PHASE 1] Preparing CAO data for {len(dealerships)} dealerships")
+
+        results = []
+        for dealership in dealerships:
+            logger.info(f"[PHASE 1] Preparing data for {dealership}")
+
+            # Call the new prepare_cao_data method (no file generation)
+            result = order_processor.prepare_cao_data(dealership)
+
+            logger.info(f"[PHASE 1] Data preparation result for {dealership}: success={result.get('success')}, vehicle_count={result.get('vehicle_count')}")
+
+            # Convert all Path objects to strings for JSON serialization
+            result = _convert_paths_to_strings(result)
+            results.append(result)
+
+        logger.info(f"[PHASE 1] Completed data preparation for {len(dealerships)} dealerships")
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error preparing CAO data: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/orders/prepare-list', methods=['POST'])
+def prepare_list_data():
+    """PHASE 1: Prepare LIST data for review with VIN validation"""
+    try:
+        data = request.get_json()
+        dealership = data.get('dealership')
+        vins = data.get('vins', [])
+
+        if not dealership:
+            return jsonify({'error': 'Dealership name required'}), 400
+        if not vins:
+            return jsonify({'error': 'VIN list required'}), 400
+
+        logger.info(f"[LIST PREPARE] Preparing LIST data for {dealership} with {len(vins)} VINs")
+
+        # Call the new prepare_list_data method (with VIN validation)
+        result = order_processor.prepare_list_data(dealership, vins)
+
+        logger.info(f"[LIST PREPARE] Data preparation result for {dealership}: success={result.get('success')}, valid_vins={result.get('valid_vins')}, invalid_vins={result.get('invalid_vins')}")
+
+        # Convert all Path objects to strings for JSON serialization
+        result = _convert_paths_to_strings(result)
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error preparing LIST data: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/orders/generate-final-files', methods=['POST'])
+def generate_final_files():
+    """PHASE 2: Generate final files from prepared data + order number"""
+    import traceback
+    logger.info(f"[API TRACE] /api/orders/generate-final-files CALLED")
+    logger.info(f"[API TRACE] Call stack: {' -> '.join([frame.filename.split('/')[-1] + ':' + str(frame.lineno) for frame in traceback.extract_stack()[-5:]])}")
+    try:
+        data = request.get_json()
+        dealership_name = data.get('dealership_name')
+        vehicles_data = data.get('vehicles_data', [])
+        csv_filename = data.get('csv_filename')
+        order_number = data.get('order_number')
+        template_type = data.get('template_type')
+        custom_templates = data.get('custom_templates')
+        skip_vin_logging = data.get('skip_vin_logging', False)
+
+        if not dealership_name:
+            return jsonify({'error': 'Missing dealership_name'}), 400
+        if not order_number:
+            return jsonify({'error': 'Missing order_number'}), 400
+
+        logger.info(f"[API TRACE] Request parameters received:")
+        logger.info(f"[API TRACE]   - dealership_name: {dealership_name}")
+        logger.info(f"[API TRACE]   - order_number: {order_number}")
+        logger.info(f"[API TRACE]   - template_type: {template_type}")
+        logger.info(f"[API TRACE]   - custom_templates: {custom_templates}")
+        logger.info(f"[API TRACE]   - skip_vin_logging: {skip_vin_logging}")
+        logger.info(f"[API TRACE]   - vehicles_data count: {len(vehicles_data)}")
+        if len(vehicles_data) > 0:
+            logger.info(f"[API TRACE]   - sample vehicle data: {vehicles_data[0]}")
+        logger.info(f"[API TRACE]   - csv_filename: {csv_filename}")
+
+        # If csv_filename is provided, read edited data from CSV file
+        if csv_filename:
+            logger.info(f"[PHASE 2] Reading edited data from CSV file: {csv_filename}")
+            try:
+                # Extract vehicles data from the edited CSV file using Phase 2 logic
+                vehicles_data = extract_vins_from_csv_for_phase2(csv_filename, return_full_data=True)
+                logger.info(f"[PHASE 2] Extracted {len(vehicles_data)} vehicles from edited CSV")
+                if len(vehicles_data) == 0:
+                    logger.warning(f"[PHASE 2] No vehicles extracted from CSV file {csv_filename}")
+                else:
+                    # Log sample vehicle to verify edits are present
+                    logger.info(f"[PHASE 2] Sample extracted vehicle: {vehicles_data[0]}")
+            except Exception as e:
+                logger.error(f"[PHASE 2] Failed to read CSV file {csv_filename}: {e}")
+                import traceback
+                logger.error(f"[PHASE 2] Full traceback: {traceback.format_exc()}")
+                return jsonify({'error': f'Failed to read edited CSV data: {str(e)}'}), 400
+
+        if not vehicles_data:
+            return jsonify({'error': 'No vehicle data available (missing vehicles_data or csv_filename)'}), 400
+
+        logger.info(f"[PHASE 2] Generating final files for {dealership_name} with order number: {order_number}")
+        logger.info(f"[PHASE 2] Processing {len(vehicles_data)} vehicles")
+
+        # Call the new generate_final_files method
+        result = order_processor.generate_final_files(
+            dealership_name=dealership_name,
+            vehicles_data=vehicles_data,
+            order_number=order_number,
+            template_type=template_type,
+            custom_templates=custom_templates,
+            skip_vin_logging=skip_vin_logging
+        )
+
+        logger.info(f"[PHASE 2] File generation result for {dealership_name}: success={result.get('success')}, files_generated={result.get('qr_codes_generated', 0)}")
+
+        # Convert all Path objects to strings for JSON serialization
+        result = _convert_paths_to_strings(result)
+
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error generating final files: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/vehicles/raw-status/<dealership_name>', methods=['GET'])
+def get_vehicle_raw_status(dealership_name):
+    """Get raw_status data for vehicles from a specific dealership (for review stage only)"""
+    try:
+        # Use the same query logic from CorrectOrderProcessor to get raw_status data
+        vehicles_with_raw_status = order_processor._get_dealership_vehicles(dealership_name)
+        
+        # Create a mapping of VIN -> raw_status for frontend use
+        raw_status_map = {}
+        for vehicle in vehicles_with_raw_status:
+            vin = vehicle.get('vin', '')
+            raw_status = vehicle.get('raw_status', 'N/A')
+            if vin:
+                raw_status_map[vin] = raw_status
+        
+        logger.info(f"Retrieved raw_status for {len(raw_status_map)} vehicles from {dealership_name}")
+        return jsonify(raw_status_map)
+        
+    except Exception as e:
+        logger.error(f"Error getting raw_status for {dealership_name}: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/orders/process-daily-cao', methods=['POST'])
@@ -825,6 +1465,7 @@ def process_list_order():
         data = request.get_json()
         dealership = data.get('dealership')
         vins = data.get('vins', [])
+        # Get skip_vin_logging from request or default to False
         skip_vin_logging = data.get('skip_vin_logging', False)
         
         if not dealership:
@@ -832,20 +1473,264 @@ def process_list_order():
         if not vins:
             return jsonify({'error': 'VIN list required'}), 400
         
-        template_type = data.get('template_type', 'shortcut_pack')
-        # OrderProcessingWorkflow.process_list_order only takes dealership and vins
+        # Template type will be determined from dealership config
         result = order_processor.process_list_order(dealership, vins)
         return jsonify(result)
     except Exception as e:
         logger.error(f"Error processing list order: {e}")
         return jsonify({'error': str(e)}), 500
 
-def extract_vins_from_csv(csv_file_path):
+@app.route('/api/orders/process-maintenance', methods=['POST'])
+def process_maintenance_order():
+    """Process maintenance-based order (CAO + LIST combination)"""
+    try:
+        data = request.get_json()
+        dealership = data.get('dealership')
+        vins = data.get('vins', [])
+        skip_vin_logging = data.get('skip_vin_logging', False)
+
+        if not dealership:
+            return jsonify({'error': 'Dealership required'}), 400
+
+        # Maintenance orders can have empty VIN list (CAO-only)
+        # The 'vins' parameter defaults to empty list in get(), so no need to check
+        logger.info(f"Processing MAINTENANCE order for {dealership} with {len(vins)} VINs (skip_vin_logging: {skip_vin_logging})")
+
+        # Process maintenance order - combines CAO (apply vinlog) + LIST (ignore vinlog)
+        result = order_processor.process_maintenance_order(dealership, vins, skip_vin_logging=skip_vin_logging)
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error processing maintenance order: {e}")
+        return jsonify({'error': str(e)}), 500
+
+def find_csv_file_like_download_route(filename):
+    """Find CSV file using the exact same logic as the download_csv route"""
+    import os
+    from pathlib import Path
+
+    logger.info(f"[FIND CSV] Looking for file: {filename}")
+
+    # Use the same directories as download_csv route
+    web_gui_orders_dir = Path(__file__).parent / "orders"
+    scripts_orders_dir = Path(__file__).parent.parent / "scripts" / "orders"
+    bulletproof_orders_dir = Path(__file__).parent.parent / "orders"
+
+    logger.info(f"[FIND CSV] Searching for {filename} in directories:")
+    logger.info(f"  - {web_gui_orders_dir}")
+    logger.info(f"  - {scripts_orders_dir}")
+    logger.info(f"  - {bulletproof_orders_dir}")
+
+    # Search for ALL files with the same name and find the most recent one
+    found_files = []
+    for orders_dir in [web_gui_orders_dir, scripts_orders_dir, bulletproof_orders_dir]:
+        logger.info(f"[FIND CSV] Checking {orders_dir} (exists: {orders_dir.exists()})")
+        if not orders_dir.exists():
+            continue
+
+        for root, dirs, files in os.walk(orders_dir):
+            logger.info(f"[FIND CSV] Checking {root} - files: {len(files)} files")
+            logger.info(f"[FIND CSV] Files in {root}: {files[:5]}")
+            if filename in files:
+                csv_file = Path(root) / filename
+                found_files.append(csv_file)
+                logger.info(f"[FIND CSV] Found file candidate at {csv_file}")
+
+    if not found_files:
+        logger.error(f"[FIND CSV] File not found: {filename}")
+        return None
+
+    # Select the most recent file by modification time
+    most_recent_file = max(found_files, key=lambda f: f.stat().st_mtime)
+    logger.info(f"[FIND CSV] Total files found: {len(found_files)}")
+    logger.info(f"[FIND CSV] Selected most recent file: {most_recent_file}")
+
+    return str(most_recent_file)
+
+def extract_vins_from_csv_for_phase2(csv_filename, return_full_data=True):
+    """
+    NEW FUNCTION: Extract vehicle data for Phase 2 processing using download_csv logic
+    This function uses the exact same file finding logic as the download_csv route
+    """
+    import pandas as pd
+    import os
+
+    logger.info(f"[PHASE2 CSV] extract_vins_from_csv_for_phase2 called with: {csv_filename}")
+
+    try:
+        # Use the new find function that mirrors download_csv exactly
+        csv_file_path = find_csv_file_like_download_route(csv_filename)
+        if not csv_file_path:
+            logger.error(f"[PHASE2 CSV] CSV file not found: {csv_filename}")
+            return []
+
+        # Read CSV file
+        df = pd.read_csv(csv_file_path)
+        logger.info(f"[PHASE2 CSV] Successfully read CSV file: {csv_file_path}")
+        logger.info(f"[PHASE2 CSV] CSV has {len(df)} rows and columns: {list(df.columns)}")
+
+        # Log first few rows to verify we're reading edited data
+        if len(df) > 0:
+            logger.info(f"[PHASE2 CSV] First row data: {dict(df.iloc[0])}")
+
+        # Look for VIN column (try different common names)
+        vin_column = None
+        possible_vin_columns = ['VIN', 'vin', 'Vin', 'VIN_Number', 'vin_number', 'VehicleVIN']
+
+        for col in possible_vin_columns:
+            if col in df.columns:
+                vin_column = col
+                break
+
+        if not vin_column:
+            logger.error(f"[PHASE2 CSV] No VIN column found in CSV. Available columns: {list(df.columns)}")
+            return []
+
+        # Filter valid rows (VINs not empty)
+        valid_df = df[df[vin_column].notna() & (df[vin_column].astype(str) != 'nan') & (df[vin_column].astype(str).str.len() >= 10)]
+
+        if return_full_data:
+            # Return full vehicle data as list of dictionaries for Phase 2 processing
+            vehicle_data = []
+            for _, row in valid_df.iterrows():
+                vehicle_dict = {}
+                for col in df.columns:
+                    vehicle_dict[col.lower()] = row[col]  # Normalize column names to lowercase
+
+                # Ensure we have essential fields that the backend expects
+                raw_vin = str(row[vin_column])
+                # Handle VINs with prefixes like "USED - VIN_NUMBER"
+                if ' - ' in raw_vin:
+                    actual_vin = raw_vin.split(' - ')[-1]  # Take the part after the last ' - '
+                else:
+                    actual_vin = raw_vin
+                vehicle_dict['vin'] = actual_vin.strip()
+
+                # Map common fields to expected names
+                if 'YEARMAKE' in row:
+                    parts = str(row['YEARMAKE']).split(' ', 1)
+                    if len(parts) >= 2:
+                        vehicle_dict['year'] = parts[0]
+                        vehicle_dict['make'] = parts[1]
+                    else:
+                        vehicle_dict['year'] = parts[0] if parts else ''
+                        vehicle_dict['make'] = ''
+
+                if 'MODEL' in row:
+                    vehicle_dict['model'] = str(row['MODEL'])
+                if 'TRIM' in row:
+                    vehicle_dict['trim'] = str(row['TRIM'])
+                if 'STOCK' in row:
+                    vehicle_dict['stock_number'] = str(row['STOCK'])
+
+                vehicle_data.append(vehicle_dict)
+
+            logger.info(f"[PHASE2 CSV] Found {len(vehicle_data)} valid vehicles with full data in CSV file {csv_file_path}")
+
+            # CRITICAL FIX: Add comprehensive CSV column preservation for all vehicles
+            # This ensures ALL direct CSV edits are preserved in Phase 2 processing
+            for i, (_, row) in enumerate(valid_df.iterrows()):
+                if i < len(vehicle_data):
+                    # Add all original CSV columns in uppercase for the generation code
+                    for col in df.columns:
+                        vehicle_data[i][col.upper()] = str(row[col])
+                    # Also fix the stock field mapping issue
+                    if 'STOCK' in row:
+                        vehicle_data[i]['stock'] = str(row['STOCK'])
+
+            # PHASE 2 QR CODE FIX: Enrich vehicle data with vehicle_url from database
+            logger.info(f"[PHASE2 CSV] Enriching vehicle data with vehicle_url from database...")
+            for vehicle in vehicle_data:
+                vin = vehicle.get('vin', '')
+                if vin:
+                    try:
+                        # Query database for vehicle_url using VIN
+                        url_result = db_manager.execute_query("""
+                            SELECT rvd.vehicle_url
+                            FROM raw_vehicle_data rvd
+                            JOIN scraper_imports si ON rvd.import_id = si.import_id
+                            WHERE rvd.vin = %s
+                            AND si.status = 'active'
+                            ORDER BY rvd.import_timestamp DESC
+                            LIMIT 1
+                        """, (vin,))
+
+                        if url_result and len(url_result) > 0:
+                            vehicle_url = url_result[0].get('vehicle_url', '')
+                            if vehicle_url:
+                                vehicle['vehicle_url'] = vehicle_url
+                                logger.info(f"[PHASE2 CSV] Enriched VIN {vin} with vehicle_url: {vehicle_url}")
+                            else:
+                                logger.warning(f"[PHASE2 CSV] No vehicle_url found for VIN {vin}")
+                        else:
+                            logger.warning(f"[PHASE2 CSV] No database record found for VIN {vin}")
+                    except Exception as e:
+                        logger.error(f"[PHASE2 CSV] Error querying vehicle_url for VIN {vin}: {e}")
+
+            # Log sample of first vehicle to verify data structure
+            if vehicle_data:
+                logger.info(f"[PHASE2 CSV] Sample vehicle data structure: {list(vehicle_data[0].keys())}")
+                logger.info(f"[PHASE2 CSV] Sample vehicle data: {vehicle_data[0]}")
+            return vehicle_data
+        else:
+            # Return just VINs
+            valid_vins = valid_df[vin_column].astype(str).tolist()
+            logger.info(f"[PHASE2 CSV] Found {len(valid_vins)} valid VINs in CSV file {csv_file_path}")
+            return valid_vins
+
+    except Exception as e:
+        logger.error(f"[PHASE2 CSV] Error extracting data from CSV {csv_filename}: {e}")
+        return []
+
+def extract_vins_from_csv(csv_file_path, return_full_data=False):
     """Extract VINs from CSV file for order processing"""
     import pandas as pd
     import os
-    
+    from pathlib import Path
+
+    logger.info(f"[CSV DEBUG] extract_vins_from_csv called with: {csv_file_path}, return_full_data={return_full_data}")
+
     try:
+        # Handle /download_csv/ web paths by converting to file system paths
+        if csv_file_path.startswith('/download_csv/'):
+            filename = csv_file_path.replace('/download_csv/', '')
+            logger.info(f"[CSV DEBUG] Web path detected, extracted filename: {filename}")
+        else:
+            # If just a filename is provided, use it directly for search
+            filename = csv_file_path
+            logger.info(f"[CSV DEBUG] Filename provided directly: {filename}")
+
+        # Search for the file in the same order directories as the download route
+        bulletproof_orders_dir = Path(__file__).parent.parent / "orders"
+        web_gui_orders_dir = Path(__file__).parent / "orders"
+        scripts_orders_dir = Path(__file__).parent.parent / "scripts" / "orders"
+
+        search_dirs = [bulletproof_orders_dir, web_gui_orders_dir, scripts_orders_dir]
+        logger.info(f"[CSV DEBUG] Searching in directories: {[str(d) for d in search_dirs]}")
+
+        # Use the same logic as download_csv route - find ALL matching files and select most recent
+        found_files = []
+        for orders_dir in search_dirs:
+            logger.info(f"[CSV DEBUG] Checking {orders_dir} (exists: {orders_dir.exists()})")
+            if not orders_dir.exists():
+                continue
+
+            for root, dirs, files in os.walk(orders_dir):
+                logger.info(f"[CSV DEBUG] Checking {root} - files: {len(files)} files")
+                if filename in files:
+                    csv_file = Path(root) / filename
+                    found_files.append(csv_file)
+                    logger.info(f"[CSV DEBUG] Found CSV file candidate: {csv_file}")
+
+        if not found_files:
+            logger.error(f"[CSV DEBUG] CSV file not found in any search directory: {filename}")
+            return []
+
+        # Select the most recent file by modification time
+        most_recent_file = max(found_files, key=lambda f: f.stat().st_mtime)
+        csv_file_path = str(most_recent_file)
+        logger.info(f"[CSV DEBUG] Selected most recent CSV file: {csv_file_path}")
+        logger.info(f"[CSV DEBUG] Total files found: {len(found_files)}, selected: {most_recent_file.name}")
+
         # Handle relative path - make it absolute if needed
         if not os.path.isabs(csv_file_path):
             # Try relative to the web_gui directory
@@ -857,36 +1742,76 @@ def extract_vins_from_csv(csv_file_path):
                 full_path = os.path.join(project_root, csv_file_path)
         else:
             full_path = csv_file_path
-            
+
         if not os.path.exists(full_path):
             logger.error(f"CSV file not found: {full_path}")
             return []
-            
+
         # Read CSV file
         df = pd.read_csv(full_path)
-        
+
         # Look for VIN column (try different common names)
         vin_column = None
         possible_vin_columns = ['VIN', 'vin', 'Vin', 'VIN_Number', 'vin_number', 'VehicleVIN']
-        
+
         for col in possible_vin_columns:
             if col in df.columns:
                 vin_column = col
                 break
-                
+
         if not vin_column:
             logger.error(f"No VIN column found in CSV. Available columns: {list(df.columns)}")
             return []
-            
-        # Extract VINs and filter valid ones (17 characters, not empty)
-        vins = df[vin_column].dropna().astype(str)
-        valid_vins = [vin for vin in vins if len(vin) >= 10 and vin != 'nan']  # Allow 10+ chars for flexibility
-        
-        logger.info(f"Found {len(valid_vins)} valid VINs in CSV file {csv_file_path}")
-        return valid_vins
-        
+
+        # Filter valid rows (VINs not empty)
+        valid_df = df[df[vin_column].notna() & (df[vin_column].astype(str) != 'nan') & (df[vin_column].astype(str).str.len() >= 10)]
+
+        if return_full_data:
+            # Return full vehicle data as list of dictionaries for Phase 2 processing
+            vehicle_data = []
+            for _, row in valid_df.iterrows():
+                vehicle_dict = {}
+                for col in df.columns:
+                    vehicle_dict[col.lower()] = row[col]  # Normalize column names to lowercase
+
+                # Ensure we have essential fields that the backend expects
+                raw_vin = str(row[vin_column])
+                # Handle VINs with prefixes like "USED - VIN_NUMBER"
+                if ' - ' in raw_vin:
+                    actual_vin = raw_vin.split(' - ')[-1]  # Take the part after the last ' - '
+                else:
+                    actual_vin = raw_vin
+                vehicle_dict['vin'] = actual_vin.strip()
+
+                # Map common fields to expected names
+                if 'YEARMAKE' in row:
+                    parts = str(row['YEARMAKE']).split(' ', 1)
+                    if len(parts) >= 2:
+                        vehicle_dict['year'] = parts[0]
+                        vehicle_dict['make'] = parts[1]
+                    else:
+                        vehicle_dict['year'] = parts[0] if parts else ''
+                        vehicle_dict['make'] = ''
+
+                if 'MODEL' in row:
+                    vehicle_dict['model'] = str(row['MODEL'])
+                if 'TRIM' in row:
+                    vehicle_dict['trim'] = str(row['TRIM'])
+                if 'STOCK' in row:
+                    vehicle_dict['stock_number'] = str(row['STOCK'])
+
+                vehicle_data.append(vehicle_dict)
+
+            logger.info(f"Found {len(vehicle_data)} valid vehicles with full data in CSV file {csv_file_path}")
+            return vehicle_data
+        else:
+            # Return just VINs for backward compatibility
+            valid_vins = valid_df[vin_column].astype(str).tolist()
+            logger.info(f"Found {len(valid_vins)} valid VINs in CSV file {csv_file_path}")
+            return valid_vins
+
     except Exception as e:
-        logger.error(f"Error extracting VINs from CSV {csv_file_path}: {e}")
+        logger.error(f"Error extracting data from CSV {csv_file_path}: {e}")
         return []
 
 @app.route('/api/orders/apply-order-number', methods=['POST'])
@@ -957,34 +1882,45 @@ def apply_order_number():
         else:
             # Update order number and date for the provided VINs
             updated_count = 0
+            inserted_count = 0
+            updated_existing_count = 0
+
             for vin in vins:
                 try:
-                    update_query = f"""
-                        UPDATE {table_name} 
-                        SET order_number = %s, order_date = CURRENT_DATE
-                        WHERE vin = %s
-                    """
-                    result = db_manager.execute_query(update_query, (order_number, vin))
-                    
-                    # Check if VIN exists in the table, if not insert it
-                    if not result:
-                        # VIN might not exist in log yet, insert it
+                    # First check if VIN exists
+                    check_query = f"SELECT 1 FROM {table_name} WHERE vin = %s"
+                    exists = db_manager.execute_query(check_query, (vin,))
+
+                    if exists:
+                        # VIN exists, update it
+                        logger.info(f"[APPLY ORDER] VIN {vin} exists in {table_name}, updating order number")
+                        update_query = f"""
+                            UPDATE {table_name}
+                            SET order_number = %s, order_date = CURRENT_DATE
+                            WHERE vin = %s
+                        """
+                        db_manager.execute_query(update_query, (order_number, vin))
+                        updated_existing_count += 1
+                    else:
+                        # VIN doesn't exist, insert it
+                        logger.info(f"[APPLY ORDER] VIN {vin} NOT found in {table_name}, inserting new record")
                         insert_query = f"""
                             INSERT INTO {table_name} (vin, processed_date, order_type, order_number, order_date, template_type)
                             VALUES (%s, CURRENT_DATE, 'CAO', %s, CURRENT_DATE, 'QR_INDIVIDUAL')
-                            ON CONFLICT (vin) DO UPDATE SET 
+                            ON CONFLICT (vin) DO UPDATE SET
                             order_number = EXCLUDED.order_number,
                             order_date = EXCLUDED.order_date
                         """
                         db_manager.execute_query(insert_query, (vin, order_number))
-                    
+                        inserted_count += 1
+
                     updated_count += 1
                     
                 except Exception as vin_error:
                     logger.warning(f"Failed to update VIN {vin}: {vin_error}")
                     continue
         
-        logger.info(f"Successfully updated {updated_count} VINs with order number {order_number}")
+        logger.info(f"[APPLY ORDER COMPLETE] Total: {updated_count} VINs | Updated existing: {updated_existing_count} | Newly inserted: {inserted_count}")
         
         return jsonify({
             'success': True,
@@ -1311,6 +2247,177 @@ def import_vin_log_csv():
     except Exception as e:
         logger.error(f"Error importing VIN log CSV: {e}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/manual-vin-import', methods=['POST'])
+def manual_vin_import():
+    """Import VINs manually entered by user into dealership-specific VIN log"""
+    try:
+        logger.info("=== MANUAL VIN IMPORT STARTED ===")
+        
+        data = request.get_json()
+        logger.info(f"Request data received: {data}")
+        
+        if not data:
+            logger.error("No data provided in request")
+            return jsonify({'error': 'No data provided'}), 400
+        
+        dealership_name = data.get('dealership_name')
+        vins = data.get('vins', [])
+        import_date = data.get('import_date')
+        source = data.get('source', 'manual_entry')
+        
+        logger.info(f"Parsed request - Dealership: {dealership_name}, VIN count: {len(vins)}, Import date: {import_date}, Source: {source}")
+        
+        if not dealership_name:
+            logger.error("No dealership name provided")
+            return jsonify({'error': 'Dealership name is required'}), 400
+            
+        if not vins or len(vins) == 0:
+            logger.error("No VINs provided")
+            return jsonify({'error': 'No VINs provided'}), 400
+        
+        logger.info(f"Manual VIN import for {dealership_name}: {len(vins)} VINs")
+        logger.info(f"VIN data structure: {vins[:2] if len(vins) > 1 else vins}")  # Show first 2 VINs
+        
+        # Get dealership-specific VIN log table name (match existing format)
+        def get_dealership_vin_log_table(dealership_name):
+            slug = dealership_name.lower()
+            slug = slug.replace(' ', '_')
+            slug = slug.replace('&', 'and')
+            slug = slug.replace('.', '')
+            slug = slug.replace(',', '')
+            slug = slug.replace('-', '_')
+            slug = slug.replace('/', '_')
+            slug = slug.replace("'", '')
+            slug = slug.replace('__', '_')
+            return f'{slug}_vin_log'
+        
+        table_name = get_dealership_vin_log_table(dealership_name)
+        logger.info(f"Using VIN log table: {table_name}")
+        
+        # Check if table exists, create if not
+        logger.info("Checking if VIN log table exists...")
+        table_check = db_manager.execute_query("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = %s 
+            AND table_name = %s
+        """, ('public', table_name))
+        
+        logger.info(f"Table check result: {table_check}")
+        
+        if not table_check:
+            logger.info(f"Table doesn't exist, creating VIN log table: {table_name}")
+            create_table_sql = f"""
+            CREATE TABLE {table_name} (
+                id SERIAL PRIMARY KEY,
+                vin VARCHAR(17) NOT NULL,
+                order_number VARCHAR(100),
+                processed_date DATE NOT NULL,
+                order_type VARCHAR(50),
+                template_type VARCHAR(50),
+                created_at TIMESTAMP DEFAULT NOW(),
+                imported_at TIMESTAMP DEFAULT NOW()
+            );
+            """
+            db_manager.execute_query(create_table_sql)
+            logger.info(f"SUCCESS: Created VIN log table: {table_name}")
+        else:
+            logger.info(f"Table exists: {table_name}")
+        
+        # Process VINs
+        imported_count = 0
+        errors = []
+        
+        logger.info(f"Starting to process {len(vins)} VINs...")
+        
+        for i, vin_data in enumerate(vins):
+            try:
+                logger.info(f"=== Processing VIN {i+1}/{len(vins)} ===")
+                logger.info(f"VIN data: {vin_data}")
+                
+                vin = vin_data['vin'].strip().upper()
+                order_number = vin_data.get('order_number', '')
+                processed_date = vin_data.get('processed_date', import_date)
+                
+                logger.info(f"Extracted VIN: '{vin}' (length: {len(vin)})")
+                logger.info(f"Order number: '{order_number}'")
+                logger.info(f"Processed date: {processed_date}")
+                
+                if not vin or len(vin) != 17:
+                    error_msg = f"Invalid VIN: '{vin}' (length: {len(vin)}, expected 17)"
+                    errors.append(error_msg)
+                    logger.warning(error_msg)
+                    continue
+                
+                # Allow duplicate VINs - remove duplicate check as requested
+                logger.info(f"Processing VIN {vin} for insertion (duplicates allowed)")
+                
+                # Insert VIN into dealership-specific VIN log
+                logger.info(f"Inserting VIN {vin} into {table_name}...")
+                insert_sql = f"""
+                    INSERT INTO {table_name} 
+                    (vin, order_number, processed_date, order_type, template_type) 
+                    VALUES (%s, %s, %s, %s, %s)
+                """
+                
+                logger.info(f"Insert SQL: {insert_sql}")
+                insert_params = (
+                    vin,
+                    order_number,
+                    processed_date,  # Use as processed_date
+                    'manual',        # order_type
+                    'manual_entry'   # template_type
+                )
+                logger.info(f"Insert params: {insert_params}")
+                
+                db_manager.execute_query(insert_sql, insert_params)
+                
+                imported_count += 1
+                logger.info(f"SUCCESS: Imported VIN {vin} to {table_name} (total imported: {imported_count})")
+                
+            except Exception as e:
+                error_msg = f"Error processing VIN {vin_data.get('vin', 'unknown')}: {str(e)}"
+                errors.append(error_msg)
+                logger.error(error_msg)
+                logger.error(f"Exception details: {type(e).__name__}: {e}")
+                import traceback
+                logger.error(f"Stack trace: {traceback.format_exc()}")
+        
+        logger.info(f"=== FINAL RESULTS ===")
+        logger.info(f"Imported count: {imported_count}")
+        logger.info(f"Errors: {errors}")
+        
+        if imported_count > 0:
+            logger.info(f"SUCCESS: Manual VIN import completed: {imported_count} VINs imported to {table_name}")
+            return jsonify({
+                'success': True,
+                'imported_count': imported_count,
+                'errors': errors,
+                'dealership': dealership_name,
+                'table_name': table_name
+            })
+        else:
+            logger.error(f"FAILED: No VINs were imported. Errors: {errors}")
+            return jsonify({
+                'success': False,
+                'error': 'No VINs were imported',
+                'errors': errors,
+                'dealership': dealership_name,
+                'table_name': table_name,
+                'total_vins_processed': len(vins)
+            }), 400
+    
+    except Exception as e:
+        logger.error(f"CRITICAL ERROR in manual VIN import: {e}")
+        logger.error(f"Exception type: {type(e).__name__}")
+        import traceback
+        logger.error(f"Full stack trace: {traceback.format_exc()}")
+        return jsonify({
+            'error': str(e),
+            'type': type(e).__name__,
+            'endpoint': 'manual-vin-import'
+        }), 500
 
 @app.route('/download_csv/<filename>')
 def download_csv(filename):
@@ -1641,7 +2748,7 @@ def search_vehicle_data():
                     SELECT 
                         r.vin, r.stock, r.location, r.year, r.make, r.model,
                         r.trim, r.ext_color as exterior_color, r.price, r.type as vehicle_type,
-                        r.normalized_type, r.on_lot_status,
+                        r.normalized_type, r.on_lot_status, r.date_in_stock,
                         r.import_timestamp, 'raw' as data_source,
                         COUNT(*) OVER (PARTITION BY r.vin) as scrape_count,
                         MIN(r.import_timestamp) OVER (PARTITION BY r.vin) as first_scraped,
@@ -1660,6 +2767,7 @@ def search_vehicle_data():
                     SELECT 
                         n.vin, n.stock, n.location, n.year, n.make, n.model,
                         n.trim, '' as exterior_color, n.price, n.vehicle_condition as vehicle_type,
+                        n.date_in_stock,
                         r.import_timestamp, 'normalized' as data_source,
                         COUNT(*) OVER (PARTITION BY n.vin) as scrape_count,
                         MIN(r.import_timestamp) OVER (PARTITION BY n.vin) as first_scraped,
@@ -1668,7 +2776,7 @@ def search_vehicle_data():
                     JOIN raw_vehicle_data r ON n.raw_data_id = r.id
                 )
                 SELECT vin, stock, location, year, make, model, trim, 
-                       exterior_color, price, vehicle_type, import_timestamp, data_source, scrape_count, first_scraped
+                       exterior_color, price, vehicle_type, date_in_stock, import_timestamp, data_source, scrape_count, first_scraped
                 FROM ranked_vehicles 
                 WHERE rn = 1
             """
@@ -1678,14 +2786,14 @@ def search_vehicle_data():
                     SELECT 
                         r.vin, r.stock, r.location, r.year, r.make, r.model,
                         r.trim, r.ext_color as exterior_color, r.price, r.type as vehicle_type,
-                        r.normalized_type, r.on_lot_status,
+                        r.date_in_stock, r.normalized_type, r.on_lot_status,
                         r.import_timestamp, 'raw' as data_source, r.id
                     FROM raw_vehicle_data r
                     UNION ALL
                     SELECT 
                         n.vin, n.stock, n.location, n.year, n.make, n.model,
                         n.trim, '' as exterior_color, n.price, n.vehicle_condition as vehicle_type,
-                        '' as normalized_type, '' as on_lot_status,
+                        n.date_in_stock, '' as normalized_type, '' as on_lot_status,
                         r.import_timestamp, 'normalized' as data_source, n.id
                     FROM normalized_vehicle_data n
                     JOIN raw_vehicle_data r ON n.raw_data_id = r.id
@@ -1693,7 +2801,7 @@ def search_vehicle_data():
                 ranked_vehicles AS (
                     SELECT 
                         vin, stock, location, year, make, model, trim, 
-                        exterior_color, price, vehicle_type, normalized_type, on_lot_status,
+                        exterior_color, price, vehicle_type, date_in_stock, normalized_type, on_lot_status,
                         import_timestamp, data_source,
                         COUNT(*) OVER (PARTITION BY vin) as scrape_count,
                         MIN(import_timestamp) OVER (PARTITION BY vin) as first_scraped,
@@ -1701,7 +2809,7 @@ def search_vehicle_data():
                     FROM all_vehicles
                 )
                 SELECT vin, stock, location, year, make, model, trim, 
-                       exterior_color, price, vehicle_type, normalized_type, on_lot_status,
+                       exterior_color, price, vehicle_type, date_in_stock, normalized_type, on_lot_status,
                        import_timestamp, data_source, scrape_count, first_scraped
                 FROM ranked_vehicles
                 WHERE rn = 1
@@ -2218,6 +3326,65 @@ def get_single_vehicle_data(vin):
         logger.error(f"Error getting single vehicle data for VIN {vin}: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/data/manual-vins/<dealership_name>', methods=['POST'])
+def get_manual_vin_data(dealership_name):
+    """Fetch vehicle data for manually entered VINs from active scraper data for a specific dealership"""
+    try:
+        data = request.get_json()
+        vins = data.get('vins', [])
+
+        if not vins:
+            return jsonify({'error': 'No VINs provided'}), 400
+
+        # Fetch vehicle data from active scraper imports for this dealership
+        query = """
+            SELECT nvd.*
+            FROM normalized_vehicle_data nvd
+            JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
+            JOIN scraper_imports si ON rvd.import_id = si.import_id
+            WHERE nvd.vin = ANY(%s)
+            AND nvd.location = %s
+            AND si.status = 'active'
+            ORDER BY rvd.import_timestamp DESC
+        """
+
+        vehicles = []
+        for vin in vins:
+            result = db_manager.execute_query(query, [[vin], dealership_name])
+            if result and len(result) > 0:
+                vehicle_data = dict(result[0])
+                # Format the vehicle data to match CAO format
+                vehicles.append({
+                    'vin': vehicle_data.get('vin', vin),
+                    'year': str(vehicle_data.get('year', '')),
+                    'make': vehicle_data.get('make', ''),
+                    'model': vehicle_data.get('model', ''),
+                    'trim': vehicle_data.get('trim', ''),
+                    'stock': vehicle_data.get('stock', ''),
+                    'price': vehicle_data.get('price', ''),
+                    'vehicle_type': vehicle_data.get('vehicle_condition', ''),
+                    'source': 'manual_lookup'
+                })
+            else:
+                # If VIN not found in active data, return placeholder
+                vehicles.append({
+                    'vin': vin,
+                    'year': 'Manual',
+                    'make': 'Entry',
+                    'model': 'VIN Not Found',
+                    'trim': '',
+                    'stock': 'MANUAL',
+                    'price': '',
+                    'vehicle_type': '',
+                    'source': 'manual_not_found'
+                })
+
+        return jsonify({'success': True, 'vehicles': vehicles})
+
+    except Exception as e:
+        logger.error(f"Error fetching manual VIN data for {dealership_name}: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/data/export', methods=['POST'])
 def export_search_results():
     """Export search results to CSV"""
@@ -2353,18 +3520,15 @@ def download_export_file(filename):
 def get_dealership_settings():
     """Get all dealership settings"""
     try:
+        # First get all dealership configs
         query = """
             SELECT 
                 dc.id,
                 dc.name,
                 dc.filtering_rules,
                 dc.output_rules,
-                dc.is_active,
-                COUNT(DISTINCT rd.vin) as vehicle_count,
-                MAX(rd.import_date) as last_import
+                dc.is_active
             FROM dealership_configs dc
-            LEFT JOIN raw_vehicle_data rd ON dc.name = rd.location
-            GROUP BY dc.id, dc.name, dc.filtering_rules, dc.output_rules, dc.is_active
             ORDER BY dc.name
         """
         
@@ -2373,6 +3537,7 @@ def get_dealership_settings():
         # Process filtering rules for each dealership
         settings = []
         for dealership in dealerships:
+            dealership_name = dealership['name']
             filtering_rules = dealership.get('filtering_rules', {})
             if isinstance(filtering_rules, str):
                 try:
@@ -2383,12 +3548,36 @@ def get_dealership_settings():
             # Extract vehicle types
             vehicle_types = filtering_rules.get('vehicle_types', ['new', 'used', 'certified'])
             
+            # Get vehicle count from VIN log table instead of raw_vehicle_data
+            vin_log_table = dealership_name.lower().replace(' ', '_').replace('.', '').replace("'", '') + '_vin_log'
+            vehicle_count = 0
+            last_import = None
+            
+            try:
+                # Check if VIN log table exists and get count
+                count_result = db_manager.execute_query(f"""
+                    SELECT COUNT(*) as count FROM {vin_log_table}
+                """)
+                if count_result:
+                    vehicle_count = count_result[0]['count']
+                
+                # Get last order date from VIN log
+                date_result = db_manager.execute_query(f"""
+                    SELECT MAX(order_date) as last_date FROM {vin_log_table}
+                """)
+                if date_result and date_result[0]['last_date']:
+                    last_import = date_result[0]['last_date']
+                    
+            except Exception as e:
+                # If VIN log table doesn't exist, count stays at 0
+                logger.debug(f"Could not get VIN log count for {dealership_name}: {e}")
+            
             settings.append({
                 'id': dealership['id'],
-                'name': dealership['name'],
+                'name': dealership_name,
                 'active': dealership.get('is_active', True),
-                'vehicle_count': dealership.get('vehicle_count', 0),
-                'last_import': dealership.get('last_import'),
+                'vehicle_count': vehicle_count,
+                'last_import': last_import,
                 'vehicle_types': vehicle_types,
                 'filtering_rules': filtering_rules,
                 'output_rules': dealership.get('output_rules', {})
@@ -2785,7 +3974,12 @@ def process_csv_import():
                 # CAO processing - compare against VIN history with dealership-specific filtering
                 logger.info(f"Processing CAO order for {dealership_name} (test_mode: {skip_vin_logging})")
                 # Use CorrectOrderProcessor with dealership-specific filtering
-                result = order_processor.process_cao_order(dealership_name, template_type="shortcut_pack", skip_vin_logging=skip_vin_logging)
+                # Template type will be determined from dealership config
+                result = order_processor.process_cao_order(dealership_name, skip_vin_logging=skip_vin_logging)
+            elif order_type == 'maintenance':
+                # MAINTENANCE processing - CAO + LIST combination (CAO applies vinlog, LIST ignores vinlog)
+                logger.info(f"Processing MAINTENANCE order for {dealership_name} with {len(imported_vins)} VINs (skip_vin_logging: {skip_vin_logging})")
+                result = order_processor.process_maintenance_order(dealership_name, imported_vins, skip_vin_logging=skip_vin_logging)
             else:
                 # LIST processing - process specific VIN list
                 logger.info(f"Processing LIST order for {dealership_name} with {len(imported_vins)} VINs (skip_vin_logging: {skip_vin_logging})")
@@ -2922,6 +4116,9 @@ def save_csv_data():
     """Save edited CSV data back to file"""
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Invalid JSON data'}), 400
+            
         filename = data.get('filename')
         csv_data = data.get('data')
         
@@ -2932,17 +4129,24 @@ def save_csv_data():
         if not filename.endswith('.csv'):
             return jsonify({'error': 'Invalid file type'}), 400
         
-        # Find the file in orders directory
-        orders_dir = Path(__file__).parent.parent / "scripts" / "orders"
-        
-        csv_file = None
+        # Find the file in orders directory - use same logic as Phase 2 to find most recent
+        orders_dir = Path(__file__).parent.parent / "orders"
+
+        # Find ALL files with the same name and select the most recent one
+        found_files = []
         for root, dirs, files in os.walk(orders_dir):
             if filename in files:
-                csv_file = Path(root) / filename
-                break
-        
-        if not csv_file:
+                csv_file_candidate = Path(root) / filename
+                found_files.append(csv_file_candidate)
+                logger.info(f"[CSV SAVE] Found file candidate: {csv_file_candidate}")
+
+        if not found_files:
             return jsonify({'error': 'CSV file not found'}), 404
+
+        # Select the most recent file by modification time (same as Phase 2 logic)
+        csv_file = max(found_files, key=lambda f: f.stat().st_mtime)
+        logger.info(f"[CSV SAVE] Total files found: {len(found_files)}")
+        logger.info(f"[CSV SAVE] Selected most recent file for editing: {csv_file}")
         
         # Create backup
         backup_file = csv_file.with_suffix('.csv.backup')
@@ -2951,17 +4155,22 @@ def save_csv_data():
             shutil.copy2(csv_file, backup_file)
         
         # Write updated data
-        import csv
         with open(csv_file, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-            
-            # Write headers
-            if csv_data.get('headers'):
-                writer.writerow(csv_data['headers'])
-            
-            # Write data rows
-            for row in csv_data.get('rows', []):
-                writer.writerow(row)
+            # If csv_data is a string (raw CSV content), write it directly
+            if isinstance(csv_data, str):
+                f.write(csv_data)
+            else:
+                # If csv_data is structured (legacy format), handle it
+                import csv
+                writer = csv.writer(f)
+                
+                # Write headers
+                if csv_data.get('headers'):
+                    writer.writerow(csv_data['headers'])
+                
+                # Write data rows
+                for row in csv_data.get('rows', []):
+                    writer.writerow(row)
         
         logger.info(f"CSV data saved successfully: {filename}")
         return jsonify({'success': True, 'message': 'Data saved successfully'})
@@ -3032,6 +4241,9 @@ def regenerate_qr_codes_with_urls():
 @app.route('/api/qr/generate-from-csv', methods=['POST'])
 def generate_qr_codes_from_csv():
     """Generate QR codes from CSV file for the Order Processing Wizard"""
+    import traceback
+    logger.info(f"[QR TRACE 3] generate_qr_codes_from_csv() CALLED")
+    logger.info(f"[QR TRACE 3] Call stack: {' -> '.join([frame.filename.split('/')[-1] + ':' + str(frame.lineno) for frame in traceback.extract_stack()[-5:]])}")
     try:
         data = request.get_json()
         csv_filename = data.get('csv_filename')
@@ -3086,15 +4298,61 @@ def generate_qr_codes_from_csv():
             with open(csv_file_path, 'r', newline='', encoding='utf-8') as csvfile:
                 reader = csv.DictReader(csvfile)
                 for row in reader:
-                    if row.get('Vin'):  # Only require VIN, not URL
+                    # Try multiple VIN column formats
+                    vin = row.get('VIN') or row.get('Vin') or ''
+                    if vin:  # Only require VIN, not URL
                         total_vehicles += 1
+
+                        # For NEW method: Since CSV doesn't have vehicle URLs, we need to look them up from database
+                        # Get original vehicle data from database using VIN to get the vehicle_url
+                        from database_connection import db_manager
+
+                        # Map dealership names to match database entries
+                        def map_dealership_name(name):
+                            name_mapping = {
+                                'South County DCJR': 'South County Dodge Chrysler Jeep RAM',
+                                'Glendale Subaru': 'Glendale Chrysler Jeep Dodge Ram',
+                                'Glendale CDJR': 'Glendale Chrysler Jeep Dodge Ram',
+                                'CDJR of Columbia': 'CDJR of Columbia'
+                            }
+                            return name_mapping.get(name, name)
+
+                        db_dealership_name = map_dealership_name(dealership_name)
+
+                        # Look up vehicle URL from database using VIN
+                        vehicle_url = ''
+                        try:
+                            original_vehicle_data = db_manager.execute_query("""
+                                SELECT nvd.vehicle_url FROM normalized_vehicle_data nvd
+                                JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
+                                JOIN scraper_imports si ON rvd.import_id = si.import_id
+                                WHERE nvd.vin = %s AND nvd.location = %s AND si.status = 'active'
+                                ORDER BY rvd.import_timestamp DESC
+                                LIMIT 1
+                            """, (vin, db_dealership_name))
+
+                            if original_vehicle_data and original_vehicle_data[0]['vehicle_url']:
+                                vehicle_url = original_vehicle_data[0]['vehicle_url']
+                                # Add Silver Fox UTM parameters
+                                if '?' in vehicle_url:
+                                    vehicle_url += "&utm_source=SilverFox&utm_medium=VDP_ShortCut"
+                                else:
+                                    vehicle_url += "?utm_source=SilverFox&utm_medium=VDP_ShortCut"
+                                logger.info(f"[QR GENERATION FIX] Found URL for VIN {vin}: {vehicle_url[:50]}...")
+                            else:
+                                logger.warning(f"[QR GENERATION FIX] No URL found for VIN {vin}, will use VIN as fallback")
+                                vehicle_url = vin  # Fallback to VIN if no URL found
+                        except Exception as e:
+                            logger.error(f"[QR GENERATION FIX] Error looking up URL for VIN {vin}: {e}")
+                            vehicle_url = vin  # Fallback to VIN on error
+
                         vehicle_data = {
-                            'vin': row.get('Vin', ''),
-                            'vehicle_url': row.get('Vehicle URL', ''),
-                            'year': row.get('Year', ''),
-                            'make': row.get('Make', ''),
-                            'model': row.get('Model', ''),
-                            'stock': row.get('Stock', '')
+                            'vin': vin,
+                            'vehicle_url': vehicle_url,
+                            'year': row.get('Year') or row.get('YEAR') or '',
+                            'make': row.get('Make') or row.get('MAKE') or '',
+                            'model': row.get('Model') or row.get('MODEL') or '',
+                            'stock': row.get('Stock') or row.get('STOCK') or ''
                         }
                         
                         if vehicle_data['vehicle_url']:
@@ -3105,13 +4363,16 @@ def generate_qr_codes_from_csv():
             logger.error(f"[QR GENERATION] Error reading CSV file: {e}")
             return jsonify({'error': f'Error reading CSV file: {str(e)}'}), 500
         
-        # Check if QR codes already exist (look for QR_Code_Path column)
+        # Check if QR codes already exist (look for QR_Code_Path or @QR columns)
         qr_already_exists = False
         try:
             with open(csv_file_path, 'r', newline='', encoding='utf-8') as csvfile:
                 reader = csv.DictReader(csvfile)
                 fieldnames = reader.fieldnames or []
-                qr_already_exists = 'QR_Code_Path' in fieldnames
+                # Check for multiple QR column formats
+                qr_already_exists = ('QR_Code_Path' in fieldnames or
+                                   '@QR' in fieldnames or
+                                   '@QR2' in fieldnames)
         except:
             pass
         
@@ -3275,6 +4536,618 @@ def generate_qr_codes_from_csv():
         logger.error(f"[QR GENERATION] Error generating QR codes: {e}")
         return jsonify({'error': f'QR code generation failed: {str(e)}'}), 500
 
+def _convert_qr_path_for_nicks_computer(local_qr_path: str, dealership_name: str, qr_index: int) -> str:
+    """Convert local QR path to Nick's computer path for Illustrator compatibility"""
+    if not local_qr_path:
+        return ''
+
+    # Clean dealership name for filename
+    clean_dealership = dealership_name.replace(' ', '_').replace("'", "").replace('.', '')
+
+    # Generate Nick's computer path with naming system: Dealership_Name_QR_Code_1.png
+    nicks_qr_filename = f"{clean_dealership}_QR_Code_{qr_index + 1}.png"
+    nicks_qr_path = f"C:\\Users\\Nick_Workstation\\Documents\\QRS\\{nicks_qr_filename}"
+
+    return nicks_qr_path
+
+@app.route('/api/csv/enhanced-download', methods=['POST'])
+def enhanced_csv_download():
+    """Enhanced download CSV with QR generation, billing sheet, and order number processing"""
+    try:
+        logger.info("[ENHANCED DOWNLOAD] Starting enhanced CSV download process")
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Invalid JSON data'}), 400
+
+        dealership_name = data.get('dealership_name')
+        order_number = data.get('order_number')
+        csv_data = data.get('csv_data')
+        custom_templates = data.get('custom_templates')
+        original_vin_list = data.get('original_vin_list')  # For LIST orders - what user originally entered
+
+        if not dealership_name or not csv_data:
+            return jsonify({'error': 'Missing dealership_name or csv_data'}), 400
+
+        logger.info(f"[ENHANCED DOWNLOAD] Processing {dealership_name} with order number: {order_number}")
+        logger.info(f"[ENHANCED DOWNLOAD] Custom templates: {custom_templates}")
+        if original_vin_list:
+            logger.info(f"[ENHANCED DOWNLOAD] LIST order detected - original VIN count: {len(original_vin_list)}")
+
+        # Step 1: Create a new output folder with order number and timestamp
+        from datetime import datetime
+        timestamp = datetime.now()
+        folder_suffix = order_number if order_number else timestamp.strftime("%Y%m%d_%H%M%S")
+        dealership_folder_name = dealership_name.replace(' ', '_').replace("'", "")
+
+        # Create output directory
+        orders_dir = Path(__file__).parent.parent / "orders"
+        output_folder = orders_dir / f"{dealership_folder_name}_{folder_suffix}_{timestamp.strftime('%Y%m%d_%H%M%S')}"
+        output_folder.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"[ENHANCED DOWNLOAD] Created output folder: {output_folder}")
+
+        # Initialize status variables
+        billing_csv_generated = False
+        vin_log_updated = False
+
+        # Step 2: Get correct template type and save CSV with proper filename
+        # Get template type from dealership configuration
+        template_type = None
+        if custom_templates:
+            logger.info(f"[ENHANCED DOWNLOAD] Custom templates provided: {custom_templates}")
+            # For enhanced download, use 'used' template since CAO mostly processes used vehicles
+            template_type = custom_templates.get('used', '') or custom_templates.get('new', '')
+            if template_type:
+                logger.info(f"[ENHANCED DOWNLOAD] Using custom template: {template_type}")
+            else:
+                logger.info(f"[ENHANCED DOWNLOAD] No custom template found, falling back to config")
+                template_type = order_processor._get_dealership_template_config(dealership_name)
+        else:
+            template_type = order_processor._get_dealership_template_config(dealership_name)
+
+        logger.info(f"[ENHANCED DOWNLOAD] Template type for {dealership_name}: {template_type}")
+
+        # CHECK FOR DUAL TEMPLATE OUTPUT (different templates for NEW vs USED)
+        dual_template_mode = False
+        new_template = None
+        used_template = None
+
+        if custom_templates and isinstance(custom_templates, dict):
+            new_template = custom_templates.get('new')
+            used_template = custom_templates.get('used')
+
+            # Only enable dual template mode if BOTH exist AND they're DIFFERENT
+            if new_template and used_template and new_template != used_template:
+                dual_template_mode = True
+                logger.info(f"[ENHANCED DOWNLOAD] Dual template mode enabled: NEW={new_template}, USED={used_template}")
+
+        csv_files_generated = []  # Track all generated CSV files
+
+        # Determine filename abbreviation based on template type (matching backend logic)
+        if template_type == "shortcut_pack":
+            abbr = "SCP"
+        elif template_type == "shortcut":
+            abbr = "SC"
+        else:
+            abbr = template_type.upper()[:3]
+
+        # Generate filename with correct abbreviation
+        clean_name_upper = dealership_name.upper().replace(' ', '_').replace("'", '')
+        csv_filename = f"{clean_name_upper}_{abbr}_{timestamp.strftime('%m.%d')} - CSV.csv"
+        csv_file_path = output_folder / csv_filename
+
+        logger.info(f"[ENHANCED DOWNLOAD] Template type '{template_type}' -> abbreviation '{abbr}' -> filename: {csv_filename}")
+
+        # Step 2b: Convert CSV format based on template type
+        import csv
+        import io
+
+        # DUAL TEMPLATE MODE: Generate separate CSVs for NEW and USED
+        if dual_template_mode:
+            logger.info(f"[ENHANCED DOWNLOAD DUAL] Splitting vehicles by condition for {dealership_name}")
+
+            # Parse CSV data to split by condition
+            csv_reader = csv.DictReader(io.StringIO(csv_data))
+            all_vehicles = list(csv_reader)
+
+            new_vehicles = []
+            used_vehicles = []
+
+            for vehicle in all_vehicles:
+                # Determine condition from QRSTOCK field (format: "NEW - VIN" or "USED - VIN")
+                condition = 'used'  # Default to used
+
+                qrstock = vehicle.get('QRSTOCK', '')
+                if qrstock:
+                    # Parse the type prefix from QRSTOCK (before " - ")
+                    if ' - ' in qrstock:
+                        type_prefix = qrstock.split(' - ')[0].strip().upper()
+                        if type_prefix == 'NEW':
+                            condition = 'new'
+
+                if condition == 'new':
+                    new_vehicles.append(vehicle)
+                else:
+                    used_vehicles.append(vehicle)
+
+            logger.info(f"[ENHANCED DOWNLOAD DUAL] Split: {len(new_vehicles)} NEW, {len(used_vehicles)} USED")
+
+            # Generate NEW CSV if there are new vehicles
+            if new_vehicles:
+                # Determine abbreviation for NEW template
+                if new_template == "shortcut_pack":
+                    new_abbr = "SCP"
+                elif new_template == "shortcut":
+                    new_abbr = "SC"
+                else:
+                    new_abbr = new_template.upper()[:3]
+
+                new_csv_filename = f"{clean_name_upper}_{new_abbr}_NEW_{timestamp.strftime('%m.%d')}.csv"
+                new_csv_path = output_folder / new_csv_filename
+
+                # Convert to proper template format for NEW vehicles
+                if new_template.startswith('custom_'):
+                    # Custom template - normalize and use template CSV generator
+                    normalized_vehicles = []
+                    for vehicle in new_vehicles:
+                        normalized = {k.lower(): v for k, v in vehicle.items()}
+                        normalized_vehicles.append(normalized)
+
+                    # Generate QR paths
+                    qr_paths = [f"C:\\QR_CODES\\{dealership_name.replace(' ', '_')}_QR_Code_{i+1}.png" for i in range(len(normalized_vehicles))]
+
+                    with open(new_csv_path, 'w', newline='', encoding='utf-8') as f:
+                        order_processor._generate_custom_template_csv(normalized_vehicles, new_template, f, qr_paths, dealership_name)
+
+                elif new_template == "shortcut":
+                    # Shortcut format: STOCK,MODEL,@QR
+                    with open(new_csv_path, 'w', newline='', encoding='utf-8') as f:
+                        writer = csv.writer(f)
+                        writer.writerow(['STOCK', 'MODEL', '@QR'])
+                        for idx, vehicle in enumerate(new_vehicles):
+                            stock = vehicle.get('STOCK', '')
+                            model = vehicle.get('YEARMODEL', vehicle.get('MODEL', ''))
+                            qr_path = f"C:\\QR_CODES\\{dealership_name.replace(' ', '_')}_QR_Code_{idx+1}.png"
+                            writer.writerow([stock, model, qr_path])
+
+                else:
+                    # Shortcut Pack or other format - keep same structure with QR path conversion
+                    with open(new_csv_path, 'w', newline='', encoding='utf-8') as f:
+                        writer = csv.DictWriter(f, fieldnames=new_vehicles[0].keys())
+                        writer.writeheader()
+                        for idx, vehicle in enumerate(new_vehicles):
+                            vehicle_copy = dict(vehicle)
+                            # Convert QR paths
+                            if '@QR' in vehicle_copy:
+                                vehicle_copy['@QR'] = f"C:\\QR_CODES\\{dealership_name.replace(' ', '_')}_QR_Code_{idx+1}.png"
+                            if '@QR2' in vehicle_copy:
+                                vehicle_copy['@QR2'] = f"C:\\QR_CODES\\{dealership_name.replace(' ', '_')}_QR_Code_{idx+1}.png"
+                            writer.writerow(vehicle_copy)
+
+                csv_files_generated.append(str(new_csv_path))
+                logger.info(f"[ENHANCED DOWNLOAD DUAL] Generated NEW CSV with {new_template} format: {new_csv_filename}")
+
+            # Generate USED CSV if there are used vehicles
+            if used_vehicles:
+                # Determine abbreviation for USED template
+                if used_template == "shortcut_pack":
+                    used_abbr = "SCP"
+                elif used_template == "shortcut":
+                    used_abbr = "SC"
+                else:
+                    used_abbr = used_template.upper()[:3]
+
+                used_csv_filename = f"{clean_name_upper}_{used_abbr}_USED_{timestamp.strftime('%m.%d')}.csv"
+                used_csv_path = output_folder / used_csv_filename
+
+                # Convert to proper template format for USED vehicles
+                if used_template.startswith('custom_'):
+                    # Custom template - normalize and use template CSV generator
+                    normalized_vehicles = []
+                    for vehicle in used_vehicles:
+                        normalized = {k.lower(): v for k, v in vehicle.items()}
+                        normalized_vehicles.append(normalized)
+
+                    # Generate QR paths (continue numbering from NEW vehicles)
+                    offset = len(new_vehicles) if new_vehicles else 0
+                    qr_paths = [f"C:\\QR_CODES\\{dealership_name.replace(' ', '_')}_QR_Code_{i+offset+1}.png" for i in range(len(normalized_vehicles))]
+
+                    with open(used_csv_path, 'w', newline='', encoding='utf-8') as f:
+                        order_processor._generate_custom_template_csv(normalized_vehicles, used_template, f, qr_paths, dealership_name)
+
+                elif used_template == "shortcut":
+                    # Shortcut format: STOCK,MODEL,@QR
+                    offset = len(new_vehicles) if new_vehicles else 0
+                    with open(used_csv_path, 'w', newline='', encoding='utf-8') as f:
+                        writer = csv.writer(f)
+                        writer.writerow(['STOCK', 'MODEL', '@QR'])
+                        for idx, vehicle in enumerate(used_vehicles):
+                            stock = vehicle.get('STOCK', '')
+                            model = vehicle.get('YEARMODEL', vehicle.get('MODEL', ''))
+                            qr_path = f"C:\\QR_CODES\\{dealership_name.replace(' ', '_')}_QR_Code_{idx+offset+1}.png"
+                            writer.writerow([stock, model, qr_path])
+
+                else:
+                    # Shortcut Pack or other format - keep same structure with QR path conversion
+                    offset = len(new_vehicles) if new_vehicles else 0
+                    with open(used_csv_path, 'w', newline='', encoding='utf-8') as f:
+                        writer = csv.DictWriter(f, fieldnames=used_vehicles[0].keys())
+                        writer.writeheader()
+                        for idx, vehicle in enumerate(used_vehicles):
+                            vehicle_copy = dict(vehicle)
+                            # Convert QR paths
+                            if '@QR' in vehicle_copy:
+                                vehicle_copy['@QR'] = f"C:\\QR_CODES\\{dealership_name.replace(' ', '_')}_QR_Code_{idx+offset+1}.png"
+                            if '@QR2' in vehicle_copy:
+                                vehicle_copy['@QR2'] = f"C:\\QR_CODES\\{dealership_name.replace(' ', '_')}_QR_Code_{idx+offset+1}.png"
+                            writer.writerow(vehicle_copy)
+
+                csv_files_generated.append(str(used_csv_path))
+                logger.info(f"[ENHANCED DOWNLOAD DUAL] Generated USED CSV with {used_template} format: {used_csv_filename}")
+
+            # Set csv_file_path to first generated file for backward compatibility
+            csv_file_path = output_folder / csv_files_generated[0].split('/')[-1] if csv_files_generated else csv_file_path
+            csv_filename = csv_file_path.name
+
+            logger.info(f"[ENHANCED DOWNLOAD DUAL] Generated {len(csv_files_generated)} CSV files")
+
+        elif template_type == "shortcut":
+            # Convert to shortcut format: STOCK,MODEL,@QR (3-column format)
+            logger.info(f"[ENHANCED DOWNLOAD] Converting to shortcut format for {dealership_name}")
+
+            csv_reader = csv.DictReader(io.StringIO(csv_data))
+            shortcut_rows = []
+
+            for idx, row in enumerate(csv_reader):
+                # Extract data for shortcut format
+                stock = row.get('STOCK', '')
+                # For MODEL, use YEARMODEL if available, otherwise combine year/make/model
+                model = row.get('YEARMODEL', row.get('MODEL', ''))
+                qr_path = row.get('@QR', '')
+
+                # Convert QR path for Nick's computer compatibility
+                nicks_qr_path = _convert_qr_path_for_nicks_computer(qr_path, dealership_name, idx)
+
+                shortcut_rows.append([stock, model, nicks_qr_path])
+
+            # Write shortcut format CSV
+            with open(csv_file_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(['STOCK', 'MODEL', '@QR'])  # Header
+                writer.writerows(shortcut_rows)
+
+            logger.info(f"[ENHANCED DOWNLOAD] Generated shortcut format CSV with {len(shortcut_rows)} vehicles")
+
+        elif template_type and template_type.startswith('custom_'):
+            # Handle custom templates: use the same logic as the auto-process workflow
+            logger.info(f"[ENHANCED DOWNLOAD] Processing custom template: {template_type}")
+
+            # Parse the original CSV data to get vehicle data
+            csv_reader = csv.DictReader(io.StringIO(csv_data))
+            raw_vehicles = list(csv_reader)
+
+            # Normalize field names to lowercase for template mapping
+            vehicles = []
+            for vehicle in raw_vehicles:
+                normalized_vehicle = {}
+                for key, value in vehicle.items():
+                    # Convert CSV field names to lowercase for template mapping
+                    # STOCK -> stock, MODEL -> model, etc.
+                    normalized_key = key.lower()
+                    normalized_vehicle[normalized_key] = value
+                vehicles.append(normalized_vehicle)
+
+            # Generate QR paths for custom template CSV
+            qr_paths = []
+            for idx in range(len(vehicles)):
+                qr_path = _convert_qr_path_for_nicks_computer(f"qr_code_{idx+1}", dealership_name, idx)
+                qr_paths.append(qr_path)
+
+            # Generate custom template CSV using the same method as auto-process
+            with open(csv_file_path, 'w', newline='', encoding='utf-8') as f:
+                order_processor._generate_custom_template_csv(vehicles, template_type, f, qr_paths, dealership_name)
+
+            logger.info(f"[ENHANCED DOWNLOAD] Generated custom template CSV with {len(vehicles)} vehicles using {template_type}")
+
+        else:
+            # Other template types: parse and convert QR paths for Nick's computer
+            logger.info(f"[ENHANCED DOWNLOAD] Converting QR paths for {template_type} format for {dealership_name}")
+
+            csv_reader = csv.DictReader(io.StringIO(csv_data))
+            converted_rows = []
+
+            for idx, row in enumerate(csv_reader):
+                # Convert QR paths to Nick's computer format
+                row_copy = dict(row)
+
+                # Convert @QR field if it exists
+                if '@QR' in row_copy:
+                    row_copy['@QR'] = _convert_qr_path_for_nicks_computer(row_copy['@QR'], dealership_name, idx)
+
+                # Convert @QR2 field if it exists (used in some templates)
+                if '@QR2' in row_copy:
+                    row_copy['@QR2'] = _convert_qr_path_for_nicks_computer(row_copy['@QR2'], dealership_name, idx)
+
+                converted_rows.append(row_copy)
+
+            # Write converted CSV with proper headers
+            if converted_rows:
+                fieldnames = converted_rows[0].keys()
+                with open(csv_file_path, 'w', newline='', encoding='utf-8') as f:
+                    writer = csv.DictWriter(f, fieldnames=fieldnames)
+                    writer.writeheader()
+                    writer.writerows(converted_rows)
+
+                logger.info(f"[ENHANCED DOWNLOAD] Generated {template_type} format CSV with converted QR paths for {len(converted_rows)} vehicles")
+            else:
+                # Fallback: write original data if no rows found
+                with open(csv_file_path, 'w', newline='', encoding='utf-8') as f:
+                    f.write(csv_data)
+                logger.info(f"[ENHANCED DOWNLOAD] Generated {template_type} format CSV with original data (no conversion)")
+
+            logger.info(f"[ENHANCED DOWNLOAD] Generated {template_type} format CSV with converted QR paths")
+
+        logger.info(f"[ENHANCED DOWNLOAD] Saved edited CSV: {csv_file_path}")
+
+        # Step 3: Generate QR codes from the edited CSV
+        qr_folder = output_folder / "qr_codes"
+        qr_folder.mkdir(exist_ok=True)
+
+        # Parse CSV to extract vehicle data for QR generation
+        import csv
+        import io
+        qr_codes_generated = 0
+
+        csv_reader = csv.DictReader(io.StringIO(csv_data))
+        vehicles_for_qr = []
+
+        for i, row in enumerate(csv_reader, 1):
+            # Extract key vehicle data for QR generation
+            vehicle_data = {
+                'yearmake': row.get('YEARMAKE', ''),
+                'model': row.get('MODEL', ''),
+                'trim': row.get('TRIM', ''),
+                'stock': row.get('STOCK', ''),
+                'vin': row.get('VIN', ''),
+                'misc': row.get('MISC', ''),
+                'index': i
+            }
+            vehicles_for_qr.append(vehicle_data)
+
+        # Generate QR codes
+        import qrcode
+        from PIL import Image
+
+        logger.info(f"[ENHANCED DOWNLOAD QR FIX] Starting QR generation for {len(vehicles_for_qr)} vehicles")
+        logger.info(f"[ENHANCED DOWNLOAD QR FIX] Dealership: {dealership_name}")
+
+        qr_files = []
+        for vehicle in vehicles_for_qr:
+            try:
+                # CRITICAL FIX: Look up vehicle URL from database instead of using VIN text
+                raw_vin = vehicle['vin']
+                # Strip prefixes like "NEW - ", "USED - ", "CERTIFIED - ", "CPO - " from VIN for database lookup
+                vin = raw_vin
+                if ' - ' in vin:
+                    vin = vin.split(' - ')[-1]
+
+                # Additional fallback: strip common vehicle type prefixes if still present
+                vehicle_type_prefixes = ['NEW', 'USED', 'CPO', 'CERTIFIED PRE OWNED', 'CERTIFIED', 'PRE-OWNED', 'PRE OWNED', 'PO']
+                for prefix in vehicle_type_prefixes:
+                    if vin.upper().startswith(prefix + ' '):
+                        vin = vin[len(prefix):].strip()
+                        break
+                    if vin.upper().startswith(prefix + '-'):
+                        vin = vin[len(prefix)+1:].strip()
+                        break
+
+                logger.info(f"[ENHANCED DOWNLOAD QR FIX] Processing VIN: {raw_vin} -> cleaned: {vin}")
+
+                # Map dealership name to database name (same logic as OLD workflow)
+                dealership_name_mapping = {
+                    'Dave Sinclair Lincoln South': 'Dave Sinclair Lincoln',
+                    'Dave Sinclair Lincoln St. Peters': 'Dave Sinclair Lincoln St. Peters',
+                    'South County DCJR': 'South County Dodge Chrysler Jeep RAM',
+                    'CDJR of Columbia': 'Joe Machens Chrysler Dodge Jeep Ram',
+                    'Glendale CDJR': 'Glendale Chrysler Jeep Dodge Ram',
+                    'BMW of Columbia': 'BMW of Columbia',
+                    'KIA of Columbia': 'Kia of Columbia',
+                    'Rusty Drewing Chevy BGMC': 'Rusty Drewing Chevrolet Buick GMC'
+                }
+                db_dealership_name = dealership_name_mapping.get(dealership_name, dealership_name)
+
+                # Look up vehicle URL from database using VIN - FIXED to use raw_vehicle_data which has vehicle_url
+                vehicle_url_data = db_manager.execute_query("""
+                    SELECT rvd.vehicle_url
+                    FROM raw_vehicle_data rvd
+                    JOIN scraper_imports si ON rvd.import_id = si.import_id
+                    WHERE rvd.vin = %s AND rvd.location = %s AND si.status = 'active'
+                    ORDER BY rvd.import_timestamp DESC
+                    LIMIT 1
+                """, (vin, db_dealership_name))
+
+                if vehicle_url_data and vehicle_url_data[0]['vehicle_url']:
+                    vehicle_url = vehicle_url_data[0]['vehicle_url']
+                    # Add UTM parameters for tracking
+                    if '?' in vehicle_url:
+                        qr_data = f"{vehicle_url}&utm_source=SilverFox&utm_medium=VDP_ShortCut"
+                    else:
+                        qr_data = f"{vehicle_url}?utm_source=SilverFox&utm_medium=VDP_ShortCut"
+                    logger.info(f"[ENHANCED DOWNLOAD QR FIX] Found URL for {vin}: {vehicle_url}")
+                else:
+                    # Fallback to MISC field or VIN text if no URL found
+                    qr_data = vehicle['misc'] if vehicle['misc'] else f"{vehicle['yearmake']} {vehicle['model']} - {vehicle['vin']}"
+                    logger.warning(f"[ENHANCED DOWNLOAD QR FIX] No URL found for {vin}, using fallback: {qr_data}")
+
+                # Generate QR code with exact API specifications to match backend
+                qr = qrcode.QRCode(
+                    version=1,  # Automatically determines version based on data
+                    error_correction=qrcode.constants.ERROR_CORRECT_L,  # Same as backend
+                    box_size=10,  # Same as backend
+                    border=0,  # No border to match backend output
+                )
+                qr.add_data(qr_data)
+                qr.make(fit=True)
+
+                # Create QR image with exact color specification: #323232 (50, 50, 50 in RGB)
+                qr_img = qr.make_image(fill_color=(50, 50, 50), back_color="white")
+
+                # Resize to exact 388x388 pixels to match backend output
+                qr_img = qr_img.resize((388, 388), Image.Resampling.LANCZOS)
+
+                # Save QR code
+                qr_filename = f"{dealership_folder_name}_QR_Code_{vehicle['index']}.png"
+                qr_path = qr_folder / qr_filename
+                qr_img.save(qr_path)
+
+                qr_files.append(str(qr_path))
+                qr_codes_generated += 1
+
+                logger.info(f"[ENHANCED DOWNLOAD] Generated QR code {vehicle['index']}: {qr_filename}")
+
+            except Exception as qr_error:
+                logger.error(f"[ENHANCED DOWNLOAD] Error generating QR code for vehicle {vehicle['index']}: {qr_error}")
+
+        # Step 4: Generate billing CSV
+        billing_csv_filename = f"{dealership_name.replace(' ', '').upper()}_SCP_{timestamp.strftime('%m.%d')} - BILLING2.csv"
+        billing_csv_path = output_folder / billing_csv_filename
+
+        try:
+            # Import the order processor for billing CSV generation
+            scripts_path = Path(__file__).parent.parent / "scripts"
+            import sys
+            if str(scripts_path) not in sys.path:
+                sys.path.insert(0, str(scripts_path))
+            from correct_order_processing import CorrectOrderProcessor
+
+            processor = CorrectOrderProcessor()
+
+            # Convert vehicles to format expected by billing CSV generator
+            ordered_vehicles = []
+            vin_list = []  # Extract VINs for billing CSV
+            for vehicle in vehicles_for_qr:
+                vin = vehicle['vin']
+                vin_list.append(vin)
+                ordered_vehicles.append({
+                    'vin': vin,
+                    'year': vehicle['yearmake'].split()[0] if vehicle['yearmake'] else '',
+                    'make': ' '.join(vehicle['yearmake'].split()[1:]) if vehicle['yearmake'] else '',
+                    'model': vehicle['model'],
+                    'stock': vehicle['stock']
+                })
+
+            # For LIST orders: Use original VIN list from frontend (what user entered)
+            # If not provided, use vin_list for both (backward compatibility)
+            if original_vin_list:
+                # LIST order with invalid VIN tracking
+                list_original_vins = original_vin_list
+                list_filtered_vins = vin_list  # VINs that are being produced
+                logger.info(f"[ENHANCED DOWNLOAD] LIST order billing - Ordered: {len(list_original_vins)}, Produced: {len(list_filtered_vins)}")
+            elif vin_list:
+                # LIST order without original VIN list tracking (assume all valid)
+                # Still pass vin_list for duplicate checking
+                list_original_vins = vin_list
+                list_filtered_vins = vin_list
+                logger.info(f"[ENHANCED DOWNLOAD] LIST order billing (no tracking) - VINs: {len(vin_list)}")
+            else:
+                # CAO order
+                list_original_vins = None
+                list_filtered_vins = None
+
+            # Generate billing CSV using the correct method with VIN lists
+            timestamp_str = timestamp.strftime('%Y%m%d_%H%M%S')
+            billing_csv_path = processor._generate_billing_sheet_csv(
+                vehicles=ordered_vehicles,
+                dealership_name=dealership_name,
+                output_folder=output_folder,
+                timestamp=timestamp_str,
+                original_vin_list=list_original_vins,
+                filtered_vin_list=list_filtered_vins
+            )
+
+            if billing_csv_path and billing_csv_path.exists():
+                logger.info(f"[ENHANCED DOWNLOAD] Generated billing CSV: {billing_csv_path}")
+                billing_csv_generated = True
+            else:
+                logger.warning(f"[ENHANCED DOWNLOAD] Billing CSV generation failed or file not created")
+                billing_csv_generated = False
+                billing_csv_path = None
+
+        except Exception as billing_error:
+            logger.error(f"[ENHANCED DOWNLOAD] Error generating billing CSV: {billing_error}")
+            billing_csv_generated = False
+            billing_csv_path = None
+
+        # Step 5: Update VIN log with order number (if provided)
+        if order_number:
+            try:
+                logger.info(f"[ENHANCED DOWNLOAD] Updating VIN log for {dealership_name} with order number: {order_number}")
+
+                # Apply order number to VIN log using existing VIN log update logic
+                from scripts.database_connection import get_database_connection
+
+                # Create VIN log table name
+                vin_log_table = dealership_name.lower().replace(' ', '_').replace("'", '') + '_vin_log'
+
+                # Extract VINs from vehicles for VIN log update
+                vehicle_vins = [vehicle['vin'] for vehicle in vehicles_for_qr if vehicle['vin']]
+
+                if vehicle_vins:
+                    # Update VIN log entries with order number
+                    with get_database_connection() as conn:
+                        with conn.cursor() as cursor:
+                            # Update the most recent entries for these VINs with the order number
+                            for vin in vehicle_vins:
+                                cursor.execute(f"""
+                                    UPDATE {vin_log_table}
+                                    SET order_number = %s, updated_at = CURRENT_TIMESTAMP
+                                    WHERE vin = %s AND order_number IS NULL
+                                    ORDER BY processed_date DESC, id DESC
+                                    LIMIT 1
+                                """, (order_number, vin))
+
+                        conn.commit()
+                        vin_log_updated = True
+                        logger.info(f"[ENHANCED DOWNLOAD] Updated VIN log for {len(vehicle_vins)} vehicles with order number: {order_number}")
+
+            except Exception as vin_log_error:
+                logger.error(f"[ENHANCED DOWNLOAD] Error updating VIN log: {vin_log_error}")
+                vin_log_updated = False
+
+        # Step 6: Return comprehensive response
+        response_data = {
+            'success': True,
+            'message': 'Enhanced CSV download completed successfully',
+            'dealership_name': dealership_name,
+            'order_number': order_number,
+            'output_folder': str(output_folder),
+            'csv_file': str(csv_file_path),
+            'csv_filename': csv_filename,
+            'billing_csv_file': str(billing_csv_path) if billing_csv_path else None,
+            'billing_csv_filename': billing_csv_filename if billing_csv_path else None,
+            'qr_folder': str(qr_folder),
+            'qr_codes_generated': qr_codes_generated,
+            'total_vehicles': len(vehicles_for_qr),
+            'qr_files': qr_files,
+            'timestamp': timestamp.isoformat(),
+            'billing_csv_generated': billing_csv_generated,
+            'vin_log_updated': vin_log_updated,
+            'vehicles_processed': len(vehicles_for_qr),
+            'csv_download_url': f"/download_csv/{csv_filename}",
+            'billing_download_url': f"/download_csv/{billing_csv_filename}" if billing_csv_path else None
+        }
+
+        logger.info(f"[ENHANCED DOWNLOAD] Successfully completed enhanced download for {dealership_name}")
+        logger.info(f"[ENHANCED DOWNLOAD] Generated {qr_codes_generated} QR codes")
+        logger.info(f"[ENHANCED DOWNLOAD] Output folder: {output_folder}")
+
+        return jsonify(response_data)
+
+    except Exception as e:
+        logger.error(f"[ENHANCED DOWNLOAD] Error in enhanced CSV download: {e}")
+        return jsonify({'error': f'Enhanced download failed: {str(e)}'}), 500
+
 # =============================================================================
 # REAL-TIME SCRAPER MANAGEMENT ENDPOINTS
 # =============================================================================
@@ -3290,73 +5163,73 @@ def scraper_output_callback(output_msg):
 
 @app.route('/api/scrapers/start', methods=['POST'])
 def start_scraper():
-    """Start scraping for a specific dealership"""
+    """Start scraping for selected dealerships"""
     try:
         data = request.get_json()
         # Support both singular and plural formats for compatibility
         dealership_names = data.get('dealership_names', [])
         dealership_name = data.get('dealership_name')
-        
-        # If plural format is used, take the first dealership
-        if dealership_names and len(dealership_names) > 0:
-            dealership_name = dealership_names[0]
-        
-        if not dealership_name:
-            return jsonify({'success': False, 'error': 'Dealership name required'}), 400
-            
+
+        # Handle single dealership format
+        if dealership_name and not dealership_names:
+            dealership_names = [dealership_name]
+
+        if not dealership_names or len(dealership_names) == 0:
+            return jsonify({'success': False, 'error': 'No dealerships selected'}), 400
+
         if DEMO_MODE or scraper18_controller is None:
             # Simulate demo scraper output for testing
             def simulate_demo_scraper():
                 import time
+                for dealership in dealership_names:
+                    socketio.emit('scraper_output', {
+                        'message': f'[DEMO] Starting scraper for {dealership}',
+                        'status': 'starting',
+                        'dealership': dealership
+                    })
+                    time.sleep(1)
+
                 socketio.emit('scraper_output', {
-                    'message': f'🔄 DEMO: Starting scraper for {dealership_name}',
-                    'status': 'starting',
-                    'dealership': dealership_name
-                })
-                
-                time.sleep(2)
-                socketio.emit('scraper_output', {
-                    'message': f'📊 DEMO: Processing pages for {dealership_name}',
-                    'status': 'processing',
-                    'progress': 25,
-                    'vehicles_processed': 15,
-                    'dealership': dealership_name
-                })
-                
-                time.sleep(3)
-                socketio.emit('scraper_output', {
-                    'message': f'🏁 DEMO: Completed scraper for {dealership_name}',
+                    'message': f'[DEMO] Completed {len(dealership_names)} scrapers',
                     'status': 'completed',
-                    'progress': 100,
-                    'vehicles_processed': 45,
-                    'dealership': dealership_name
+                    'progress': 100
                 })
-            
+
             # Run demo in background thread
             demo_thread = threading.Thread(target=simulate_demo_scraper, daemon=True)
             demo_thread.start()
-            
+
             return jsonify({
                 'success': True,
-                'message': f'DEMO: Started scraper for {dealership_name}',
+                'message': f'DEMO: Started scrapers for {len(dealership_names)} dealerships',
                 'demo_mode': True
             })
-        
-        # Start scraper in background thread
-        def run_scraper():
+
+        # Start scrapers in background thread
+        def run_scrapers():
             try:
-                result = scraper18_controller.run_single_scraper(dealership_name, force_run=True)
-                logger.info(f"Scraper result for {dealership_name}: {result}")
+                if len(dealership_names) == 1:
+                    # Single scraper
+                    result = scraper18_controller.run_single_scraper(dealership_names[0], force_run=True)
+                    logger.info(f"Scraper result for {dealership_names[0]}: {result}")
+                else:
+                    # Multiple scrapers - run all selected
+                    result = scraper18_controller.run_all_scrapers(dealership_names)
+                    logger.info(f"Scraper results for {len(dealership_names)} dealerships: {result}")
             except Exception as e:
-                logger.error(f"Error running scraper for {dealership_name}: {e}")
-        
-        thread = threading.Thread(target=run_scraper, daemon=True)
+                logger.error(f"Error running scrapers: {e}")
+                socketio.emit('scraper_output', {
+                    'message': f'[ERROR] Scraper failed: {str(e)}',
+                    'status': 'error'
+                })
+
+        thread = threading.Thread(target=run_scrapers, daemon=True)
         thread.start()
-        
+
         return jsonify({
             'success': True,
-            'message': f'Started scraper for {dealership_name}',
-            'dealership': dealership_name
+            'message': f'Started scrapers for {len(dealership_names)} dealerships',
+            'dealerships': dealership_names
         })
             
     except Exception as e:
@@ -3704,6 +5577,34 @@ def csv_import():
                 except:
                     msrp_val = None
                 
+                # Process Date In Stock - CRITICAL FIX with multiple format support
+                try:
+                    date_in_stock_val = None
+                    if 'Date In Stock' in row and row['Date In Stock']:
+                        from datetime import datetime
+                        date_str = str(row['Date In Stock']).strip()
+                        if date_str and date_str != '':
+                            # Try multiple date formats
+                            date_formats = [
+                                '%m/%d/%Y',  # MM/DD/YYYY (e.g., "10/17/2024") - Primary format in CSV
+                                '%Y/%m/%d',  # YYYY/MM/DD (e.g., "2025/04/22")
+                                '%Y-%m-%d',  # YYYY-MM-DD (e.g., "2025-04-22")
+                                '%m-%d-%Y'   # MM-DD-YYYY (e.g., "04-22-2025")
+                            ]
+                            
+                            for fmt in date_formats:
+                                try:
+                                    date_in_stock_val = datetime.strptime(date_str, fmt).date()
+                                    break  # Successfully parsed, exit loop
+                                except ValueError:
+                                    continue  # Try next format
+                            
+                            if date_in_stock_val is None:
+                                logger.warning(f"Could not parse Date In Stock '{date_str}' with any supported format")
+                except Exception as e:
+                    logger.warning(f"Could not parse Date In Stock '{row.get('Date In Stock', '')}': {e}")
+                    date_in_stock_val = None
+                
                 # Mark test data in location field if skip_vin_log is enabled
                 location_name = dealership_name
                 if skip_vin_log:
@@ -3724,7 +5625,7 @@ def csv_import():
                     row['Body Style'],  # body_style
                     row['Fuel Type'],  # fuel_type
                     msrp_val,  # msrp
-                    None,  # date_in_stock
+                    date_in_stock_val,  # date_in_stock - FIXED: Now uses parsed CSV date
                     row['Street Address'],  # street_address
                     row['Locality'],  # locality
                     row['Postal Code'],  # postal_code
@@ -3773,12 +5674,12 @@ def csv_import():
                         'error': str(e)
                     })
         
-        # Update import statistics
+        # CRITICAL FIX: Finalize import (includes normalization + stats update)
         try:
-            import_manager.update_import_stats(import_id)
-            logger.info(f"Updated import statistics for import_id: {import_id}")
+            import_manager.finalize_import(import_id)
+            logger.info(f"Finalized import {import_id} with stats and normalization")
         except Exception as e:
-            logger.warning(f"Failed to update import statistics: {e}")
+            logger.warning(f"Failed to finalize import: {e}")
         
         # Calculate processing time
         end_time = datetime.now()
@@ -4025,11 +5926,15 @@ def get_dealership_vin_history(dealership_name):
         
         # Calculate stats with null checking
         unique_orders = list(set([h.get('order_number', '') for h in history if h.get('order_number')]))
+        
+        # Get dates, filtering out None values
+        valid_dates = [h['processed_date'] for h in history if h.get('processed_date') is not None]
+        
         stats = {
             'total_vins': len(history),
             'unique_orders': len(unique_orders),
-            'first_date': min([h['processed_date'] for h in history]) if history else None,
-            'last_date': max([h['processed_date'] for h in history]) if history else None,
+            'first_date': min(valid_dates) if valid_dates else None,
+            'last_date': max(valid_dates) if valid_dates else None,
             'cao_count': len([h for h in history if h.get('order_number') and (h.get('order_number', '').startswith('CAO') or h.get('order_number', '').find('_CAO_') > 0)]),
             'list_count': len([h for h in history if h.get('order_number') and (h.get('order_number', '').startswith('LIST') or h.get('order_number', '').find('_LIST_') > 0)])
         }
@@ -4148,6 +6053,54 @@ def toggle_scraper_status(import_id):
         logger.error(f"Error toggling scraper status: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/scraper-imports/<int:import_id>', methods=['DELETE'])
+def delete_scraper_import(import_id):
+    """Delete a scraper import and all associated data"""
+    try:
+        # Check if the import exists
+        check_query = "SELECT * FROM scraper_imports WHERE import_id = %s"
+        result = db_manager.execute_query(check_query, (import_id,))
+        
+        if not result:
+            return jsonify({'error': f'Import #{import_id} not found'}), 404
+        
+        # Don't allow deleting the active import
+        if result[0].get('status') == 'active':
+            return jsonify({'error': 'Cannot delete the active import. Please archive it first.'}), 400
+        
+        # Start transaction - delete all related data
+        logger.info(f"Starting deletion of import #{import_id}")
+        
+        # Delete from normalized_vehicle_data first (due to foreign key constraint)
+        delete_normalized_query = """
+            DELETE FROM normalized_vehicle_data 
+            WHERE raw_data_id IN (
+                SELECT id FROM raw_vehicle_data WHERE import_id = %s
+            )
+        """
+        normalized_deleted = db_manager.execute_query(delete_normalized_query, (import_id,))
+        logger.info(f"Deleted normalized vehicle data for import #{import_id}")
+        
+        # Delete from raw_vehicle_data
+        delete_raw_query = "DELETE FROM raw_vehicle_data WHERE import_id = %s"
+        raw_deleted = db_manager.execute_query(delete_raw_query, (import_id,))
+        logger.info(f"Deleted raw vehicle data for import #{import_id}")
+        
+        # Finally delete the import record
+        delete_import_query = "DELETE FROM scraper_imports WHERE import_id = %s"
+        db_manager.execute_query(delete_import_query, (import_id,))
+        logger.info(f"Deleted import record #{import_id}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Import #{import_id} and all associated data have been deleted',
+            'import_id': import_id
+        })
+        
+    except Exception as e:
+        logger.error(f"Error deleting scraper import #{import_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/vin-log/export', methods=['POST'])
 def export_vin_log_data():
     """Export VIN log data for a specific dealership"""
@@ -4228,6 +6181,70 @@ def export_vin_log_data():
         
     except Exception as e:
         logger.error(f"Error exporting VIN log data: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/vin-log/remove-order-group', methods=['POST'])
+def remove_order_group():
+    """Remove an entire order group from VIN log for mistake correction"""
+    try:
+        data = request.get_json()
+        dealership_name = data.get('dealership_name')
+        order_number = data.get('order_number')
+
+        if not dealership_name or not order_number:
+            return jsonify({'error': 'Dealership name and order number are required'}), 400
+
+        # Generate dealership table name
+        clean_name = dealership_name.lower().replace(' ', '_').replace('-', '_').replace('.', '').replace("'", '')
+        table_name = f"{clean_name}_vin_log"
+
+        # Check if table exists first
+        check_table_query = """
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_schema = 'public'
+                AND table_name = %s
+            );
+        """
+
+        table_exists = db_manager.execute_query(check_table_query, (table_name,))
+
+        if not table_exists or not table_exists[0]['exists']:
+            return jsonify({'error': f'No VIN log data found for {dealership_name}'}), 404
+
+        # Count VINs to be removed first
+        count_query = f"""
+            SELECT COUNT(*) as count
+            FROM {table_name}
+            WHERE order_number = %s
+        """
+
+        count_result = db_manager.execute_query(count_query, (order_number,))
+        vins_to_remove = count_result[0]['count'] if count_result else 0
+
+        if vins_to_remove == 0:
+            return jsonify({'error': f'No VINs found with order number {order_number}'}), 404
+
+        # Remove all VINs with the specified order number
+        delete_query = f"""
+            DELETE FROM {table_name}
+            WHERE order_number = %s
+        """
+
+        db_manager.execute_query(delete_query, (order_number,))
+
+        logger.info(f"Removed order group {order_number} from {dealership_name} VIN log: {vins_to_remove} VINs deleted")
+
+        return jsonify({
+            'success': True,
+            'message': f'Successfully removed order group {order_number}',
+            'dealership_name': dealership_name,
+            'order_number': order_number,
+            'vins_removed': vins_to_remove
+        })
+
+    except Exception as e:
+        logger.error(f"Error removing order group: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/scraper-data/export', methods=['POST'])
@@ -4315,6 +6332,655 @@ def export_scraper_data():
         
     except Exception as e:
         logger.error(f"Error exporting scraper data: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/test-endpoint', methods=['GET', 'POST'])
+def test_endpoint():
+    """Test endpoint to verify route registration"""
+    return jsonify({'message': 'Test endpoint works!', 'method': request.method})
+
+@app.route('/api/get_raw_scraper_data', methods=['POST'])
+def get_raw_scraper_data():
+    """Get raw scraper data for specific VINs from a dealership"""
+    try:
+        data = request.get_json()
+        vins = data.get('vins', [])
+        dealership = data.get('dealership', '')
+
+        if not vins or not dealership:
+            return jsonify({'error': 'VINs and dealership are required'}), 400
+
+        logger.info(f"[RAW DATA API] Fetching raw data for {len(vins)} VINs from {dealership}")
+
+        conn = get_database_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+
+        cursor = conn.cursor()
+
+        # Query raw_vehicle_data for these VINs from active imports for this dealership
+        placeholders = ','.join(['%s'] * len(vins))
+        query = """
+            SELECT rvd.vin, rvd.year, rvd.make, rvd.model, rvd.trim, rvd.stock_number,
+                   rvd.vehicle_condition, rvd.price, rvd.location, rvd.import_date,
+                   rvd.raw_year_make, rvd.raw_model, rvd.raw_trim, rvd.raw_stock,
+                   rvd.raw_price, rvd.raw_condition
+            FROM raw_vehicle_data rvd
+            JOIN scraper_imports si ON rvd.import_id = si.import_id
+            WHERE rvd.vin IN ({})
+            AND rvd.location = %s
+            AND si.status = 'active'
+            ORDER BY rvd.import_date DESC
+        """.format(placeholders)
+
+        # Add dealership to the end of VINs list for the query
+        cursor.execute(query, vins + [dealership])
+        rows = cursor.fetchall()
+
+        # Convert to dictionary with VIN as key
+        raw_data = {}
+        for row in rows:
+            vin = row[0]
+            raw_data[vin] = {
+                'vin': row[0],
+                'year': row[1],
+                'make': row[2],
+                'model': row[3],
+                'trim': row[4],
+                'stock_number': row[5],
+                'vehicle_condition': row[6],
+                'price': row[7],
+                'location': row[8],
+                'import_date': row[9].isoformat() if row[9] else None,
+                'raw_year_make': row[10],
+                'raw_model': row[11],
+                'raw_trim': row[12],
+                'raw_stock': row[13],
+                'raw_price': row[14],
+                'raw_condition': row[15]
+            }
+
+        cursor.close()
+        conn.close()
+
+        logger.info(f"[RAW DATA API] Retrieved raw data for {len(raw_data)} VINs from {dealership}")
+        return jsonify(raw_data)
+
+    except Exception as e:
+        logger.error(f"[RAW DATA API] Error fetching raw data: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# TEMPLATE MANAGEMENT ENDPOINTS
+# =============================================================================
+
+@app.route('/api/templates/fields', methods=['GET'])
+def get_template_fields():
+    """Get all available template field definitions"""
+    try:
+        fields = db_manager.execute_query("""
+            SELECT * FROM template_field_definitions
+            WHERE is_available = true
+            ORDER BY field_label
+        """)
+
+        return jsonify({
+            'success': True,
+            'fields': fields
+        })
+    except Exception as e:
+        logger.error(f"Error fetching template fields: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates', methods=['GET'])
+def get_templates():
+    """Get all templates or filtered by dealership"""
+    try:
+        dealership = request.args.get('dealership')
+
+        if dealership:
+            # Get templates mapped to specific dealership
+            query = """
+                SELECT tc.*, dtm.vehicle_condition, dtm.priority
+                FROM template_configs tc
+                LEFT JOIN dealership_template_mapping dtm ON tc.id = dtm.template_id
+                WHERE dtm.dealership_name = %s OR tc.is_system_default = true
+                ORDER BY dtm.priority DESC, tc.template_name
+            """
+            templates = db_manager.execute_query(query, (dealership,))
+        else:
+            # Get all templates
+            templates = db_manager.execute_query("""
+                SELECT * FROM template_configs
+                WHERE is_active = true
+                ORDER BY template_name
+            """)
+
+        return jsonify({
+            'success': True,
+            'templates': templates
+        })
+    except Exception as e:
+        logger.error(f"Error fetching templates: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates/<int:template_id>', methods=['GET'])
+def get_template(template_id):
+    """Get a specific template by ID"""
+    try:
+        template = db_manager.execute_query("""
+            SELECT * FROM template_configs
+            WHERE id = %s
+        """, (template_id,))
+
+        if not template:
+            return jsonify({'error': 'Template not found'}), 404
+
+        return jsonify({
+            'success': True,
+            'template': template[0]
+        })
+    except Exception as e:
+        logger.error(f"Error fetching template: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates', methods=['POST'])
+def create_template():
+    """Create a new template"""
+    try:
+        data = request.get_json()
+
+        if not data.get('template_name') or not data.get('fields'):
+            return jsonify({'error': 'Template name and fields are required'}), 400
+
+        import json
+
+        result = db_manager.execute_query("""
+            INSERT INTO template_configs
+            (template_name, description, template_type, fields, created_by)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            data['template_name'],
+            data.get('description', ''),
+            data.get('template_type', 'shortcut_pack'),
+            json.dumps(data['fields']),
+            data.get('created_by', 'user')
+        ))
+
+        return jsonify({
+            'success': True,
+            'template_id': result[0]['id'],
+            'message': 'Template created successfully'
+        })
+    except Exception as e:
+        logger.error(f"Error creating template: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates/<int:template_id>', methods=['PUT'])
+def update_template(template_id):
+    """Update an existing template"""
+    try:
+        data = request.get_json()
+        import json
+
+        # Build dynamic update query
+        update_fields = []
+        params = []
+
+        if 'template_name' in data:
+            update_fields.append("template_name = %s")
+            params.append(data['template_name'])
+
+        if 'description' in data:
+            update_fields.append("description = %s")
+            params.append(data['description'])
+
+        if 'fields' in data:
+            update_fields.append("fields = %s")
+            params.append(json.dumps(data['fields']))
+
+        if 'is_active' in data:
+            update_fields.append("is_active = %s")
+            params.append(data['is_active'])
+
+        if not update_fields:
+            return jsonify({'error': 'No fields to update'}), 400
+
+        # Add updated_at and template_id
+        update_fields.append("updated_at = CURRENT_TIMESTAMP")
+        params.append(template_id)
+
+        query = f"""
+            UPDATE template_configs
+            SET {', '.join(update_fields)}
+            WHERE id = %s
+        """
+
+        db_manager.execute_query(query, params)
+
+        return jsonify({
+            'success': True,
+            'message': 'Template updated successfully'
+        })
+    except Exception as e:
+        logger.error(f"Error updating template: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates/<int:template_id>', methods=['DELETE'])
+def delete_template(template_id):
+    """Delete a template (soft delete by setting is_active = false)"""
+    try:
+        # Check if it's a system default
+        check_default = db_manager.execute_query("""
+            SELECT is_system_default FROM template_configs WHERE id = %s
+        """, (template_id,))
+
+        if check_default and check_default[0]['is_system_default']:
+            return jsonify({'error': 'Cannot delete system default template'}), 400
+
+        # Soft delete
+        db_manager.execute_query("""
+            UPDATE template_configs
+            SET is_active = false, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        """, (template_id,))
+
+        return jsonify({
+            'success': True,
+            'message': 'Template deleted successfully'
+        })
+    except Exception as e:
+        logger.error(f"Error deleting template: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates/mapping', methods=['POST'])
+def map_template_to_dealership():
+    """Map a template to a dealership"""
+    try:
+        data = request.get_json()
+
+        if not data.get('dealership_name') or not data.get('template_id'):
+            return jsonify({'error': 'Dealership name and template ID are required'}), 400
+
+        db_manager.execute_query("""
+            INSERT INTO dealership_template_mapping
+            (dealership_name, template_id, vehicle_condition, priority)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (dealership_name, vehicle_condition, template_id)
+            DO UPDATE SET priority = EXCLUDED.priority
+        """, (
+            data['dealership_name'],
+            data['template_id'],
+            data.get('vehicle_condition'),
+            data.get('priority', 0)
+        ))
+
+        return jsonify({
+            'success': True,
+            'message': 'Template mapped to dealership successfully'
+        })
+    except Exception as e:
+        logger.error(f"Error mapping template: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates/preview', methods=['POST'])
+def preview_template():
+    """Preview how a template would render with sample data"""
+    try:
+        data = request.get_json()
+        template_fields = data.get('fields', {})
+        sample_vin = data.get('sample_vin')
+        dealership = data.get('dealership')
+
+        # Get sample vehicle data - try specific VIN first, then any vehicle from dealership
+        sample_data = None
+        if sample_vin and dealership:
+            sample_data = db_manager.execute_query("""
+                SELECT nvd.* FROM normalized_vehicle_data nvd
+                JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
+                JOIN scraper_imports si ON rvd.import_id = si.import_id
+                WHERE nvd.vin = %s AND nvd.location = %s AND si.status = 'active'
+                LIMIT 1
+            """, (sample_vin, dealership))
+
+            if sample_data:
+                sample_data = sample_data[0]
+
+        # If no specific VIN or no match found, get any vehicle from dealership for preview
+        if not sample_data and dealership:
+            logger.info(f"No specific VIN data, getting sample from {dealership}")
+            sample_data = db_manager.execute_query("""
+                SELECT nvd.* FROM normalized_vehicle_data nvd
+                JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
+                JOIN scraper_imports si ON rvd.import_id = si.import_id
+                WHERE nvd.location = %s AND si.status = 'active'
+                ORDER BY rvd.import_timestamp DESC
+                LIMIT 1
+            """, (dealership,))
+
+            if sample_data:
+                sample_data = sample_data[0]
+                logger.info(f"Found sample vehicle: {sample_data.get('year', 'N/A')} {sample_data.get('make', 'N/A')} {sample_data.get('model', 'N/A')}")
+
+        # If no sample data, use mock data
+        if not sample_data:
+            sample_data = {
+                'vin': '1HGCM82633A123456',
+                'stock': 'STK12345',
+                'year': 2024,
+                'make': 'Honda',
+                'model': 'Accord',
+                'trim': 'EX-L',
+                'price': 35000,
+                'msrp': 38000,
+                'vehicle_condition': 'new',
+                'status': 'onlot',
+                'date_in_stock': '2024-01-15',
+                'location': dealership or 'Sample Dealership',
+                'vehicle_url': 'https://example.com/vehicle/123456'
+            }
+
+        # DEBUG: Log received data structure
+        logger.info(f"Preview request - Dealership: {dealership}")
+        logger.info(f"Template fields received: {template_fields}")
+        logger.info(f"Columns count: {len(template_fields.get('columns', []))}")
+        logger.info(f"Sample VIN: {sample_vin}")
+        logger.info(f"Using mock data: {not sample_data or 'vin' not in sample_data or sample_data['vin'] == '1HGCM82633A123456'}")
+
+        # Create 3 rows of sample data for preview
+        sample_vehicles = [
+            {
+                'vin': '1HGCM82633A123456',
+                'stock': 'STK12345',
+                'year': 2024,
+                'make': 'Honda',
+                'model': 'Accord',
+                'trim': 'EX-L',
+                'price': 35000,
+                'msrp': 38000,
+                'vehicle_condition': 'new',
+                'status': 'onlot',
+                'date_in_stock': '2024-01-15',
+                'location': dealership or 'Sample Dealership',
+                'vehicle_url': 'https://example.com/vehicle/123456'
+            },
+            {
+                'vin': '2T1BURHE5KC987654',
+                'stock': 'STK67890',
+                'year': 2023,
+                'make': 'Toyota',
+                'model': 'Camry',
+                'trim': 'LE',
+                'price': 28500,
+                'msrp': 31000,
+                'vehicle_condition': 'used',
+                'status': 'onlot',
+                'date_in_stock': '2024-02-20',
+                'location': dealership or 'Sample Dealership',
+                'vehicle_url': 'https://example.com/vehicle/987654'
+            },
+            {
+                'vin': '3VW2B7AJ5EM456789',
+                'stock': 'STK11111',
+                'year': 2022,
+                'make': 'Volkswagen',
+                'model': 'Jetta',
+                'trim': 'S',
+                'price': 22900,
+                'msrp': 25500,
+                'vehicle_condition': 'certified',
+                'status': 'onlot',
+                'date_in_stock': '2024-03-10',
+                'location': dealership or 'Sample Dealership',
+                'vehicle_url': 'https://example.com/vehicle/456789'
+            }
+        ]
+
+        # Render template with sample data - create multiple rows
+        preview_rows = []
+        for vehicle_data in sample_vehicles:
+            rendered_fields = []
+            for field in template_fields.get('columns', []):
+                rendered = {
+                    'key': field['key'],
+                    'label': field.get('label', field['key']),
+                    'value': None
+                }
+
+                if field['type'] == 'concatenated' and 'format' in field:
+                    # Handle concatenated fields
+                    import re
+                    format_str = field['format']
+                    for key, value in vehicle_data.items():
+                        format_str = format_str.replace(f'{{{key}}}', str(value))
+                    rendered['value'] = format_str
+                elif field['type'] == 'calculated':
+                    # Handle calculated fields like days_on_lot
+                    if field['key'] == 'days_on_lot' and vehicle_data.get('date_in_stock'):
+                        from datetime import datetime
+                        try:
+                            if isinstance(vehicle_data['date_in_stock'], str):
+                                stock_date = datetime.strptime(vehicle_data['date_in_stock'], '%Y-%m-%d')
+                            else:
+                                stock_date = vehicle_data['date_in_stock']
+                            days = (datetime.now() - stock_date).days
+                            rendered['value'] = f"{days} days"
+                        except:
+                            rendered['value'] = "N/A"
+                elif field['type'] == 'special':
+                    # Handle special fields like QR code
+                    if field['key'] == 'qr_code':
+                        rendered['value'] = "[QR CODE IMAGE]"
+                else:
+                    # Regular field mapping
+                    source = field.get('source', field['key'])
+                    rendered['value'] = vehicle_data.get(source, 'N/A')
+
+                    # Apply formatting if specified
+                    if field.get('format') and rendered['value'] != 'N/A':
+                        if field['type'] == 'number' and '$' in field.get('format', ''):
+                            rendered['value'] = f"${rendered['value']:,.0f}"
+
+                rendered_fields.append(rendered)
+            preview_rows.append(rendered_fields)
+
+        return jsonify({
+            'success': True,
+            'preview': sample_vehicles,  # Return the raw vehicle data, not processed fields
+            'sample_data': sample_vehicles[0]  # Return first vehicle as sample
+        })
+    except Exception as e:
+        logger.error(f"Error previewing template: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# CUSTOM TEMPLATE PROCESSING ENDPOINTS (SEPARATE FROM EXISTING ORDER PROCESSING)
+# =============================================================================
+
+@app.route('/api/custom-templates/preview', methods=['POST'])
+def custom_templates_preview():
+    """Redirect old endpoint to new one"""
+    return preview_template()
+
+@app.route('/api/custom-templates', methods=['POST'])
+def custom_templates_save():
+    """Redirect old save endpoint to new one"""
+    try:
+        data = request.get_json()
+        template_name = data.get('name')
+        template_description = data.get('description', '')
+        template_type = data.get('type', 'standard')
+        template_fields = data.get('fields', {})
+
+        # Use existing create_template function
+        return create_template()
+    except Exception as e:
+        logger.error(f"Error in custom templates save: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates/save', methods=['POST'])
+def templates_save():
+    """Save template with proper data mapping"""
+    try:
+        data = request.get_json()
+        logger.info(f"Template save request received: {data}")
+
+        # Extract custom combined fields if present
+        custom_combined_fields = data.get('customCombinedFields', {})
+
+        # Get the fields object, ensuring it has the columns key
+        fields = data.get('fields', {})
+        if not fields:
+            fields = {}
+        if 'columns' not in fields:
+            fields['columns'] = []
+
+        # Store custom combined fields in the fields object for persistence
+        if custom_combined_fields:
+            fields['customCombinedFields'] = custom_combined_fields
+
+        # Validate required fields
+        template_name = data.get('name')
+        if not template_name or not template_name.strip():
+            logger.error("Template name is missing or empty")
+            return jsonify({'error': 'Template name is required'}), 400
+
+        if not fields or (not fields.get('columns') and not fields.get('customCombinedFields')):
+            logger.error("Template fields are missing or empty")
+            return jsonify({'error': 'Template must have at least one field'}), 400
+
+        # Direct database insertion instead of calling create_template
+        import json
+
+        logger.info(f"Saving template: name={template_name}, fields={fields}")
+
+        result = db_manager.execute_query("""
+            INSERT INTO template_configs
+            (template_name, description, template_type, fields, created_by)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            template_name,
+            data.get('description', ''),
+            data.get('type', 'standard'),
+            json.dumps(fields),
+            'user'
+        ))
+
+        if result and len(result) > 0:
+            logger.info(f"Template saved successfully with ID: {result[0]['id']}")
+            return jsonify({
+                'success': True,
+                'template_id': result[0]['id'],
+                'message': 'Template created successfully'
+            })
+        else:
+            logger.error("Failed to save template - no ID returned")
+            return jsonify({'error': 'Failed to save template'}), 500
+
+    except Exception as e:
+        logger.error(f"Error in templates_save: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/custom-templates/test/<dealership_name>', methods=['POST'])
+def test_custom_template_processing(dealership_name):
+    """Test custom template processing for a dealership (SAFE - doesn't affect existing system)"""
+    try:
+        from custom_template_processor import custom_template_processor
+
+        data = request.get_json() or {}
+        vehicle_condition = data.get('vehicle_condition')
+
+        # This is completely separate from existing order processing
+        result = custom_template_processor.process_custom_template_order(
+            dealership_name,
+            vehicle_condition
+        )
+
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error testing custom template: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/custom-templates/preview/<dealership_name>/<int:template_id>', methods=['GET'])
+def preview_custom_template_output(dealership_name, template_id):
+    """Preview custom template output with real data (SAFE - read-only)"""
+    try:
+        from custom_template_processor import custom_template_processor
+
+        sample_vin = request.args.get('sample_vin')
+
+        # This only reads data, doesn't modify anything
+        result = custom_template_processor.test_custom_template_preview(
+            dealership_name,
+            template_id,
+            sample_vin
+        )
+
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error previewing custom template: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/custom-templates/check/<dealership_name>', methods=['GET'])
+def check_custom_template_availability(dealership_name):
+    """Check if dealership has custom templates configured (SAFE - read-only)"""
+    try:
+        from template_resolver import template_resolver
+
+        vehicle_condition = request.args.get('vehicle_condition')
+
+        template_result = template_resolver.get_template(dealership_name, vehicle_condition)
+
+        return jsonify({
+            'success': True,
+            'has_custom_template': template_result['type'] == 'custom',
+            'template_info': template_result
+        })
+    except Exception as e:
+        logger.error(f"Error checking custom template: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates/list', methods=['GET'])
+def get_templates_list():
+    """Get templates list for Template Builder UI"""
+    try:
+        # Get all active templates
+        templates = db_manager.execute_query("""
+            SELECT * FROM template_configs
+            WHERE is_active = true
+            ORDER BY template_name
+        """)
+
+        return jsonify({
+            'success': True,
+            'templates': templates or []
+        })
+    except Exception as e:
+        logger.error(f"Error fetching templates list: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/dealership-configs', methods=['GET'])
+def get_dealership_configs():
+    """Get dealership configurations for Template Builder UI"""
+    try:
+        # Get dealership configs
+        configs = db_manager.execute_query("""
+            SELECT name, is_active FROM dealership_configs
+            WHERE is_active = true
+            ORDER BY name
+        """)
+
+        # Format for Template Builder
+        dealerships = [{'name': config['name']} for config in (configs or [])]
+
+        return jsonify({
+            'success': True,
+            'dealerships': dealerships
+        })
+    except Exception as e:
+        logger.error(f"Error fetching dealership configs: {e}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

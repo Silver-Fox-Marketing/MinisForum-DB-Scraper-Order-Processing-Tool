@@ -40,6 +40,20 @@ Updated: 2025-08-08 - DEALERSHIP-SPECIFIC VIN LOGS IMPLEMENTATION
 
 ## 🎯 Major Version Updates
 
+### **v2.6 (August 27, 2025) - Enhanced Manual VIN Entry + Dark Mode Contrast Revolution 🎯🌙**
+- **🎯 MANUAL VIN ENTRY FIXED**: Complete workflow from button click to functional text field
+  - Auto-opens Manual Entry tab for immediate VIN input access
+  - Smart button labeling and enhanced user experience flow  
+  - Supports bulk VIN entry with order grouping and validation
+- **🌙 DARK MODE CONTRAST REVOLUTION**: Dealership panels now clearly distinguish from background
+  - Enhanced card visibility with rich dark gradients and transparency effects
+  - Professional multi-layer shadows with Silver Fox red accent borders
+  - Improved text contrast and visual hierarchy for better accessibility
+- **🔍 DEALERSHIP SETTINGS SEARCH**: Real-time search functionality for quick dealership location
+  - Instant filtering with search icon, clear button, and results counter
+  - Keyboard support with Enter key functionality and responsive design
+  - Professional styling matching Silver Fox brand aesthetics throughout
+
 ### **v2.5 (August 25, 2025) - Professional Dealership Settings Interface & Bulk Management**
 - 🎨 **MAJOR UI/UX OVERHAUL**: Complete professional redesign of Dealership Settings tab
 - 💾 **CRITICAL FIX**: "Save All Changes" functionality now works properly with bulk editing

@@ -1,27 +1,13 @@
-from enhanced_helper_class import *
-import traceback
-import sys
-import os
-import json
-import datetime
-import requests
+from . helper_class import *
+from . interface_class import *
+from selenium.webdriver.common.by import By
 import time
-from bs4 import BeautifulSoup
-from interface_class import *
-
-# Database configuration for bulletproof system
-DB_CONFIG = {
-    'host': 'localhost', 
-    'database': 'vehicle_inventory',
-    'user': 'postgres',
-    'password': 'password'
-}
 
 class JOEMACHENSTOYOTA():
 
 	def __init__(self, data_folder, output_file):
 
-		self.helper = EnhancedHelper(DB_CONFIG)
+		self.helper = Helper()
 		
 		self.data_folder = data_folder
 		self.output_file = output_file
@@ -37,7 +23,12 @@ class JOEMACHENSTOYOTA():
 
 		# print(soup)
 
-		json_data = soup.find('script', string=re.compile('shift_digital_session_id')).text.strip()
+		script_tag = soup.find('script', string=re.compile('shift_digital_session_id'))
+		if not script_tag:
+			print(f"Could not find script with 'shift_digital_session_id' on page: {vehicle_url}")
+			return False
+		
+		json_data = script_tag.text.strip()
 		json_data = ' '.join(json_data.split()).split('page:')[1].split(', shift_digital_session_id')[0].strip()
 		json_data = json.loads(json_data)
 
@@ -71,7 +62,11 @@ class JOEMACHENSTOYOTA():
 		else:
 			v_type = v_type[0].title()
 
-		body = json_data['vehicle_body_style'][0]
+		body_list = json_data.get('vehicle_body_style')
+		if body_list and isinstance(body_list, list):
+			body = body_list[0]
+		else:
+			body = 'Unknown'
 		fuel_type = json_data['vehicle_engine_fuel'][0]
 
 		date_in_stock = json_data['vehicle_date_instock'][0].split()[0]
@@ -167,6 +162,19 @@ class JOEMACHENSTOYOTA():
 			while 1:
 
 				soup = self.interface.get_selenium_response(f'https://www.joemachenstoyota.com/search/joe-machens-toyota/?av={status}&cy=65201&lc=8692&p={page_num}')
+
+				# Select "All" from results per page dropdown for faster scraping
+				if page_num == 1:
+					try:
+						driver = self.interface.driver
+						dropdown = driver.find_element(By.CLASS_NAME, 'select_Resultsperpage_content')
+						dropdown.click()
+						time.sleep(1)
+						all_option = driver.find_element(By.XPATH, "//option[text()='All']")
+						all_option.click()
+						time.sleep(3)
+					except Exception as error:
+						print('Could not select All from dropdown: ', error)
 
 				while 1:
 

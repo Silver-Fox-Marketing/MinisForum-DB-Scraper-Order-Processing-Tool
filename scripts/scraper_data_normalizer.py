@@ -27,7 +27,7 @@ class ScraperDataNormalizer:
         
         # Default mapping file path
         if not mapping_file_path:
-            mapping_file_path = r"C:\Users\Workstation_1\Documents\Tools\ClaudeCode\projects\shared_resources\Scraper Data Normalization Map - Sheet1 (1).csv"
+            mapping_file_path = r"C:\Users\Workstation_1\Documents\Tools\ClaudeCode\projects\shared_resources\Scraper Data Normalization Map - Sheet1 (3).csv"
         
         self.load_normalization_mapping(mapping_file_path)
     
@@ -69,18 +69,18 @@ class ScraperDataNormalizer:
             'new': 'new'
         }
         
-        # Lot status mappings - CRITICAL: Use 'on lot' format for database compatibility
+        # Lot status mappings - CRITICAL: Use 'onlot'/'offlot' format for database compatibility
         self.lot_status_mapping = {
-            'instock': 'on lot',
-            'in stock': 'on lot',
-            'available': 'on lot',
-            'on lot': 'on lot',
-            'on-lot': 'on lot',
-            'in-transit': 'off lot',
-            'in transit': 'off lot',
-            'allocated': 'off lot',
-            'courtesy vehicle': 'off lot',
-            'in-service': 'off lot'
+            'instock': 'onlot',
+            'in stock': 'onlot',
+            'available': 'onlot',
+            'on lot': 'onlot',
+            'on-lot': 'onlot',
+            'in-transit': 'offlot',
+            'in transit': 'offlot',
+            'allocated': 'offlot',
+            'courtesy vehicle': 'offlot',
+            'in-service': 'offlot'
         }
     
     def normalize_vehicle_type(self, raw_type: str) -> str:
@@ -109,9 +109,16 @@ class ScraperDataNormalizer:
         
         return 'unknown'
     
-    def normalize_lot_status(self, raw_status: str) -> str:
-        """Normalize status to onlot or offlot"""
+    def normalize_lot_status(self, raw_status: str, vehicle_type: str = None) -> str:
+        """Normalize status to onlot or offlot
+        
+        IMPORTANT: For used vehicles, NULL/empty status implies 'available' (on lot)
+        """
+        # CRITICAL: Used vehicles with NULL/empty status are implicitly available/on lot
         if not raw_status:
+            # For used vehicles (po, cpo), empty status means available on lot
+            if vehicle_type and vehicle_type in ['po', 'cpo', 'used']:
+                return 'onlot'
             return 'unknown'
             
         raw_status_lower = raw_status.lower().strip()
@@ -125,14 +132,14 @@ class ScraperDataNormalizer:
             if key in raw_status_lower or raw_status_lower in key:
                 return value
         
-        # Default fallback patterns - CRITICAL: Use 'on lot' format for database compatibility
+        # Default fallback patterns - CRITICAL: Use 'onlot'/'offlot' format for database compatibility
         if any(word in raw_status_lower for word in ['stock', 'available', 'lot']):
-            return 'on lot'
+            return 'onlot'
         elif any(word in raw_status_lower for word in ['transit', 'allocated', 'courtesy', 'service', 'build', 'production']):
-            return 'off lot'
+            return 'offlot'
         
         # Conservative default - assume on lot if unsure
-        return 'on lot'
+        return 'onlot'
     
     def normalize_vehicle_data(self, vehicle_data: Dict) -> Tuple[str, str]:
         """
@@ -147,8 +154,11 @@ class ScraperDataNormalizer:
         raw_type = vehicle_data.get('type', '')
         raw_status = vehicle_data.get('status', '')
         
+        # First normalize the vehicle type
         normalized_type = self.normalize_vehicle_type(raw_type)
-        lot_status = self.normalize_lot_status(raw_status)
+        
+        # Then normalize lot status, passing the vehicle type for proper NULL handling
+        lot_status = self.normalize_lot_status(raw_status, normalized_type)
         
         return normalized_type, lot_status
     

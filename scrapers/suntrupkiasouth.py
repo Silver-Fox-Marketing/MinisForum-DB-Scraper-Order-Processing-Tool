@@ -36,7 +36,22 @@ class SUNTRUPKIASOUTH():
 		model = json_data['model']
 		trim = json_data['trim']
 		ext_color = json_data['ext_color']
-		status = ''
+		
+		# CRITICAL FIX: Extract actual status from API response
+		# Check multiple possible status fields in Suntrup's API
+		status = 'In Stock'  # Default to In Stock
+		
+		# Check for common status fields in Suntrup's JSON response
+		if 'in_transit_filter' in json_data:
+			if json_data['in_transit_filter'] == 'true' or json_data['in_transit_filter'] is True:
+				status = 'In Transit'
+		elif 'status' in json_data:
+			status = json_data['status']
+		elif 'lightning' in json_data and 'status' in json_data['lightning']:
+			status = json_data['lightning']['status']
+		elif 'availability' in json_data:
+			status = json_data['availability']
+		
 		price = json_data['our_price']
 		body = json_data['body']
 		fuel_type = json_data.get('fueltype', '')

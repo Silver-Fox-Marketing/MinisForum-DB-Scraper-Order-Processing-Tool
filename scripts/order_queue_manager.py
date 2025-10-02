@@ -32,7 +32,7 @@ scripts_dir = current_file.parent
 sys.path.insert(0, str(scripts_dir))
 
 from database_connection import db_manager
-from order_processing_workflow import OrderProcessingWorkflow
+from correct_order_processing import CorrectOrderProcessor
 
 # Setup logging
 logging.basicConfig(
@@ -45,7 +45,7 @@ class OrderQueueManager:
     """Manages daily order processing queue and template-based CSV generation"""
     
     def __init__(self):
-        self.workflow = OrderProcessingWorkflow()
+        self.workflow = CorrectOrderProcessor()
         self.templates = self._load_templates()
         
     def _load_templates(self) -> Dict[str, Dict]:

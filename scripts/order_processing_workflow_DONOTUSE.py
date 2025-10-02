@@ -204,16 +204,16 @@ class OrderProcessingWorkflow:
                 import_id = active_import['import_id']
                 logger.info(f"Using active import ID: {import_id} from {active_import['import_date']}")
             
-            # Build condition based on vehicle types
+            # Build condition based on vehicle types (case-insensitive)
             type_conditions = []
             if 'new' in vehicle_types:
-                type_conditions.append("type = 'New'")
+                type_conditions.append("LOWER(type) = 'new'")
             if 'cpo' in vehicle_types:
-                type_conditions.append("type = 'Certified Pre-Owned'")
+                type_conditions.append("LOWER(type) IN ('certified pre-owned', 'cpo', 'certified')")
             if 'used' in vehicle_types:
-                type_conditions.append("type IN ('Used', 'Pre-Owned', 'Certified Pre-Owned')")
+                type_conditions.append("LOWER(type) IN ('used', 'pre-owned', 'certified pre-owned', 'cpo', 'po')")
             if 'po' in vehicle_types:  # Pre-owned
-                type_conditions.append("type IN ('Used', 'Pre-Owned')")
+                type_conditions.append("LOWER(type) IN ('used', 'pre-owned', 'po')")
             
             type_filter = " OR ".join(type_conditions) if type_conditions else "TRUE"
             

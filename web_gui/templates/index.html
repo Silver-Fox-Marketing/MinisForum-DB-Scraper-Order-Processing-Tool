@@ -3,101 +3,725 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MinisForum Database Control - Silver Fox Marketing</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=2025081920&cache-bust={{ range(1000, 9999) | random }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/vin_log_update.css') }}?v=2025081903">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>MinisForum Database Control - Silver Fox Marketing [TEMPLATE-FIX-FINAL]</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/vin_log_update.css') }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/template_builder.css') }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/keyboard_shortcuts.css') }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- Inline CSS to force display fixes -->
+    <!-- Modern Dealership Panel Styles -->
     <style>
-        .dealership-item {
-            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
-            border: 2px solid #e2e8f0 !important;
-            border-radius: 12px !important;
-            padding: 16px 20px !important;
-            margin-bottom: 8px !important;
-            cursor: pointer !important;
+        /* Clean, Modern Dealership Panels */
+        .modern-dealer-panel {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .modern-dealer-panel:hover,
+        .modern-dealer-panel:focus {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            border-color: #ea580c;
+            outline: none;
+        }
+
+        .modern-dealer-panel:focus {
+            box-shadow: 0 4px 6px -1px rgba(234, 88, 12, 0.2), 0 2px 4px -1px rgba(234, 88, 12, 0.1), 0 0 0 3px rgba(234, 88, 12, 0.1);
+        }
+
+        /* Dark mode support */
+        [data-theme="dark"] .modern-dealer-panel {
+            background: #1f2937;
+            border-color: #374151;
+        }
+
+        [data-theme="dark"] .modern-dealer-panel:hover,
+        [data-theme="dark"] .modern-dealer-panel:focus {
+            border-color: #ea580c;
+            background: #111827;
+        }
+        
+        /* Panel Content Structure */
+        .modern-dealer-panel .panel-content {
             display: flex;
-            align-items: center !important;
-            justify-content: space-between !important;
-            min-height: 60px !important;
-            overflow: visible !important;
+            flex-direction: column;
+            gap: 8px;
         }
         
-        .dealership-name {
-            font-weight: 600 !important;
-            flex: 1 !important;
-            color: #1e293b !important;
-            font-size: 1rem !important;
-            line-height: 1.4 !important;
-            padding-right: 12px !important;
+        .modern-dealer-panel .dealer-title {
+            margin: 0;
+            font-size: 1.0rem;
+            font-weight: 600;
+            color: #1e293b;
+            letter-spacing: -0.02em;
         }
         
-        .dealership-type {
-            font-size: 0.75rem !important;
-            font-weight: 600 !important;
-            background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%) !important;
-            color: #475569 !important;
-            padding: 4px 12px !important;
-            border-radius: 20px !important;
-            text-transform: uppercase !important;
-            letter-spacing: 0.5px !important;
-            border: 1px solid #cbd5e1 !important;
-            min-width: 50px !important;
-            text-align: center !important;
+        [data-theme="dark"] .modern-dealer-panel .dealer-title {
+            color: #f1f5f9;
         }
         
-        .dealership-type.cao {
-            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%) !important;
-            color: #1e40af !important;
-            border-color: #bfdbfe !important;
+        .modern-dealer-panel .panel-details {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         
-        .dealership-type.list {
-            background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%) !important;
-            color: #16a34a !important;
-            border-color: #bbf7d0 !important;
+        .modern-dealer-panel .detail-row {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            font-size: 0.85rem;
+        }
+        
+        .modern-dealer-panel .detail-label {
+            color: #64748b;
+            font-weight: 500;
+        }
+        
+        .modern-dealer-panel .detail-value {
+            color: #334155;
+            font-weight: 600;
+        }
+        
+        [data-theme="dark"] .modern-dealer-panel .detail-label {
+            color: #94a3b8;
+        }
+        
+        [data-theme="dark"] .modern-dealer-panel .detail-value {
+            color: #e2e8f0;
+        }
+        
+        /* Order Type Badge */
+        .modern-dealer-panel .order-type-badge {
+            padding: 3px 10px;
+            border-radius: 16px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .modern-dealer-panel .order-type-badge.cao {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+        }
+        
+        .modern-dealer-panel .order-type-badge.list {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+        
+        /* Selected State */
+        .modern-dealer-panel.selected {
+            background: linear-gradient(135deg, #fd410d, #ff6b3d);
+            border-color: #fd410d;
+        }
+        
+        .modern-dealer-panel.selected .dealer-title,
+        .modern-dealer-panel.selected .detail-label,
+        .modern-dealer-panel.selected .detail-value {
+            color: white;
+        }
+        
+        /* Dragging State */
+        .modern-dealer-panel.dragging {
+            opacity: 0.5;
+            transform: rotate(2deg);
+        }
+
+        /* Raw Data Toggle Styles */
+        .raw-data-toggle-container {
+            margin: 16px 0;
+            padding: 16px;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+
+        [data-theme="dark"] .raw-data-toggle-container {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            border-color: #475569;
+        }
+
+        .raw-data-toggle {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .raw-data-toggle input[type="checkbox"] {
+            display: none;
+        }
+
+        .toggle-slider {
+            position: relative;
+            width: 52px;
+            height: 28px;
+            background: #cbd5e1;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .toggle-slider::before {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 24px;
+            height: 24px;
+            background: white;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+        }
+
+        .raw-data-toggle input:checked + .toggle-slider {
+            background: #fd410d;
+        }
+
+        .raw-data-toggle input:checked + .toggle-slider::before {
+            transform: translateX(24px);
+        }
+
+        .toggle-label {
+            font-weight: 600;
+            color: #334155;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.95rem;
+        }
+
+        [data-theme="dark"] .toggle-label {
+            color: #e2e8f0;
+        }
+
+        .toggle-label i {
+            color: #64748b;
+            font-size: 1rem;
+        }
+
+        [data-theme="dark"] .toggle-label i {
+            color: #94a3b8;
+        }
+
+        .raw-data-toggle input:checked ~ .toggle-label i {
+            color: #fd410d;
+        }
+
+        .toggle-description {
+            margin-top: 8px;
+            margin-left: 64px;
+        }
+
+        .toggle-description p {
+            margin: 0;
+            font-size: 0.85rem;
+            color: #64748b;
+            font-style: italic;
+        }
+
+        [data-theme="dark"] .toggle-description p {
+            color: #94a3b8;
+        }
+
+        /* Raw Data Table Styles */
+        .raw-data-row {
+            background: linear-gradient(135deg, #fef7f0 0%, #fef3e7 100%);
+            border-left: 3px solid #fd410d;
+        }
+
+        [data-theme="dark"] .raw-data-row {
+            background: linear-gradient(135deg, #2d1b13 0%, #1f1611 100%);
+        }
+
+        .raw-data-status {
+            position: relative;
+        }
+
+        .raw-status-badge {
+            background: linear-gradient(135deg, #fd410d, #ff6b3d);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .raw-data-tooltip {
+            position: absolute;
+            top: 50%;
+            right: 8px;
+            transform: translateY(-50%);
+            cursor: pointer;
+        }
+
+        .raw-data-tooltip i {
+            color: #64748b;
+            font-size: 0.9rem;
+            transition: color 0.3s ease;
+        }
+
+        .raw-data-tooltip:hover i {
+            color: #fd410d;
+        }
+
+        .tooltip-content {
+            position: absolute;
+            top: -8px;
+            right: 25px;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            line-height: 1.4;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            max-width: 300px;
+            white-space: normal;
+            word-wrap: break-word;
+        }
+
+        .raw-data-tooltip:hover .tooltip-content {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .tooltip-content::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 100%;
+            transform: translateY(-50%);
+            border: 6px solid transparent;
+            border-left-color: rgba(0, 0, 0, 0.9);
         }
     </style>
+    
+    <style>
+    /* Old dealership card styles - TO BE REMOVED */
+    [data-theme="dark"] .dealership-card,
+    [data-theme="dark"] .dealership-cards-grid .dealership-card,
+    body[data-theme="dark"] .dealership-card {
+        background: #3a3a3a !important;
+        background-color: #3a3a3a !important;
+        border: 1px solid #4a4a4a !important;
+        border-radius: 8px !important;
+        padding: 24px !important;
+        color: #f8fafc !important;
+        margin-bottom: 16px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 16px !important;
+    }
+    
+    [data-theme="dark"] .dealership-card .dealership-name,
+    [data-theme="dark"] .dealership-card h3,
+    [data-theme="dark"] .dealership-name,
+    body[data-theme="dark"] .dealership-name {
+        color: #f8fafc !important;
+        background: transparent !important;
+        font-weight: 600 !important;
+        font-size: 1rem !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        position: relative !important;
+        top: auto !important;
+        left: auto !important;
+        transform: none !important;
+    }
+
+    /* Sidebar Logo Section - Responsive to sidebar state with optimized spacing for larger logos */
+    .sidebar-logo-section {
+        text-align: center;
+        padding: 25px 20px;
+        margin: 20px 0;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        border-top: 1px solid rgba(253, 65, 13, 0.1);
+        border-bottom: 1px solid rgba(253, 65, 13, 0.1);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+    }
+
+    /* Both logos - Larger size when sidebar is expanded for professional appearance */
+    .sidebar-sf-logo,
+    .sidebar-car-logo {
+        width: 150px;
+        height: 150px;
+        object-fit: contain;
+        filter: brightness(1.1);
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .sidebar-sf-logo:hover,
+    .sidebar-car-logo:hover {
+        transform: scale(1.05);
+        filter: brightness(1.2);
+    }
+
+    /* Both logos - SMALLER when sidebar is collapsed */
+    .sidebar-navigation.collapsed .sidebar-logo-section {
+        padding: 8px 6px;
+        margin: 6px 0;
+        gap: 6px;
+    }
+
+    .sidebar-navigation.collapsed .sidebar-sf-logo,
+    .sidebar-navigation.collapsed .sidebar-car-logo {
+        width: 30px;
+        height: 30px;
+    }
+
+    /* Better vertical space distribution */
+    .sidebar-nav {
+        flex: 0 1 auto;
+        min-height: 0;
+    }
+
+    .sidebar-footer {
+        margin-top: auto;
+        flex-shrink: 0;
+    }
+
+    /* CRITICAL SIDEBAR OPTIMIZATION - Step by step fixes */
+
+    /* 1. Reduce excessive sidebar width from 280px to 240px */
+    .sidebar-navigation {
+        width: 240px !important;
+        min-width: 240px !important;
+    }
+
+    /* 2. Modern Professional Theme Toggle - Responsive Design */
+    .sidebar-theme-section {
+        padding: 8px 20px !important;
+        margin-bottom: 8px !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+    }
+
+    /* Modern Toggle Container */
+    .sidebar-theme-section .theme-toggle-container {
+        margin: 0 !important;
+        position: relative !important;
+    }
+
+    /* EXPANDED STATE - Modern Professional Toggle */
+    .sidebar-theme-section .theme-toggle {
+        width: 72px !important;
+        height: 36px !important;
+        border-radius: 18px !important;
+        background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%) !important;
+        border: 2px solid #e2e8f0 !important;
+        position: relative !important;
+        cursor: pointer !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        box-shadow:
+            inset 0 2px 4px rgba(0, 0, 0, 0.1),
+            0 1px 2px rgba(0, 0, 0, 0.05) !important;
+    }
+
+    /* Toggle Thumb - Expanded */
+    .sidebar-theme-section .theme-toggle-thumb {
+        width: 28px !important;
+        height: 28px !important;
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+        border-radius: 50% !important;
+        position: absolute !important;
+        top: 2px !important;
+        left: 4px !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        box-shadow:
+            0 2px 4px rgba(0, 0, 0, 0.1),
+            0 1px 2px rgba(0, 0, 0, 0.06) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    /* Icons in Thumb */
+    .sidebar-theme-section .theme-icon {
+        font-size: 14px !important;
+        transition: all 0.3s ease !important;
+        position: absolute !important;
+    }
+
+    .sidebar-theme-section .light-icon {
+        color: #f59e0b !important;
+        opacity: 1 !important;
+    }
+
+    .sidebar-theme-section .dark-icon {
+        color: #6366f1 !important;
+        opacity: 0 !important;
+    }
+
+    /* Dark Mode Active State */
+    .sidebar-theme-section .theme-toggle-input:checked + .theme-toggle-slider {
+        background: linear-gradient(135deg, #1e293b 0%, #374151 100%) !important;
+        border-color: #374151 !important;
+    }
+
+    .sidebar-theme-section .theme-toggle-input:checked + .theme-toggle-slider .theme-toggle-thumb {
+        transform: translateX(36px) !important;
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+    }
+
+    .sidebar-theme-section .theme-toggle-input:checked + .theme-toggle-slider .light-icon {
+        opacity: 0 !important;
+    }
+
+    .sidebar-theme-section .theme-toggle-input:checked + .theme-toggle-slider .dark-icon {
+        opacity: 1 !important;
+        color: #ffffff !important;
+    }
+
+    /* Hover Effects */
+    .sidebar-theme-section .theme-toggle:hover {
+        transform: scale(1.02) !important;
+        box-shadow:
+            inset 0 2px 4px rgba(0, 0, 0, 0.1),
+            0 2px 8px rgba(0, 0, 0, 0.1) !important;
+    }
+
+    /* COLLAPSED STATE - Proportional Scaling */
+    .sidebar-navigation.collapsed .sidebar-theme-section {
+        padding: 6px 8px !important;
+        margin-bottom: 6px !important;
+    }
+
+    .sidebar-navigation.collapsed .sidebar-theme-section .theme-toggle {
+        width: 52px !important;
+        height: 26px !important;
+        border-radius: 13px !important;
+    }
+
+    .sidebar-navigation.collapsed .sidebar-theme-section .theme-toggle-thumb {
+        width: 20px !important;
+        height: 20px !important;
+        top: 1px !important;
+        left: 3px !important;
+    }
+
+    .sidebar-navigation.collapsed .sidebar-theme-section .theme-icon {
+        font-size: 10px !important;
+    }
+
+    .sidebar-navigation.collapsed .sidebar-theme-section .theme-toggle-input:checked + .theme-toggle-slider .theme-toggle-thumb {
+        transform: translateX(26px) !important;
+    }
+
+    /* 3. Fix footer padding and system status visibility */
+    .sidebar-footer {
+        padding: 12px 16px !important;
+    }
+
+    .sidebar-status {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        font-size: 12px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    .status-label {
+        max-width: 120px !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    /* 4. Update collapsed state for new width */
+    .sidebar-navigation.collapsed {
+        width: 60px !important;
+        min-width: 60px !important;
+    }
+
+    /* 5. Ensure responsive grid layouts use new width */
+    @media (max-width: 768px) {
+        .sidebar-navigation {
+            left: -240px !important;
+        }
+    }
+
+    /* ORDER QUEUE MANAGEMENT SPACING FIXES */
+
+    /* 1. CRITICAL FIX: Increase spacing between Scheduled Days and Individual Dealerships */
+    .day-selection {
+        margin-bottom: 50px !important;
+        padding-bottom: 20px !important;
+        position: relative !important;
+        z-index: 10 !important;
+    }
+
+    .dealership-selection {
+        margin-top: 40px !important;
+        clear: both !important;
+        position: relative !important;
+        z-index: 5 !important;
+        background: var(--theme-surface-elevated) !important;
+        border-radius: 12px !important;
+        padding: 24px !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+        border: 1px solid var(--theme-border) !important;
+    }
+
+    /* 2. Ensure day buttons have proper containment and spacing */
+    .day-buttons {
+        gap: 16px !important;
+        margin-bottom: 0px !important;
+        padding: 16px !important;
+        position: relative !important;
+        z-index: 15 !important;
+        overflow: hidden !important;
+    }
+
+    .dealership-selection h3 {
+        color: var(--primary-red) !important;
+        margin-bottom: 20px !important;
+        font-size: 1.3rem !important;
+        font-weight: 700 !important;
+    }
+
+    /* 4. Enhanced search section visual hierarchy */
+    .dealership-search {
+        margin-top: 12px !important;
+        position: relative !important;
+    }
+
+    /* 5. Autocomplete container and search bar fixes */
+    .dealership-search-container {
+        position: relative !important;
+        width: 100% !important;
+    }
+
+    /* Order Queue dealership search - has built-in icon */
+    .dealership-search .dealership-search-container .search-input {
+        width: 100% !important;
+        padding: 12px 16px 12px 40px !important;
+        border: 2px solid var(--theme-border) !important;
+        border-radius: 8px !important;
+        background: var(--theme-surface) !important;
+        color: var(--theme-text-primary) !important;
+        font-size: 14px !important;
+        transition: border-color 0.3s ease !important;
+    }
+
+    .dealership-search .dealership-search-container .search-input:focus {
+        outline: none !important;
+        border-color: var(--primary-red) !important;
+        box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1) !important;
+    }
+
+    /* CRITICAL: Disable the external CSS search icon that's creating duplicates */
+    .dealership-search::before {
+        display: none !important;
+    }
+
+    /* Order Queue search icon - our properly positioned one */
+    .dealership-search .dealership-search-container::before {
+        content: '\f002' !important;
+        font-family: 'Font Awesome 5 Free' !important;
+        font-weight: 900 !important;
+        position: absolute !important;
+        left: 14px !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        color: var(--theme-text-secondary) !important;
+        font-size: 14px !important;
+        pointer-events: none !important;
+        z-index: 2 !important;
+    }
+
+    /* VIN History search - has separate button, different styling */
+    .vin-history-interface .dealership-search-container .search-input {
+        width: 100% !important;
+        padding: 12px 16px !important;
+        border: 2px solid var(--theme-border) !important;
+        border-radius: 8px !important;
+        background: var(--theme-surface) !important;
+        color: var(--theme-text-primary) !important;
+        font-size: 14px !important;
+        transition: border-color 0.3s ease !important;
+    }
+
+    .dealership-autocomplete {
+        position: absolute !important;
+        top: 100% !important;
+        left: 0 !important;
+        right: 0 !important;
+        background: var(--theme-surface) !important;
+        border: 1px solid var(--theme-border) !important;
+        border-top: none !important;
+        border-radius: 0 0 8px 8px !important;
+        max-height: 200px !important;
+        overflow-y: auto !important;
+        z-index: 1000 !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+        display: none !important;
+    }
+
+    .autocomplete-item {
+        padding: 12px 16px !important;
+        cursor: pointer !important;
+        border-bottom: 1px solid var(--theme-border-light) !important;
+        transition: background 0.2s ease !important;
+    }
+
+    .autocomplete-item:hover {
+        background: var(--theme-bg-secondary) !important;
+    }
+
+    .autocomplete-item.selected {
+        background: var(--primary-red) !important;
+        color: white !important;
+    }
+
+    /* 6. Dealership list always visible and 2 panels per row - PRESERVE EXISTING GRID SYSTEM */
+    .dealership-list {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 12px !important;
+        margin-top: 16px !important;
+        padding: 8px !important;
+    }
+
+    /* Ensure dealership panels work properly in 2-column grid */
+    .dealership-list .modern-dealer-panel {
+        margin: 0 !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    </style>
+
 </head>
 <body>
     <div class="app-container">
-        <!-- Header -->
-        <header class="app-header">
-            <button class="mobile-menu-toggle" id="mobileMenuToggle">
-                <i class="fas fa-bars"></i>
-            </button>
-            <div class="header-content">
-                <div class="logo-section">
-                    <img src="{{ url_for('static', filename='images/LS_TEXT-SECONDARY.svg') }}" alt="Silver Fox Marketing" class="header-logo">
-                    <div class="title-section">
-                        <h1 class="app-title">Database and Order Processing Toolkit</h1>
-                        <span class="company-name">Silver Fox Marketing</span>
-                    </div>
-                </div>
-                <div class="status-section">
-                    <div class="status-indicator" id="systemStatus">
-                        <i class="fas fa-circle status-icon"></i>
-                        <span class="status-text">System Ready</span>
-                    </div>
-                    <div class="last-scrape" id="lastScrape">
-                        Last Scrape: Never
-                    </div>
-                    <!-- Dark Mode Toggle -->
-                    <div class="theme-toggle-container">
-                        <label class="theme-toggle" for="darkModeToggle" title="Toggle Dark Mode">
-                            <input type="checkbox" id="darkModeToggle" class="theme-toggle-input">
-                            <div class="theme-toggle-slider">
-                                <i class="fas fa-sun theme-icon light-icon"></i>
-                                <i class="fas fa-moon theme-icon dark-icon"></i>
-                                <div class="theme-toggle-thumb"></div>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-            </div>
-        </header>
 
         <!-- Main Content Area -->
         <div class="main-content">
@@ -118,6 +742,35 @@
                     </button>
                 </div>
                 
+                <!-- System Status Indicator -->
+                <div class="sidebar-status-section">
+                    <div class="status-indicator" id="systemStatus">
+                        <i class="fas fa-circle status-icon"></i>
+                        <span class="status-text">System Ready</span>
+                    </div>
+                </div>
+                
+                <!-- Last Scrape Indicator -->
+                <div class="sidebar-scrape-section">
+                    <div class="last-scrape" id="lastScrape">
+                        Last Scrape: Never
+                    </div>
+                </div>
+
+                <!-- Theme Toggle -->
+                <div class="sidebar-theme-section">
+                    <div class="theme-toggle-container">
+                        <label class="theme-toggle" for="darkModeToggle" title="Toggle Dark Mode">
+                            <input type="checkbox" id="darkModeToggle" class="theme-toggle-input">
+                            <div class="theme-toggle-slider">
+                                <i class="fas fa-sun theme-icon light-icon"></i>
+                                <i class="fas fa-moon theme-icon dark-icon"></i>
+                                <div class="theme-toggle-thumb"></div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
                 <nav class="sidebar-nav">
                     <!-- ORDER PROCESSING SECTION - First and primary -->
                     <div class="sidebar-section primary">
@@ -128,6 +781,7 @@
                         <button class="sidebar-tab active" data-tab="queue-management">
                             <i class="fas fa-tasks"></i>
                             <span class="tab-label">Order Queue</span>
+                            <span class="shortcut-hint">Alt+Q</span>
                             <div class="tab-indicator"></div>
                         </button>
                     </div>
@@ -143,11 +797,19 @@
                         <button class="sidebar-tab" data-tab="dealership-settings">
                             <i class="fas fa-cog"></i>
                             <span class="tab-label">Dealership Settings</span>
+                            <span class="shortcut-hint">Alt+D</span>
                             <div class="tab-indicator"></div>
                         </button>
                         <button class="sidebar-tab" data-tab="data-search">
                             <i class="fas fa-search"></i>
                             <span class="tab-label">Data Search</span>
+                            <span class="shortcut-hint">Alt+S</span>
+                            <div class="tab-indicator"></div>
+                        </button>
+                        <button class="sidebar-tab" data-tab="template-builder">
+                            <i class="fas fa-layer-group"></i>
+                            <span class="tab-label">Template Builder</span>
+                            <span class="shortcut-hint">Alt+T</span>
                             <div class="tab-indicator"></div>
                         </button>
                     </div>
@@ -173,15 +835,24 @@
                         <button class="sidebar-tab" data-tab="system-status">
                             <i class="fas fa-chart-line"></i>
                             <span class="tab-label">System Status</span>
+                            <span class="shortcut-hint">Alt+Y</span>
                             <div class="tab-indicator"></div>
                         </button>
                     </div>
                 </nav>
                 
                 <div class="sidebar-footer">
+                    <div class="sidebar-logo-section">
+                        <img src="{{ url_for('static', filename='images/silver_fox_logo.svg') }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}" alt="Silver Fox Marketing" class="sidebar-sf-logo">
+                        <img src="{{ url_for('static', filename='images/car_logo_orange.png') }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}" alt="LotSherpa" class="sidebar-car-logo">
+                    </div>
                     <div class="sidebar-status">
                         <i class="fas fa-circle status-dot"></i>
                         <span class="status-label">All Systems Online</span>
+                    </div>
+                    <div class="keyboard-shortcuts-hint" style="margin-top: 12px; padding: 8px 12px; background: rgba(99, 102, 241, 0.1); border-left: 3px solid #6366f1; border-radius: 4px; font-size: 12px; cursor: pointer;" onclick="if(window.keyboardShortcuts) window.keyboardShortcuts.toggleHelp()">
+                        <i class="fas fa-keyboard" style="color: #6366f1; margin-right: 6px;"></i>
+                        <span style="color: #6366f1; font-weight: 500;">Press <kbd style="background: #6366f1; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">F1</kbd> or <kbd style="background: #6366f1; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">?</kbd> for shortcuts</span>
                     </div>
                 </div>
             </aside>
@@ -428,6 +1099,7 @@
                             </div>
                         </div>
                         
+                        
                         <div class="dealership-settings-container">
                             <div class="settings-grid" id="dealershipSettingsGrid">
                                 <div class="loading">
@@ -457,13 +1129,11 @@
                                     </label>
                                 </div>
                                 
-                                <button class="btn btn-secondary" id="clearQueueBtn">
+                                <button class="btn btn-secondary" id="clearQueueBtn" title="Clear Queue (Alt+K)">
                                     <i class="fas fa-trash"></i>
-                                    Clear Queue
                                 </button>
                                 <button class="btn btn-primary" id="refreshQueueBtn">
                                     <i class="fas fa-sync"></i>
-                                    Refresh
                                 </button>
                             </div>
                         </div>
@@ -489,27 +1159,34 @@
                                     <div class="selection-panel">
                                 <!-- Day Buttons -->
                                 <div class="day-selection">
-                                    <h3>Scheduled Days</h3>
+                                    <h3>Scheduled Days
+                                        <i class="fas fa-cog settings-gear" id="schedule-settings-btn" title="Configure Schedule Settings"></i>
+                                    </h3>
                                     <div class="day-buttons">
                                         <button class="day-btn" data-day="monday">
                                             <i class="fas fa-calendar-day"></i>
-                                            Monday
+                                            MON
+                                            <span class="shortcut-hint">1</span>
                                         </button>
                                         <button class="day-btn" data-day="tuesday">
                                             <i class="fas fa-calendar-day"></i>
-                                            Tuesday
+                                            TUES
+                                            <span class="shortcut-hint">2</span>
                                         </button>
                                         <button class="day-btn" data-day="wednesday">
                                             <i class="fas fa-calendar-day"></i>
-                                            Wednesday
+                                            WED
+                                            <span class="shortcut-hint">3</span>
                                         </button>
                                         <button class="day-btn" data-day="thursday">
                                             <i class="fas fa-calendar-day"></i>
-                                            Thursday
+                                            THURS
+                                            <span class="shortcut-hint">4</span>
                                         </button>
                                         <button class="day-btn" data-day="friday">
                                             <i class="fas fa-calendar-day"></i>
-                                            Friday
+                                            FRI
+                                            <span class="shortcut-hint">5</span>
                                         </button>
                                     </div>
                                 </div>
@@ -520,13 +1197,12 @@
                                     
                                     <!-- Dealership Search -->
                                     <div class="dealership-search">
-                                        <input type="text" id="dealershipSearchInput" placeholder="Search dealerships..." class="search-input">
-                                        <button class="search-btn" id="dealershipSearchBtn">
-                                            <i class="fas fa-search"></i>
-                                        </button>
-                                        <button class="clear-search-btn" id="clearDealershipSearchBtn" style="display: none;">
-                                            <i class="fas fa-times"></i>
-                                        </button>
+                                        <div class="dealership-search-container">
+                                            <input type="text" id="dealershipSearchInput" placeholder="Search dealerships... (Press / to focus)" class="search-input">
+                                            <div class="dealership-autocomplete" id="dealershipAutocomplete">
+                                                <!-- Autocomplete suggestions will be populated here -->
+                                            </div>
+                                        </div>
                                     </div>
                                     
                                     <div class="dealership-list" id="dealershipList">
@@ -547,26 +1223,7 @@
                                     </div>
                                 </div>
                                 
-                                <div class="queue-actions">
-                                    <!-- Testing Mode Toggle -->
-                                    <div class="testing-mode-toggle" style="margin-bottom: 1rem; padding: 0.75rem; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px;">
-                                        <label style="display: flex; align-items: center; cursor: pointer; margin: 0;">
-                                            <input type="checkbox" id="queueTestingMode" style="margin-right: 10px; width: 18px; height: 18px; cursor: pointer;">
-                                            <span style="font-weight: 500; color: #856404;">
-                                                <i class="fas fa-flask" style="margin-right: 5px;"></i>
-                                                Testing Mode - Skip VIN History Logging
-                                            </span>
-                                        </label>
-                                        <p style="margin: 8px 0 0 28px; color: #856404; font-size: 12px; line-height: 1.3;">
-                                            When enabled, processed VINs will NOT be added to dealership VIN histories. Use for testing to avoid affecting future CAO comparisons.
-                                        </p>
-                                    </div>
-                                    
-                                    <button class="btn btn-primary btn-large" id="processQueueBtn" disabled>
-                                        <i class="fas fa-play"></i>
-                                        Process Queue
-                                    </button>
-                                </div>
+                                <!-- Queue actions moved outside to enable fixed positioning -->
                             </div>
                         </div>
                     </div>
@@ -664,18 +1321,307 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Template Builder Tab -->
+                    <div class="tab-panel" id="template-builder-panel">
+                        <div class="panel-header">
+                            <h2>
+                                <i class="fas fa-layer-group"></i>
+                                Template Builder
+                            </h2>
+                            <div class="control-buttons">
+                                <button class="btn btn-secondary" id="templatePreviewBtn">
+                                    <i class="fas fa-eye"></i>
+                                    Preview
+                                </button>
+                                <button class="btn btn-success" id="saveTemplateBtn">
+                                    <i class="fas fa-save"></i>
+                                    Save Template
+                                </button>
+                                <button class="btn btn-warning" id="updateTemplateBtn" style="display: none;">
+                                    <i class="fas fa-edit"></i>
+                                    Update Template
+                                </button>
+                                <button class="btn btn-primary" id="newTemplateBtn">
+                                    <i class="fas fa-plus"></i>
+                                    New Template
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Template Builder Content -->
+                        <div class="template-builder-container">
+                            <!-- Left Panel - Template List & Properties -->
+                            <div class="template-sidebar">
+                                <!-- Existing Templates -->
+                                <div class="template-section">
+                                    <h3>
+                                        <i class="fas fa-folder"></i>
+                                        My Templates
+                                    </h3>
+                                    <div class="template-list" id="templateList">
+                                        <div class="template-item sample">
+                                            <div class="template-info">
+                                                <div class="template-name">Sample Template</div>
+                                                <div class="template-details">3 columns • Modified today</div>
+                                            </div>
+                                            <div class="template-actions">
+                                                <button class="btn-icon" title="Edit"><i class="fas fa-edit"></i></button>
+                                                <button class="btn-icon" title="Clone"><i class="fas fa-copy"></i></button>
+                                                <button class="btn-icon danger" title="Delete"><i class="fas fa-trash"></i></button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Template Properties -->
+                                <div class="template-section">
+                                    <h3>
+                                        <i class="fas fa-cog"></i>
+                                        Template Properties
+                                    </h3>
+                                    <form class="template-form" id="templatePropertiesForm">
+                                        <div class="form-group">
+                                            <label for="templateName">Template Name</label>
+                                            <input type="text" id="templateName" placeholder="Enter template name" class="form-control">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="templateDescription">Description</label>
+                                            <textarea id="templateDescription" placeholder="Brief description" class="form-control" rows="2"></textarea>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="templateType">Template Type</label>
+                                            <select id="templateType" class="form-control">
+                                                <option value="standard">Standard</option>
+                                                <option value="compact">Compact</option>
+                                                <option value="detailed">Detailed</option>
+                                            </select>
+                                        </div>
+                                    </form>
+                                </div>
+
+                                <!-- Available Fields -->
+                                <div class="template-section">
+                                    <h3>
+                                        <i class="fas fa-puzzle-piece"></i>
+                                        Available Fields
+                                    </h3>
+                                    <div class="field-library" id="fieldLibrary">
+                                        <!-- Basic Fields -->
+                                        <div class="field-category">
+                                            <h4>Basic Fields</h4>
+                                            <div class="field-grid">
+                                                <div class="field-item" data-field="vin" draggable="true">
+                                                    <i class="fas fa-barcode"></i>
+                                                    <span>VIN</span>
+                                                </div>
+                                                <div class="field-item" data-field="stock" draggable="true">
+                                                    <i class="fas fa-hashtag"></i>
+                                                    <span>Stock #</span>
+                                                </div>
+                                                <div class="field-item" data-field="type" draggable="true">
+                                                    <i class="fas fa-info-circle"></i>
+                                                    <span>Type</span>
+                                                </div>
+                                                <div class="field-item" data-field="year" draggable="true">
+                                                    <i class="fas fa-calendar"></i>
+                                                    <span>Year</span>
+                                                </div>
+                                                <div class="field-item" data-field="make" draggable="true">
+                                                    <i class="fas fa-industry"></i>
+                                                    <span>Make</span>
+                                                </div>
+                                                <div class="field-item" data-field="model" draggable="true">
+                                                    <i class="fas fa-car"></i>
+                                                    <span>Model</span>
+                                                </div>
+                                                <div class="field-item" data-field="trim" draggable="true">
+                                                    <i class="fas fa-star"></i>
+                                                    <span>Trim</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Pricing & Status -->
+                                        <div class="field-category">
+                                            <h4>Pricing & Status</h4>
+                                            <div class="field-grid">
+                                                <div class="field-item" data-field="price" draggable="true">
+                                                    <i class="fas fa-dollar-sign"></i>
+                                                    <span>Price</span>
+                                                </div>
+                                                <div class="field-item" data-field="msrp" draggable="true">
+                                                    <i class="fas fa-tag"></i>
+                                                    <span>MSRP</span>
+                                                </div>
+                                                <div class="field-item" data-field="status" draggable="true">
+                                                    <i class="fas fa-check-circle"></i>
+                                                    <span>Status</span>
+                                                </div>
+                                                <div class="field-item" data-field="date_in_stock" draggable="true">
+                                                    <i class="fas fa-clock"></i>
+                                                    <span>Date in Stock</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Vehicle Details -->
+                                        <div class="field-category">
+                                            <h4>Vehicle Details</h4>
+                                            <div class="field-grid">
+                                                <div class="field-item" data-field="ext_color" draggable="true">
+                                                    <i class="fas fa-palette"></i>
+                                                    <span>Ext Color</span>
+                                                </div>
+                                                <div class="field-item" data-field="body_style" draggable="true">
+                                                    <i class="fas fa-truck"></i>
+                                                    <span>Body Style</span>
+                                                </div>
+                                                <div class="field-item" data-field="fuel_type" draggable="true">
+                                                    <i class="fas fa-gas-pump"></i>
+                                                    <span>Fuel Type</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Location Fields -->
+                                        <div class="field-category">
+                                            <h4>Location</h4>
+                                            <div class="field-grid">
+                                                <div class="field-item" data-field="location" draggable="true">
+                                                    <i class="fas fa-map-marker-alt"></i>
+                                                    <span>Location</span>
+                                                </div>
+                                                <div class="field-item" data-field="street_address" draggable="true">
+                                                    <i class="fas fa-road"></i>
+                                                    <span>Street Address</span>
+                                                </div>
+                                                <div class="field-item" data-field="locality" draggable="true">
+                                                    <i class="fas fa-city"></i>
+                                                    <span>City</span>
+                                                </div>
+                                                <div class="field-item" data-field="region" draggable="true">
+                                                    <i class="fas fa-map"></i>
+                                                    <span>State</span>
+                                                </div>
+                                                <div class="field-item" data-field="postal_code" draggable="true">
+                                                    <i class="fas fa-envelope"></i>
+                                                    <span>Zip Code</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Special Fields -->
+                                        <div class="field-category">
+                                            <h4>Special Fields</h4>
+                                            <div class="field-grid">
+                                                <div class="field-item special" data-field="qr_code" draggable="true">
+                                                    <i class="fas fa-qrcode"></i>
+                                                    <span>QR Code</span>
+                                                </div>
+                                                <div class="field-item calculated" data-field="days_on_lot" draggable="true">
+                                                    <i class="fas fa-clock"></i>
+                                                    <span>Days on Lot</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Concatenated Fields -->
+                                        <div class="field-category">
+                                            <div class="category-header">
+                                                <h4>Combined Fields</h4>
+                                                <button class="btn btn-sm btn-success" id="createCombinedFieldBtn" title="Create custom combined field" onclick="window.openFieldConcatenationModal()" style="background-color: #28a745; border-color: #28a745;">
+                                                    <i class="fas fa-plus"></i> Field
+                                                </button>
+                                            </div>
+                                            <div class="field-grid" id="combinedFieldsGrid">
+                                                <div class="field-item combined" data-field="year_make_model" draggable="true">
+                                                    <i class="fas fa-compress-alt"></i>
+                                                    <span>Year Make Model</span>
+                                                </div>
+                                                <div class="field-item combined" data-field="stock_vin" draggable="true">
+                                                    <i class="fas fa-link"></i>
+                                                    <span>Stock - VIN</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Right Panel - Template Designer -->
+                            <div class="template-designer">
+                                <div class="designer-header">
+                                    <h3>
+                                        <i class="fas fa-drafting-compass"></i>
+                                        Template Designer
+                                    </h3>
+                                    <div class="designer-controls">
+                                        <button class="btn btn-sm btn-secondary" id="clearTemplateBtn">
+                                            <i class="fas fa-eraser"></i>
+                                            Clear
+                                        </button>
+                                        <button class="btn btn-sm btn-primary" id="addColumnBtn">
+                                            <i class="fas fa-plus"></i>
+                                            Add Column
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Template Canvas -->
+                                <div class="template-canvas" id="templateCanvas">
+                                    <div class="canvas-header">
+                                        <div class="canvas-title">Template Preview</div>
+                                        <div class="canvas-subtitle">Drag fields from the left panel to build your template</div>
+                                    </div>
+
+                                    <!-- Template Columns Container -->
+                                    <div class="template-columns" id="templateColumns">
+                                        <div class="drop-zone empty" id="dropZone">
+                                            <div class="drop-message">
+                                                <i class="fas fa-mouse-pointer"></i>
+                                                <p>Drag and drop fields here to create your template</p>
+                                                <p class="help-text">Start by dragging a field from the Available Fields panel</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Template Preview Table -->
+                                <div class="template-preview-section">
+                                    <div class="preview-header">
+                                        <h4>
+                                            <i class="fas fa-eye"></i>
+                                            Live Preview
+                                        </h4>
+                                        <select class="form-control preview-dealership" id="previewDealership">
+                                            <option value="">Select dealership for sample data...</option>
+                                        </select>
+                                    </div>
+                                    <div class="preview-table-container">
+                                        <table class="preview-table" id="previewTable">
+                                            <thead id="previewTableHead">
+                                                <tr>
+                                                    <td colspan="100%" class="no-preview">
+                                                        <i class="fas fa-info-circle"></i>
+                                                        Add fields to see preview
+                                                    </td>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="previewTableBody">
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
                 </div>
             </div>
         </div>
         
-        <!-- Footer -->
-        <footer class="app-footer">
-            <div class="footer-content">
-                <img src="{{ url_for('static', filename='images/Asset_67.svg') }}" alt="Silver Fox Asset" class="footer-logo">
-            </div>
-        </footer>
     </div>
 
     <!-- Modals -->
@@ -720,6 +1666,17 @@
                                     </div>
                                 </label>
                             </div>
+                            <div class="toggle-option" data-value="maintenance">
+                                <input type="radio" id="orderTypeMaintenance" name="order_type" value="maintenance">
+                                <label for="orderTypeMaintenance" class="modern-radio-label">
+                                    <div class="radio-indicator"></div>
+                                    <div class="radio-content">
+                                        <img src="/static/images/maintenance_icon.svg" alt="Maintenance" style="width: 16px; height: 16px; color: currentColor;">
+                                        <span class="radio-title">MAINTENANCE</span>
+                                        <span class="radio-desc">CAO + Manual VINs</span>
+                                    </div>
+                                </label>
+                            </div>
                         </div>
                     </div>
 
@@ -730,29 +1687,53 @@
                             <h4>Vehicle Types</h4>
                         </div>
                         <div class="modern-checkbox-grid">
-                            <div class="modern-checkbox-item">
-                                <input type="checkbox" id="vehicleNew" name="vehicle_types" value="new" checked>
-                                <label for="vehicleNew" class="modern-checkbox-label">
-                                    <div class="checkbox-indicator">
-                                        <i class="fas fa-check"></i>
-                                    </div>
-                                    <div class="checkbox-content">
-                                        <i class="fas fa-star"></i>
-                                        <span>New Vehicles</span>
-                                    </div>
-                                </label>
+                            <div class="modern-checkbox-item" style="flex-direction: column; align-items: flex-start;">
+                                <div style="display: flex; align-items: center; width: 100%;">
+                                    <input type="checkbox" id="vehicleNew" name="vehicle_types" value="new" checked>
+                                    <label for="vehicleNew" class="modern-checkbox-label">
+                                        <div class="checkbox-indicator">
+                                            <i class="fas fa-check"></i>
+                                        </div>
+                                        <div class="checkbox-content">
+                                            <i class="fas fa-star"></i>
+                                            <span>New Vehicles</span>
+                                        </div>
+                                    </label>
+                                </div>
+                                <!-- Custom Template Dropdown for New Vehicles -->
+                                <div style="margin-top: 10px; margin-left: 30px;">
+                                    <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Template:</label>
+                                    <select id="newVehicleCustomTemplate" name="new_custom_template" class="modern-input" style="font-size: 11px; padding: 4px 8px; max-width: 200px;">
+                                        <option value="">Use Default Template</option>
+                                        <optgroup label="Custom Templates" id="newCustomTemplatesGroup">
+                                            <!-- Custom templates will be populated dynamically -->
+                                        </optgroup>
+                                    </select>
+                                </div>
                             </div>
-                            <div class="modern-checkbox-item">
-                                <input type="checkbox" id="vehicleUsed" name="vehicle_types" value="used" checked>
-                                <label for="vehicleUsed" class="modern-checkbox-label">
-                                    <div class="checkbox-indicator">
-                                        <i class="fas fa-check"></i>
-                                    </div>
-                                    <div class="checkbox-content">
-                                        <i class="fas fa-history"></i>
-                                        <span>Used Vehicles</span>
-                                    </div>
-                                </label>
+                            <div class="modern-checkbox-item" style="flex-direction: column; align-items: flex-start;">
+                                <div style="display: flex; align-items: center; width: 100%;">
+                                    <input type="checkbox" id="vehicleUsed" name="vehicle_types" value="used" checked>
+                                    <label for="vehicleUsed" class="modern-checkbox-label">
+                                        <div class="checkbox-indicator">
+                                            <i class="fas fa-check"></i>
+                                        </div>
+                                        <div class="checkbox-content">
+                                            <i class="fas fa-history"></i>
+                                            <span>Used Vehicles</span>
+                                        </div>
+                                    </label>
+                                </div>
+                                <!-- Custom Template Dropdown for Used Vehicles -->
+                                <div style="margin-top: 10px; margin-left: 30px;">
+                                    <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Template:</label>
+                                    <select id="usedVehicleCustomTemplate" name="used_custom_template" class="modern-input" style="font-size: 11px; padding: 4px 8px; max-width: 200px;">
+                                        <option value="">Use Default Template</option>
+                                        <optgroup label="Custom Templates" id="usedCustomTemplatesGroup">
+                                            <!-- Custom templates will be populated dynamically -->
+                                        </optgroup>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -784,6 +1765,77 @@
                                     Minimum Year
                                 </label>
                                 <input type="number" id="minYear" name="min_year" min="1900" max="2030" placeholder="Any year" class="modern-input">
+                            </div>
+                            <div class="filter-item">
+                                <label for="seasoningDays" class="modern-input-label">
+                                    <i class="fas fa-hourglass-half"></i>
+                                    Seasoning Days
+                                </label>
+                                <input type="number" id="seasoningDays" name="seasoning_days" min="0" max="365" placeholder="0" class="modern-input">
+                                <small class="help-text">Minimum days vehicle must be on lot before including in CAO orders</small>
+                            </div>
+                            <div class="filter-item">
+                                <label for="requiredBrands" class="modern-input-label">
+                                    <i class="fas fa-tags"></i>
+                                    Required Brands
+                                </label>
+                                <input type="text" id="requiredBrands" name="required_brands" placeholder="e.g., Toyota, Honda" class="modern-input">
+                                <small class="help-text">Comma-separated list of brands. Leave blank to include all brands</small>
+                            </div>
+                        </div>
+                        
+                        <!-- Special Filters Section -->
+                        <div class="form-section">
+                            <div class="section-header">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <h4>Special Requirements</h4>
+                            </div>
+                            <div class="modern-checkbox-grid">
+                                <div class="modern-checkbox-item">
+                                    <input type="checkbox" id="excludeMissingPrice" name="exclude_missing_price" value="true">
+                                    <label for="excludeMissingPrice" class="modern-checkbox-label">
+                                        <div class="checkbox-indicator">
+                                            <i class="fas fa-check"></i>
+                                        </div>
+                                        <div class="checkbox-content">
+                                            <i class="fas fa-dollar-sign"></i>
+                                            <span>Exclude Missing Prices</span>
+                                            <small>Required for graphics with printed prices</small>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Output Format Section -->
+                        <div class="form-section">
+                            <div class="section-header">
+                                <i class="fas fa-file-export"></i>
+                                <h4>Output Format Settings</h4>
+                            </div>
+                            <div class="filter-grid">
+                                <div class="filter-item">
+                                    <label for="templateVariant" class="modern-input-label">
+                                        <i class="fas fa-columns"></i>
+                                        Template Format
+                                    </label>
+                                    <select id="templateVariant" name="template_variant" class="modern-input">
+                                        <option value="standard">Standard Format</option>
+                                        <option value="glendale_format">SCP + $</option>
+                                        <optgroup label="Custom Templates" id="customTemplatesGroup">
+                                            <!-- Custom templates will be populated dynamically -->
+                                        </optgroup>
+                                    </select>
+                                    <small class="help-text">Column structure for CSV output</small>
+                                </div>
+                                <div class="filter-item">
+                                    <label for="priceMarkup" class="modern-input-label">
+                                        <i class="fas fa-plus-circle"></i>
+                                        Price Markup ($)
+                                    </label>
+                                    <input type="number" id="priceMarkup" name="price_markup" min="0" placeholder="0" class="modern-input">
+                                    <small class="help-text">Amount to add to vehicle price in output</small>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -899,6 +1951,76 @@
         </div>
     </div>
 
+    <!-- Dealership Schedule Configuration Modal -->
+    <div class="modal" id="dealershipScheduleModal">
+        <div class="modal-content dealership-schedule-modal">
+            <div class="modal-header">
+                <h3>Configure Dealership Schedule</h3>
+                <button class="modal-close" id="closeDealershipScheduleModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="schedule-instructions">
+                    <p>Select which dealerships should be processed on each day of the week:</p>
+                </div>
+
+                <div class="schedule-config-grid">
+                    <!-- Monday -->
+                    <div class="day-config-section">
+                        <h4><i class="fas fa-calendar-day"></i> Monday</h4>
+                        <div class="dealership-grid" data-day="monday">
+                            <!-- Dealerships will be populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Tuesday -->
+                    <div class="day-config-section">
+                        <h4><i class="fas fa-calendar-day"></i> Tuesday</h4>
+                        <div class="dealership-grid" data-day="tuesday">
+                            <!-- Dealerships will be populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Wednesday -->
+                    <div class="day-config-section">
+                        <h4><i class="fas fa-calendar-day"></i> Wednesday</h4>
+                        <div class="dealership-grid" data-day="wednesday">
+                            <!-- Dealerships will be populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Thursday -->
+                    <div class="day-config-section">
+                        <h4><i class="fas fa-calendar-day"></i> Thursday</h4>
+                        <div class="dealership-grid" data-day="thursday">
+                            <!-- Dealerships will be populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Friday -->
+                    <div class="day-config-section">
+                        <h4><i class="fas fa-calendar-day"></i> Friday</h4>
+                        <div class="dealership-grid" data-day="friday">
+                            <!-- Dealerships will be populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bulk-actions">
+                    <button class="btn btn-secondary btn-sm" id="selectAllDays">Assign All to Every Day</button>
+                    <button class="btn btn-secondary btn-sm" id="clearAllDays">Clear All Assignments</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelScheduleConfig">Cancel</button>
+                <button class="btn btn-primary" id="saveScheduleConfig">
+                    <i class="fas fa-save"></i> Save Schedule
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- VIN Log Modal -->
     <div class="modal" id="vinLogModal">
         <div class="modal-content vin-log-modal modern-modal">
@@ -1006,7 +2128,11 @@
                 </button>
                 <button class="modern-modal-btn update-btn" id="updateVinLogBtn">
                     <i class="fas fa-upload"></i>
-                    Update Log
+                    Update VIN Log
+                </button>
+                <button class="modern-modal-btn delete-btn" id="removeOrderGroupBtn" style="background-color: #dc3545;">
+                    <i class="fas fa-trash-alt"></i>
+                    Remove Order Group
                 </button>
                 <button class="modern-modal-btn close-btn" id="closeVinLogModalBtn">
                     <i class="fas fa-times-circle"></i>
@@ -1057,11 +2183,11 @@
                 <!-- Import Method Selection -->
                 <div class="import-method-selection">
                     <div class="method-tabs">
-                        <button class="method-tab active" id="csvImportTab" data-method="csv">
+                        <button class="method-tab active" id="csvImportTab" data-method="csv" onclick="switchToCSVModeInline()">
                             <i class="fas fa-file-csv"></i>
                             CSV Import
                         </button>
-                        <button class="method-tab" id="manualEntryTab" data-method="manual">
+                        <button class="method-tab" id="manualEntryTab" data-method="manual" onclick="switchToManualModeInline()">
                             <i class="fas fa-keyboard"></i>
                             Manual Entry
                         </button>
@@ -1118,7 +2244,7 @@
 
 SF24002
 3FAHP0JA4CR123456
-5NPEB4AC7BH987654" rows="12"></textarea>
+5NPEB4AC7BH987654" rows="12" oninput="updateManualEntryStatsInline()"></textarea>
                                 
                                 <div class="entry-stats" id="manualEntryStats">
                                     <div class="stat-item">
@@ -1133,11 +2259,11 @@ SF24002
                             </div>
                             
                             <div class="manual-entry-actions">
-                                <button class="manual-action-btn validate-btn" id="validateManualEntry">
+                                <button class="manual-action-btn validate-btn" id="validateManualEntry" onclick="emergencyValidate()">
                                     <i class="fas fa-check-circle"></i>
                                     Validate Format
                                 </button>
-                                <button class="manual-action-btn clear-btn" id="clearManualEntry">
+                                <button class="manual-action-btn clear-btn" id="clearManualEntry" onclick="emergencyClear()">
                                     <i class="fas fa-eraser"></i>
                                     Clear All
                                 </button>
@@ -1160,8 +2286,8 @@ SF24002
                 <!-- Import Options -->
                 <div class="import-options">
                     <div class="option-group">
-                        <input type="checkbox" id="skipDuplicates" checked>
-                        <label for="skipDuplicates">Skip duplicate VINs (recommended)</label>
+                        <input type="checkbox" id="skipDuplicates">
+                        <label for="skipDuplicates">Skip duplicate VINs</label>
                     </div>
                     <div class="option-group">
                         <input type="checkbox" id="updateExisting">
@@ -1214,7 +2340,11 @@ SF24002
                 <button class="btn btn-secondary" id="cancelVinLogUpdate">
                     Cancel
                 </button>
-                <button class="btn btn-primary" id="startVinLogImport" disabled>
+                <button class="btn btn-success" id="importManualVins" onclick="handleManualVinImport()">
+                    <i class="fas fa-keyboard"></i>
+                    Import Manual VINs
+                </button>
+                <button class="btn btn-primary" id="startVinLogImport" disabled onclick="window.app.handleImportButtonClick()">
                     <i class="fas fa-upload" id="importButtonIcon"></i>
                     <span id="importButtonText">Import CSV</span>
                 </button>
@@ -1329,7 +2459,7 @@ SF24002
         <div class="modal-content wizard-modal">
             <div class="modal-header">
                 <div class="modal-header-logo-section">
-                    <img src="{{ url_for('static', filename='images/LS_GLYPH-PRIMARY.svg') }}" alt="LotSherpa" class="modal-wizard-logo">
+                    <img src="{{ url_for('static', filename='images/LS_GLYPH_SMALL_PRIMARY.png') }}" alt="LotSherpa" class="modal-wizard-logo">
                     <div class="modal-header-text">
                         <h3 class="modal-wizard-title">Order Processing System</h3>
                     </div>
@@ -1339,6 +2469,22 @@ SF24002
                 </button>
             </div>
             <div class="modal-body">
+                <!-- Keyboard Shortcuts Help Banner -->
+                <div class="wizard-shortcuts-banner" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px;">
+                    <i class="fas fa-keyboard" style="color: #6366f1; font-size: 20px;"></i>
+                    <div style="flex: 1;">
+                        <strong style="color: #6366f1; font-size: 14px;">Keyboard Shortcuts:</strong>
+                        <span style="color: #64748b; font-size: 13px; margin-left: 8px;">
+                            <kbd style="background: #6366f1; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin: 0 4px;">Alt+←</kbd> Back
+                            <kbd style="background: #6366f1; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin: 0 4px;">Alt+→</kbd> Next
+                            <kbd style="background: #6366f1; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin: 0 4px;">Alt+Enter</kbd> Continue
+                            <kbd style="background: #6366f1; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin: 0 4px;">Alt+Shift+P</kbd> Process Now
+                            <kbd style="background: #6366f1; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin: 0 4px;">Alt+B</kbd> Batch
+                            <kbd style="background: #6366f1; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin: 0 4px;">Esc</kbd> Close
+                        </span>
+                    </div>
+                </div>
+
                 <!-- Wizard Progress Indicator -->
                 <div class="wizard-progress" id="modalWizardProgress">
                     <div class="progress-step active" id="modal-step-initialize">
@@ -1397,6 +2543,7 @@ SF24002
                             <button class="btn-wizard primary" onclick="window.modalWizard.startProcessing()">
                                 <i class="fas fa-play"></i>
                                 Start Processing
+                                <span class="shortcut-hint">Alt+Enter</span>
                             </button>
                         </div>
                     </div>
@@ -1416,10 +2563,12 @@ SF24002
                             <button class="btn-wizard secondary" onclick="window.modalWizard.previousStep()">
                                 <i class="fas fa-arrow-left"></i>
                                 Back
+                                <span class="shortcut-hint">Alt+←</span>
                             </button>
                             <button class="btn-wizard primary" onclick="window.modalWizard.nextStep()">
                                 <i class="fas fa-arrow-right"></i>
                                 Continue
+                                <span class="shortcut-hint">Alt+→</span>
                             </button>
                         </div>
                     </div>
@@ -1439,10 +2588,12 @@ SF24002
                             <button class="btn-wizard secondary" onclick="window.modalWizard.previousStep()">
                                 <i class="fas fa-arrow-left"></i>
                                 Back
+                                <span class="shortcut-hint">Alt+←</span>
                             </button>
                             <button class="btn-wizard primary" onclick="window.modalWizard.processListVins()">
                                 <i class="fas fa-arrow-right"></i>
                                 Process VINs
+                                <span class="shortcut-hint">Alt+Enter</span>
                             </button>
                         </div>
                     </div>
@@ -1455,14 +2606,31 @@ SF24002
                         </div>
 
                         <div class="review-summary" id="modalReviewSummary">
+                            <!-- Dealership Selector Section -->
+                            <div class="dealership-selector-section" id="modalDealershipSelector" style="display: none;">
+                                <div class="section-header">
+                                    <h3><i class="fas fa-building"></i> Select Dealership to Review</h3>
+                                    <p class="section-description">Choose which dealership's data to review</p>
+                                </div>
+                                <div class="dealership-tabs" id="modalDealershipTabs">
+                                    <!-- Dealership tabs will be populated here -->
+                                </div>
+                            </div>
+
                             <!-- Vehicle Data Preview Section -->
                             <div class="vehicle-preview-section">
                                 <div class="section-header">
                                     <h3><i class="fas fa-car"></i> Vehicle Data Preview</h3>
+
+
                                     <div class="preview-stats">
                                         <span class="vehicle-count-badge">
                                             <i class="fas fa-list-ol"></i>
                                             <span id="modalVehicleCount">0</span>
+                                        </span>
+                                        <span class="current-dealership-badge" id="modalCurrentDealership" style="display: none;">
+                                            <i class="fas fa-building"></i>
+                                            <span id="modalCurrentDealershipName">All Dealerships</span>
                                         </span>
                                         <button class="btn btn-secondary btn-sm" id="modalDownloadCsv" style="display: none;">
                                             <i class="fas fa-download"></i>
@@ -1475,13 +2643,15 @@ SF24002
                                     <table class="vehicle-data-table" id="modalVehicleDataTable">
                                         <thead>
                                             <tr>
-                                                <th>Actions</th>
+                                                <th></th>
                                                 <th>Year/Make</th>
                                                 <th>Model</th>
                                                 <th>Trim</th>
                                                 <th>Stock</th>
                                                 <th>VIN</th>
-                                                <th>QR</th>
+                                                <th class="raw-status-header">Raw Status</th>
+                                                <th class="data-toggle-header">Data Type</th>
+                                                <th></th>
                                             </tr>
                                         </thead>
                                         <tbody id="modalVehicleDataBody">
@@ -1504,10 +2674,17 @@ SF24002
                             <button class="btn-wizard secondary" onclick="window.modalWizard.previousStep()">
                                 <i class="fas fa-arrow-left"></i>
                                 Back
+                                <span class="shortcut-hint">Alt+←</span>
+                            </button>
+                            <button class="btn-wizard success" onclick="window.modalWizard.processThisDealershipNow()">
+                                <i class="fas fa-bolt"></i>
+                                Process Presently
+                                <span class="shortcut-hint">Alt+Shift+P</span>
                             </button>
                             <button class="btn-wizard primary" onclick="window.modalWizard.proceedToQRGeneration()">
-                                <i class="fas fa-qrcode"></i>
-                                Generate QR Codes
+                                <i class="fas fa-layer-group"></i>
+                                Batch Process
+                                <span class="shortcut-hint">Alt+B</span>
                             </button>
                         </div>
                     </div>
@@ -1519,23 +2696,53 @@ SF24002
                             <p class="step-description">Provide the order number for file organization and tracking</p>
                         </div>
 
-                        <div class="order-number-input">
+                        <!-- Single Dealership Order Number Input (default) -->
+                        <div class="single-order-input" id="singleOrderInput">
                             <div class="form-group">
                                 <label for="modalOrderNumber">Order Number:</label>
-                                <input type="text" id="modalOrderNumber" class="form-control" 
-                                       placeholder="e.g., SF24001, Order123, etc." 
+                                <input type="text" id="modalOrderNumber" class="form-control"
+                                       placeholder="e.g., SF24001, Order123, etc."
                                        maxlength="20" required>
                             </div>
+                        </div>
+
+                        <!-- Multi-Dealership Order Number Input -->
+                        <div class="multi-order-input" id="multiOrderInput" style="display: none;">
+                            <div class="multi-order-header">
+                                <h3><i class="fas fa-building"></i> Order Numbers by Dealership</h3>
+                                <p class="multi-order-description">Enter a unique order number for each dealership being processed</p>
+                            </div>
+                            <div class="dealership-order-list" id="dealershipOrderList">
+                                <!-- Dealership order inputs will be populated here -->
+                            </div>
+                        </div>
+
+
+                        <!-- VIN Preview Section -->
+                        <div id="orderNumberPreview" class="order-preview" style="display: none;">
+                            <h4>Order Preview</h4>
+                            <div class="preview-content">
+                                <div id="vinPreviewList"></div>
+                            </div>
+                        </div>
+
+                        <!-- Other required elements -->
+                        <div style="display: none;">
+                            <div id="orderNumberDealershipDisplay"></div>
+                            <div id="orderDealershipName"></div>
+                            <div id="orderVinCount"></div>
                         </div>
                         
                         <div class="wizard-actions">
                             <button class="btn-wizard secondary" onclick="window.modalWizard.previousStep()">
                                 <i class="fas fa-arrow-left"></i>
                                 Back
+                                <span class="shortcut-hint">Alt+←</span>
                             </button>
                             <button class="btn-wizard primary" onclick="window.modalWizard.generateFinalOutput()">
                                 <i class="fas fa-check"></i>
                                 Complete Order
+                                <span class="shortcut-hint">Alt+Enter</span>
                             </button>
                         </div>
                     </div>
@@ -1647,8 +2854,617 @@ SF24002
         </div>
     </div>
 
+    <!-- Field Concatenation Modal -->
+    <div class="modal" id="fieldConcatenationModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-compress-alt"></i> Create Combined Field</h3>
+                <button class="modal-close" id="closeConcatenationModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="concatenationForm">
+                    <div class="form-group">
+                        <label for="combinedFieldName">Field Name:</label>
+                        <input type="text" id="combinedFieldName" class="form-control" placeholder="e.g., Year Make Model">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="combinedFieldKey">Field Key:</label>
+                        <input type="text" id="combinedFieldKey" class="form-control" placeholder="e.g., year_make_model" readonly>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Fields to Combine:</label>
+                        <div class="field-selection-area">
+                            <div class="available-fields-list">
+                                <h4>Available Fields</h4>
+                                <div class="field-chips" id="availableFieldChips">
+                                    <!-- Core Vehicle Fields -->
+                                    <div class="field-chip" data-field="vin"><i class="fas fa-barcode"></i> VIN</div>
+                                    <div class="field-chip" data-field="stock"><i class="fas fa-hashtag"></i> Stock #</div>
+                                    <div class="field-chip" data-field="type"><i class="fas fa-info-circle"></i> Type</div>
+                                    <div class="field-chip" data-field="year"><i class="fas fa-calendar"></i> Year</div>
+                                    <div class="field-chip" data-field="make"><i class="fas fa-industry"></i> Make</div>
+                                    <div class="field-chip" data-field="model"><i class="fas fa-car"></i> Model</div>
+                                    <div class="field-chip" data-field="trim"><i class="fas fa-star"></i> Trim</div>
+
+                                    <!-- Pricing Fields -->
+                                    <div class="field-chip" data-field="price"><i class="fas fa-dollar-sign"></i> Price</div>
+                                    <div class="field-chip" data-field="msrp"><i class="fas fa-tag"></i> MSRP</div>
+
+                                    <!-- Vehicle Details -->
+                                    <div class="field-chip" data-field="ext_color"><i class="fas fa-palette"></i> Ext Color</div>
+                                    <div class="field-chip" data-field="body_style"><i class="fas fa-truck"></i> Body Style</div>
+                                    <div class="field-chip" data-field="fuel_type"><i class="fas fa-gas-pump"></i> Fuel Type</div>
+                                    <div class="field-chip" data-field="status"><i class="fas fa-check-circle"></i> Status</div>
+
+                                    <!-- Date Fields -->
+                                    <div class="field-chip" data-field="date_in_stock"><i class="fas fa-clock"></i> Date in Stock</div>
+
+                                    <!-- Location Fields -->
+                                    <div class="field-chip" data-field="location"><i class="fas fa-map-marker-alt"></i> Location</div>
+                                    <div class="field-chip" data-field="street_address"><i class="fas fa-road"></i> Street Address</div>
+                                    <div class="field-chip" data-field="locality"><i class="fas fa-city"></i> City</div>
+                                    <div class="field-chip" data-field="region"><i class="fas fa-map"></i> State</div>
+                                    <div class="field-chip" data-field="postal_code"><i class="fas fa-envelope"></i> Zip Code</div>
+
+                                    <!-- URL Field -->
+                                    <div class="field-chip" data-field="vehicle_url"><i class="fas fa-link"></i> Vehicle URL</div>
+                                </div>
+                            </div>
+
+                            <div class="selected-fields-list">
+                                <h4>Selected Fields</h4>
+                                <div class="field-combination-builder" id="fieldCombinationBuilder">
+                                    <div class="combination-placeholder">
+                                        <i class="fas fa-mouse-pointer"></i>
+                                        <p>Click fields from the left to add them here</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="fieldSeparator">Separator:</label>
+                        <select id="fieldSeparator" class="form-control">
+                            <option value=" ">Space</option>
+                            <option value=" - ">Dash</option>
+                            <option value=" | ">Pipe</option>
+                            <option value=", ">Comma</option>
+                            <option value="_">Underscore</option>
+                            <option value="">No separator</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Preview:</label>
+                        <div class="field-preview" id="fieldPreview">
+                            <span class="preview-text">Select fields to see preview</span>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelConcatenation">Cancel</button>
+                <button class="btn btn-primary" id="createCombinedField">Create Field</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Queue Actions Panel - Moved outside main container for fixed positioning -->
+    <div class="queue-actions" id="floatingQueueActions" style="display: none;">
+        <!-- Modern Testing Mode Toggle Panel -->
+        <div class="modern-testing-toggle" id="modernTestingToggle" onclick="toggleTestingMode()">
+            <div class="toggle-content">
+                <div class="toggle-header">
+                    <i class="fas fa-flask toggle-icon"></i>
+                    <span class="toggle-title">Testing Mode</span>
+                    <div class="toggle-switch">
+                        <div class="switch-slider"></div>
+                    </div>
+                </div>
+                <p class="toggle-description">Skip VIN history logging for testing <span class="shortcut-hint">(Alt+M)</span></p>
+            </div>
+            <input type="checkbox" id="queueTestingMode" style="display: none;">
+        </div>
+        
+        <button class="btn btn-primary btn-large" id="processQueueBtn" disabled>
+            <i class="fas fa-play"></i>
+            Process Queue
+            <span class="shortcut-hint">Alt+P</span>
+        </button>
+    </div>
+
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=2025082502"></script>
+    <script src="{{ url_for('static', filename='js/keyboard_shortcuts.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?cache-bust=vinlog-checkbox-fix-{{ range(100000000, 999999999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/' + (unique_template_builder_js or 'template_builder.js')) }}?v={{ cache_version }}"></script>
+    <script src="{{ url_for('static', filename='js/template_wizard_v2.js') }}?v={{ cache_version }}"></script>
+
+    <!-- EMERGENCY CACHE OVERRIDE - Fix template builder API endpoint -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(() => {
+            if (window.templateBuilder && window.templateBuilder.loadPreviewData) {
+                console.log('[EMERGENCY FIX] Overriding template builder loadPreviewData function');
+
+                // Override the problematic function with correct API endpoint
+                window.templateBuilder.loadPreviewData = async function(dealershipName) {
+                    if (!dealershipName) {
+                        console.error('[TEMPLATE BUILDER] No dealership selected for preview');
+                        this.updatePreview([]);
+                        return;
+                    }
+
+                    const requestData = {
+                        dealership: dealershipName,
+                        fields: {
+                            columns: this.currentTemplate.fields || []
+                        },
+                        sample_vin: null
+                    };
+
+                    console.log('[TEMPLATE BUILDER DEBUG] Request data:', requestData);
+
+                    try {
+                        const response = await fetch('/api/templates/preview', {  // CORRECT ENDPOINT
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(requestData)
+                        });
+
+                        const result = await response.json();
+                        console.log('[TEMPLATE BUILDER DEBUG] API response:', result);
+
+                        if (result.success) {
+                            console.log('[TEMPLATE BUILDER DEBUG] Preview data:', result.preview);
+                            console.log('[TEMPLATE BUILDER DEBUG] Current template fields:', this.currentTemplate.fields);
+                            console.log('[TEMPLATE BUILDER DEBUG] Calling updatePreview with data:', result.preview || []);
+                            this.updatePreview(result.preview || []);
+                        } else {
+                            console.error('[TEMPLATE BUILDER] Preview error:', result.error);
+                            this.updatePreview([]);
+                        }
+                    } catch (error) {
+                        console.error('[TEMPLATE BUILDER] Preview request error:', error);
+                        this.updatePreview([]);
+                    }
+                };
+
+                // Also override updatePreview function with debugging
+                const originalUpdatePreview = window.templateBuilder.updatePreview;
+                window.templateBuilder.updatePreview = function(sampleData = []) {
+                    console.log('[DEBUG] updatePreview called with:', sampleData);
+                    console.log('[DEBUG] Current template fields:', this.currentTemplate.fields);
+                    console.log('[DEBUG] Template fields length check:', this.currentTemplate.fields ? this.currentTemplate.fields.length : 'undefined');
+
+                    const tableHead = document.getElementById('previewTableHead');
+                    const tableBody = document.getElementById('previewTableBody');
+
+                    console.log('[DEBUG] Table elements found:', {
+                        tableHead: !!tableHead,
+                        tableBody: !!tableBody
+                    });
+
+                    // Call original function
+                    return originalUpdatePreview.call(this, sampleData);
+                };
+
+                // COMMENTED OUT: Override save template function - now handled properly in template_builder.js
+                // The save function in template_builder.js now properly handles:
+                // - Custom combined fields persistence
+                // - Proper validation
+                // - Correct endpoint (/api/templates/save)
+                /*
+                window.templateBuilder.saveTemplate = async function() {
+                    if (!this.currentTemplate.name) {
+                        alert('Please enter a template name');
+                        return;
+                    }
+
+                    try {
+                        console.log('[SAVE FIX] Saving template to /api/templates/save...');
+                        const response = await fetch('/api/templates/save', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                name: this.currentTemplate.name,
+                                description: this.currentTemplate.description || '',
+                                type: this.currentTemplate.type || 'standard',
+                                fields: this.currentTemplate.fields,
+                                customCombinedFields: window.templateBuilder ? window.templateBuilder.customCombinedFields : {}
+                            })
+                        });
+
+                        const result = await response.json();
+                        console.log('[SAVE FIX] Save response:', result);
+
+                        if (result.success) {
+                            alert('Template saved successfully!');
+                            this.loadTemplates(); // Reload template list
+                        } else {
+                            alert('Error saving template: ' + (result.error || 'Unknown error'));
+                        }
+                    } catch (error) {
+                        console.error('[SAVE FIX] Save error:', error);
+                        alert('Failed to save template');
+                    }
+                };
+                */
+
+                console.log('[EMERGENCY FIX] Template builder functions overridden successfully');
+            }
+        }, 2000); // Wait for template builder to load
+    });
+    </script>
+
+    <!-- Dealership Autocomplete Enhancement -->
+    <script>
+    // Enhanced dealership autocomplete functionality
+    class DealershipAutocomplete {
+        constructor() {
+            this.dealerships = [];
+            this.selectedIndex = -1;
+            this.isVisible = false;
+            this.init();
+        }
+
+        init() {
+            // Wait for app to be ready and dealerships to be loaded
+            document.addEventListener('DOMContentLoaded', () => {
+                setTimeout(() => this.setupAutocomplete(), 1000);
+            });
+        }
+
+        setupAutocomplete() {
+            const searchInput = document.getElementById('dealershipSearchInput');
+            const autocompleteContainer = document.getElementById('dealershipAutocomplete');
+
+            if (!searchInput || !autocompleteContainer) {
+                console.log('Autocomplete elements not found, retrying...');
+                setTimeout(() => this.setupAutocomplete(), 500);
+                return;
+            }
+
+            // Load dealerships from the app instance
+            this.loadDealerships();
+
+            // Input event for real-time suggestions
+            searchInput.addEventListener('input', (e) => {
+                this.showSuggestions(e.target.value);
+            });
+
+            // Keyboard navigation
+            searchInput.addEventListener('keydown', (e) => {
+                this.handleKeydown(e);
+            });
+
+            // Hide suggestions when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.dealership-search-container')) {
+                    this.hideSuggestions();
+                }
+            });
+
+            console.log('✅ Dealership autocomplete initialized');
+        }
+
+        loadDealerships() {
+            // Try to get dealerships from the app instance
+            if (window.app && window.app.dealerships) {
+                this.dealerships = window.app.dealerships.map(d => d.name).sort();
+            } else {
+                // Fallback: common dealership names
+                this.dealerships = [
+                    'Auffenberg Hyundai', 'Bommarito Cadillac', 'Frank Leta Honda',
+                    'Glendale CDJR', 'Serra Honda', 'South County DCJR', 'Weber Chevrolet'
+                ].sort();
+            }
+            console.log(`📋 Loaded ${this.dealerships.length} dealerships for autocomplete`);
+        }
+
+        showSuggestions(query) {
+            const autocompleteContainer = document.getElementById('dealershipAutocomplete');
+            if (!query.trim()) {
+                this.hideSuggestions();
+                return;
+            }
+
+            const matches = this.dealerships.filter(name =>
+                name.toLowerCase().includes(query.toLowerCase())
+            ).slice(0, 8); // Limit to 8 suggestions
+
+            if (matches.length === 0) {
+                this.hideSuggestions();
+                return;
+            }
+
+            const html = matches.map((name, index) =>
+                `<div class="autocomplete-item" data-index="${index}" data-name="${name}">
+                    ${name}
+                </div>`
+            ).join('');
+
+            autocompleteContainer.innerHTML = html;
+            autocompleteContainer.style.display = 'block';
+            this.isVisible = true;
+            this.selectedIndex = -1;
+
+            // Add click handlers
+            autocompleteContainer.querySelectorAll('.autocomplete-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    this.selectSuggestion(item.dataset.name);
+                });
+            });
+        }
+
+        hideSuggestions() {
+            const autocompleteContainer = document.getElementById('dealershipAutocomplete');
+            if (autocompleteContainer) {
+                autocompleteContainer.style.display = 'none';
+                this.isVisible = false;
+                this.selectedIndex = -1;
+            }
+        }
+
+        handleKeydown(e) {
+            if (!this.isVisible) return;
+
+            const items = document.querySelectorAll('.autocomplete-item');
+
+            switch(e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    this.selectedIndex = Math.min(this.selectedIndex + 1, items.length - 1);
+                    this.updateSelection(items);
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    this.selectedIndex = Math.max(this.selectedIndex - 1, -1);
+                    this.updateSelection(items);
+                    break;
+                case 'Enter':
+                    e.preventDefault();
+                    if (this.selectedIndex >= 0 && items[this.selectedIndex]) {
+                        this.selectSuggestion(items[this.selectedIndex].dataset.name);
+                    }
+                    break;
+                case 'Escape':
+                    this.hideSuggestions();
+                    break;
+            }
+        }
+
+        updateSelection(items) {
+            items.forEach((item, index) => {
+                item.classList.toggle('selected', index === this.selectedIndex);
+            });
+        }
+
+        selectSuggestion(name) {
+            const searchInput = document.getElementById('dealershipSearchInput');
+            if (searchInput) {
+                searchInput.value = name;
+
+                // Trigger existing search functionality
+                if (window.app && window.app.filterDealershipList) {
+                    window.app.filterDealershipList();
+                }
+
+                // Also trigger the input event to ensure all handlers are called
+                const event = new Event('input', { bubbles: true });
+                searchInput.dispatchEvent(event);
+
+                // Show the clear button if it exists
+                const clearBtn = document.getElementById('clearDealershipSearchBtn');
+                if (clearBtn) {
+                    clearBtn.style.display = 'inline-block';
+                }
+            }
+            this.hideSuggestions();
+        }
+    }
+
+    // Initialize autocomplete
+    window.dealershipAutocomplete = new DealershipAutocomplete();
+    </script>
+
+    <!-- MODERN TESTING MODE TOGGLE FUNCTION -->
+    <script>
+    function toggleTestingMode() {
+        const toggle = document.getElementById('modernTestingToggle');
+        const checkbox = document.getElementById('queueTestingMode');
+        
+        // Toggle the active state
+        const isActive = toggle.classList.contains('active');
+        
+        if (isActive) {
+            toggle.classList.remove('active');
+            checkbox.checked = false;
+        } else {
+            toggle.classList.add('active');
+            checkbox.checked = true;
+        }
+        
+        // Add a nice ripple effect
+        const ripple = document.createElement('div');
+        ripple.style.position = 'absolute';
+        ripple.style.borderRadius = '50%';
+        ripple.style.background = isActive ? 'rgba(255, 255, 255, 0.3)' : 'rgba(16, 185, 129, 0.3)';
+        ripple.style.transform = 'scale(0)';
+        ripple.style.animation = 'ripple 0.6s linear';
+        ripple.style.left = '50%';
+        ripple.style.top = '50%';
+        ripple.style.width = '20px';
+        ripple.style.height = '20px';
+        ripple.style.marginLeft = '-10px';
+        ripple.style.marginTop = '-10px';
+        ripple.style.zIndex = '3';
+        
+        toggle.appendChild(ripple);
+        
+        setTimeout(() => {
+            if (ripple.parentNode) {
+                ripple.parentNode.removeChild(ripple);
+            }
+        }, 600);
+        
+        console.log('Testing mode:', checkbox.checked ? 'ENABLED' : 'DISABLED');
+    }
+    
+    // Add ripple animation CSS
+    if (!document.getElementById('ripple-animation')) {
+        const style = document.createElement('style');
+        style.id = 'ripple-animation';
+        style.textContent = `
+            @keyframes ripple {
+                0% { transform: scale(0); opacity: 1; }
+                100% { transform: scale(4); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    </script>
+    
+    <!-- INLINE MANUAL VIN ENTRY FUNCTIONS - CACHE BYPASS -->
+    <script>
+    function updateManualEntryStatsInline() {
+        console.log('=== INLINE UPDATE MANUAL ENTRY STATS CALLED ===');
+        const textarea = document.getElementById('manualOrderEntry');
+        const orderCountEl = document.getElementById('manualOrderCount');
+        const vinCountEl = document.getElementById('manualVinCount');
+        
+        if (!textarea || !orderCountEl || !vinCountEl) {
+            console.error('Missing required elements for stats update');
+            return;
+        }
+        
+        const text = textarea.value.trim();
+        console.log('Textarea value:', text);
+        
+        if (!text) {
+            orderCountEl.textContent = '0';
+            vinCountEl.textContent = '0';
+            console.log('No text found, setting counts to 0');
+            return;
+        }
+        
+        // Count orders and VINs
+        const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+        let orders = 0;
+        let vins = 0;
+        
+        for (let line of lines) {
+            if (line.length === 17 && /^[A-HJ-NPR-Z0-9]+$/i.test(line)) {
+                vins++;
+                console.log('Found VIN:', line);
+            } else if (line.length > 0 && line.length < 17) {
+                orders++;
+                console.log('Found Order:', line);
+            }
+        }
+        
+        // UPDATE THE DISPLAY
+        orderCountEl.textContent = orders.toString();
+        vinCountEl.textContent = vins.toString();
+        
+        console.log('Updated stats:', { orders, vins });
+    }
+    
+    function validateManualEntryInline() {
+        console.log('=== INLINE VALIDATE BUTTON CLICKED ===');
+        const textarea = document.getElementById('manualOrderEntry');
+        if (!textarea) {
+            alert('Error: Cannot find textarea element');
+            return;
+        }
+        
+        const text = textarea.value.trim();
+        console.log('Textarea content:', text);
+        
+        if (!text) {
+            alert('Please enter some VIN data to validate');
+            return;
+        }
+        
+        // Count orders and VINs
+        const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+        let orders = 0;
+        let vins = 0;
+        let errors = [];
+        
+        console.log('Processing lines:', lines);
+        
+        for (let line of lines) {
+            if (line.length === 17 && /^[A-HJ-NPR-Z0-9]+$/i.test(line)) {
+                vins++;
+                console.log('Found VIN:', line);
+            } else if (line.length > 0 && line.length < 17) {
+                orders++;
+                console.log('Found Order:', line);
+            } else if (line.length > 17) {
+                errors.push(`Line too long: ${line.substring(0, 20)}...`);
+            }
+        }
+        
+        const message = `Validation Results:\n• Orders: ${orders}\n• VINs: ${vins}\n• Errors: ${errors.length}`;
+        console.log('Validation results:', { orders, vins, errors: errors.length });
+        
+        if (errors.length > 0) {
+            alert(message + '\n\nErrors:\n' + errors.slice(0, 5).join('\n'));
+        } else {
+            alert(message + '\n\n✅ Format looks good!');
+        }
+    }
+    
+    function clearManualEntryInline() {
+        console.log('=== INLINE CLEAR BUTTON CLICKED ===');
+        const textarea = document.getElementById('manualOrderEntry');
+        if (textarea) {
+            textarea.value = '';
+            console.log('Textarea cleared');
+            updateManualEntryStatsInline();
+        } else {
+            console.error('Cannot find textarea to clear');
+        }
+    }
+    
+    function switchToCSVModeInline() {
+        console.log('=== INLINE SWITCHING TO CSV MODE ===');
+        const csvTab = document.getElementById('csvImportTab');
+        const manualTab = document.getElementById('manualEntryTab');
+        const csvSection = document.getElementById('csvImportSection');
+        const manualSection = document.getElementById('manualEntrySection');
+        
+        if (csvTab) csvTab.classList.add('active');
+        if (manualTab) manualTab.classList.remove('active');
+        if (csvSection) csvSection.style.display = 'block';
+        if (manualSection) manualSection.style.display = 'none';
+        
+        console.log('Switched to CSV mode');
+    }
+    
+    function switchToManualModeInline() {
+        console.log('=== INLINE SWITCHING TO MANUAL MODE ===');
+        const csvTab = document.getElementById('csvImportTab');
+        const manualTab = document.getElementById('manualEntryTab');
+        const csvSection = document.getElementById('csvImportSection');
+        const manualSection = document.getElementById('manualEntrySection');
+        
+        if (csvTab) csvTab.classList.remove('active');
+        if (manualTab) manualTab.classList.add('active');
+        if (csvSection) csvSection.style.display = 'none';
+        if (manualSection) manualSection.style.display = 'block';
+        
+        console.log('Switched to Manual Entry mode');
+        
+        // Update stats after switching
+        updateManualEntryStatsInline();
+    }
+    </script>
     
 </body>
 </html>

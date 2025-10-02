@@ -36,6 +36,7 @@ sys.path.insert(0, str(scrapers_path))
 from database_connection import db_manager
 from realtime_scraper_progress import ScraperProgressReporter
 from scraper_data_normalizer import normalizer
+from scraper_import_manager import ScraperImportManager
 
 class RealScraperIntegration:
     """Integration system for real working scrapers"""
@@ -56,7 +57,7 @@ class RealScraperIntegration:
             'Auffenberg Hyundai': 'auffenberghyundai.py',
             'BMW of West St. Louis': 'bmwofweststlouis.py',
             'Bommarito Cadillac': 'bommaritocadillac.py',
-            'Bommarito West County': 'bommaritowestcounty.py',
+            'Bommarito West County PO': 'bommaritowestcounty.py',
             'Columbia BMW': 'columbiabmw.py',
             'Columbia Honda': 'columbiahonda.py',
             'Dave Sinclair Lincoln South': 'davesinclairlincolnsouth.py',
@@ -67,7 +68,7 @@ class RealScraperIntegration:
             'H&W Kia': 'hwkia.py',
             'Indigo Auto Group': 'indigoautogroup.py',
             'Jaguar Ranch Mirage': 'jaguarranchomirage.py',
-            'Joe Machens CDJR': 'joemachenscdjr.py',
+            'CDJR of Columbia': 'joemachenscdjr.py',
             'Joe Machens Hyundai': 'joemachenshyundai.py',
             'Joe Machens Nissan': 'joemachensnissan.py',
             'Joe Machens Toyota': 'joemachenstoyota.py',
@@ -90,7 +91,7 @@ class RealScraperIntegration:
             'Suntrup Kia South': 'suntrupkiasouth.py',
             'Thoroughbred Ford': 'thoroughbredford.py',
             'Twin City Toyota': 'twincitytoyota.py',
-            'West County Volvo Cars': 'wcvolvocars.py',
+            'Volvo Cars West County': 'wcvolvocars.py',
             'Weber Chevrolet': 'weberchev.py'
         }
         
@@ -101,7 +102,7 @@ class RealScraperIntegration:
             'Auffenberg Hyundai': 35,
             'BMW of West St. Louis': 55,
             'Bommarito Cadillac': 25,
-            'Bommarito West County': 40,
+            'Bommarito West County PO': 40,
             'Columbia BMW': 35,
             'Columbia Honda': 40,
             'Dave Sinclair Lincoln South': 25,
@@ -112,7 +113,7 @@ class RealScraperIntegration:
             'H&W Kia': 25,
             'Indigo Auto Group': 50,
             'Jaguar Ranch Mirage': 15,
-            'Joe Machens CDJR': 35,
+            'CDJR of Columbia': 35,
             'Joe Machens Hyundai': 30,
             'Joe Machens Nissan': 25,
             'Joe Machens Toyota': 40,
@@ -135,7 +136,7 @@ class RealScraperIntegration:
             'Suntrup Kia South': 25,
             'Thoroughbred Ford': 35,
             'Twin City Toyota': 30,
-            'West County Volvo Cars': 25,
+            'Volvo Cars West County': 25,
             'Weber Chevrolet': 40
         }
         
@@ -187,7 +188,7 @@ class RealScraperIntegration:
                 'Auffenberg Hyundai': 'auffenberghyundai.com',
                 'BMW of West St. Louis': 'bmwofweststlouis.com',
                 'Bommarito Cadillac': 'bommaritocadillac.com',
-                'Bommarito West County': 'bommaritowestcounty.com',
+                'Bommarito West County PO': 'bommaritowestcounty.com',
                 'Columbia BMW': 'columbiabmw.com',
                 'Columbia Honda': 'columbiahonda.com',
                 'Dave Sinclair Lincoln South': 'davesinclairlincolnsouth.com',
@@ -198,7 +199,7 @@ class RealScraperIntegration:
                 'H&W Kia': 'hwkia.com',
                 'Indigo Auto Group': 'indigoautogroup.com',
                 'Jaguar Ranch Mirage': 'jaguarranchomirage.com',
-                'Joe Machens CDJR': 'joemachenscdjr.com',
+                'CDJR of Columbia': 'joemachenscdjr.com',
                 'Joe Machens Hyundai': 'joemachenshyundai.com',
                 'Joe Machens Nissan': 'joemachensnissan.com',
                 'Joe Machens Toyota': 'joemachenstoyota.com',
@@ -221,7 +222,7 @@ class RealScraperIntegration:
                 'Suntrup Kia South': 'suntrupkiasouth.com',
                 'Thoroughbred Ford': 'thoroughbredford.com',
                 'Twin City Toyota': 'twincitytoyota.com',
-                'West County Volvo Cars': 'wcvolvocars.com',
+                'Volvo Cars West County': 'wcvolvocars.com',
                 'Weber Chevrolet': 'weberchev.com'
             }
             
@@ -297,16 +298,20 @@ class RealScraperIntegration:
             return result
     
     def import_vehicles_to_database(self, vehicles: List[Dict], dealership_name: str) -> Dict[str, Any]:
-        """Import scraped vehicles into the database"""
+        """Import scraped vehicles into the database using proper import manager"""
         try:
             if not vehicles:
                 return {'success': False, 'error': 'No vehicles to import'}
             
             self.logger.info(f"Importing {len(vehicles)} vehicles for {dealership_name}")
             
-            imported_count = 0
-            updated_count = 0
+            # Use ScraperImportManager for proper import process
+            import_manager = ScraperImportManager()
             
+            # Create new import (archives previous imports and creates new active one)
+            import_id = import_manager.create_new_import(dealership_name, len(vehicles))
+            
+            imported_count = 0
             for vehicle in vehicles:
                 try:
                     # Check if vehicle already exists
