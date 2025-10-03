@@ -959,3 +959,38 @@
     background: rgba(220, 38, 38, 1);
     transform: scale(1.1);
 }
+
+/* Draggable Table Headers */
+.draggable-header {
+    cursor: move;
+    user-select: none;
+    position: relative;
+    transition: all 0.2s ease;
+    background: var(--theme-surface);
+}
+
+.draggable-header:hover {
+    background: rgba(var(--silver-fox-red-rgb), 0.1);
+}
+
+.header-drag-icon {
+    margin-left: 8px;
+    opacity: 0.3;
+    font-size: 0.9em;
+    transition: opacity 0.2s ease;
+}
+
+.draggable-header:hover .header-drag-icon {
+    opacity: 0.7;
+}
+
+.draggable-header.dragging {
+    opacity: 0.5;
+    background: rgba(var(--silver-fox-red-rgb), 0.2);
+}
+
+.draggable-header.drag-over {
+    background: rgba(var(--silver-fox-red-rgb), 0.3);
+    border-left: 3px solid var(--silver-fox-red);
+    padding-left: 9px;
+}

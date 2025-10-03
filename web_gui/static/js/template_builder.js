@@ -29,7 +29,6 @@ class TemplateBuilder {
         this.bindEvents();
         this.setupDragAndDrop();
         this.loadTemplates();
-        this.loadDealerships();
     }
 
     bindEvents() {
@@ -37,7 +36,6 @@ class TemplateBuilder {
         document.getElementById('newTemplateBtn')?.addEventListener('click', () => this.createNewTemplate());
         document.getElementById('saveTemplateBtn')?.addEventListener('click', () => this.saveTemplate());
         document.getElementById('updateTemplateBtn')?.addEventListener('click', () => this.updateTemplate());
-        document.getElementById('templatePreviewBtn')?.addEventListener('click', () => this.previewTemplate());
         document.getElementById('clearTemplateBtn')?.addEventListener('click', () => this.clearTemplate());
         document.getElementById('addColumnBtn')?.addEventListener('click', () => this.addColumn());
 
@@ -65,13 +63,6 @@ class TemplateBuilder {
 
         document.getElementById('templateType')?.addEventListener('change', (e) => {
             this.currentTemplate.type = e.target.value;
-        });
-
-        // Preview dealership selection
-        document.getElementById('previewDealership')?.addEventListener('change', (e) => {
-            if (e.target.value) {
-                this.loadPreviewData(e.target.value);
-            }
         });
 
         // Field concatenation modal events
@@ -628,72 +619,6 @@ class TemplateBuilder {
         this.updatePreview();
     }
 
-    async loadDealerships() {
-        try {
-            const response = await fetch('/api/dealership-configs');
-            const result = await response.json();
-
-            if (result.success) {
-                this.dealerships = result.dealerships;
-                this.renderDealershipOptions();
-            }
-        } catch (error) {
-            console.error('[TEMPLATE BUILDER] Load dealerships error:', error);
-        }
-    }
-
-    renderDealershipOptions() {
-        const select = document.getElementById('previewDealership');
-        if (!select) return;
-
-        let optionsHTML = '<option value="">Select dealership for sample data...</option>';
-
-        this.dealerships.forEach(dealership => {
-            optionsHTML += `<option value="${dealership.name}">${dealership.name}</option>`;
-        });
-
-        select.innerHTML = optionsHTML;
-    }
-
-    async loadPreviewData(dealershipName) {
-        if (this.currentTemplate.fields.columns.length === 0) {
-            this.updatePreview([]);
-            return;
-        }
-
-        const requestData = {
-            dealership: dealershipName,
-            fields: {
-                columns: this.currentTemplate.fields || []
-            },
-            sample_vin: null // Will be filled when user selects a specific VIN
-        };
-
-        console.log('[TEMPLATE BUILDER DEBUG] Request data:', requestData);
-
-        try {
-            const response = await fetch(`/api/templates/preview`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestData)
-            });
-
-            const result = await response.json();
-            console.log('[TEMPLATE BUILDER DEBUG] API response:', result);
-
-            if (result.success) {
-                console.log('[TEMPLATE BUILDER DEBUG] Preview data:', result.preview);
-                this.updatePreview(result.preview || []);
-            } else {
-                console.error('[TEMPLATE BUILDER] Preview error:', result.error);
-                this.updatePreview([]);
-            }
-        } catch (error) {
-            console.error('[TEMPLATE BUILDER] Preview request error:', error);
-            this.updatePreview([]);
-        }
-    }
-
     updatePreview(sampleData = []) {
         const tableHead = document.getElementById('previewTableHead');
         const tableBody = document.getElementById('previewTableBody');
@@ -711,32 +636,32 @@ class TemplateBuilder {
             return;
         }
 
-        // Generate header
+        // Generate header with draggable columns
         let headerHTML = '<tr>';
-        this.currentTemplate.fields.columns.forEach(field => {
-            headerHTML += `<th>${field.label}</th>`;
+        this.currentTemplate.fields.columns.forEach((field, index) => {
+            headerHTML += `
+                <th draggable="true" data-column-index="${index}" class="draggable-header" title="Drag to reorder">
+                    ${field.label}
+                    <i class="fas fa-grip-vertical header-drag-icon"></i>
+                </th>`;
         });
         headerHTML += '</tr>';
         tableHead.innerHTML = headerHTML;
 
-        // Generate body
+        // Setup drag and drop for headers
+        this.setupHeaderDragAndDrop();
+
+        // Use test sample data if none provided
         if (sampleData.length === 0) {
-            tableBody.innerHTML = `
-                <tr>
-                    <td colspan="${this.currentTemplate.fields.columns.length}" class="no-preview">
-                        <i class="fas fa-database"></i>
-                        Select a dealership to load sample data
-                    </td>
-                </tr>
-            `;
-            return;
+            sampleData = this.getTestSampleData();
         }
 
+        // Generate body with sample data
         let bodyHTML = '';
         sampleData.slice(0, 5).forEach(row => {
             bodyHTML += '<tr>';
             this.currentTemplate.fields.columns.forEach(field => {
-                const value = row[field.key] || row[field.key.toUpperCase()] || '';
+                const value = this.resolveFieldValue(row, field);
                 bodyHTML += `<td>${value}</td>`;
             });
             bodyHTML += '</tr>';
@@ -745,17 +670,194 @@ class TemplateBuilder {
         tableBody.innerHTML = bodyHTML;
     }
 
-    previewTemplate() {
-        const dealershipSelect = document.getElementById('previewDealership');
-        const selectedDealership = dealershipSelect.value;
+    getTestSampleData() {
+        // Return 5 rows of test data
+        return [
+            {
+                'vin': '1HGBH41JXMN109186',
+                'stock': 'ST12345',
+                'type': 'New',
+                'year': '2024',
+                'make': 'Honda',
+                'model': 'Civic',
+                'trim': 'LX',
+                'price': '$25,999',
+                'msrp': '$27,500',
+                'ext_color': 'Blue',
+                'body_style': 'Sedan',
+                'fuel_type': 'Gasoline',
+                'status': 'In Stock',
+                'date_in_stock': '2024-01-15',
+                'location': 'Main Lot',
+                'street_address': '123 Main St',
+                'locality': 'St Louis',
+                'region': 'MO',
+                'postal_code': '63101',
+                'vehicle_url': 'https://dealer.com/vehicle/12345'
+            },
+            {
+                'vin': '5FNRL6H78MB012345',
+                'stock': 'ST12346',
+                'type': 'Used',
+                'year': '2023',
+                'make': 'Toyota',
+                'model': 'Camry',
+                'trim': 'SE',
+                'price': '$28,500',
+                'msrp': '$32,000',
+                'ext_color': 'Silver',
+                'body_style': 'Sedan',
+                'fuel_type': 'Gasoline',
+                'status': 'In Stock',
+                'date_in_stock': '2024-01-20',
+                'location': 'Main Lot',
+                'street_address': '123 Main St',
+                'locality': 'St Louis',
+                'region': 'MO',
+                'postal_code': '63101',
+                'vehicle_url': 'https://dealer.com/vehicle/12346'
+            },
+            {
+                'vin': '1G1YZ23J9P5800001',
+                'stock': 'ST12347',
+                'type': 'CPO',
+                'year': '2022',
+                'make': 'Chevrolet',
+                'model': 'Silverado',
+                'trim': '1500 LT',
+                'price': '$42,999',
+                'msrp': '$48,500',
+                'ext_color': 'Black',
+                'body_style': 'Truck',
+                'fuel_type': 'Gasoline',
+                'status': 'In Stock',
+                'date_in_stock': '2024-01-25',
+                'location': 'Main Lot',
+                'street_address': '123 Main St',
+                'locality': 'St Louis',
+                'region': 'MO',
+                'postal_code': '63101',
+                'vehicle_url': 'https://dealer.com/vehicle/12347'
+            },
+            {
+                'vin': '3VW2B7AJ8DM123456',
+                'stock': 'ST12348',
+                'type': 'New',
+                'year': '2024',
+                'make': 'Volkswagen',
+                'model': 'Jetta',
+                'trim': 'S',
+                'price': '$22,995',
+                'msrp': '$24,500',
+                'ext_color': 'White',
+                'body_style': 'Sedan',
+                'fuel_type': 'Gasoline',
+                'status': 'In Stock',
+                'date_in_stock': '2024-02-01',
+                'location': 'Main Lot',
+                'street_address': '123 Main St',
+                'locality': 'St Louis',
+                'region': 'MO',
+                'postal_code': '63101',
+                'vehicle_url': 'https://dealer.com/vehicle/12348'
+            },
+            {
+                'vin': 'WBAPL5C50AA123456',
+                'stock': 'ST12349',
+                'type': 'Used',
+                'year': '2023',
+                'make': 'BMW',
+                'model': '3 Series',
+                'trim': '330i',
+                'price': '$38,900',
+                'msrp': '$45,000',
+                'ext_color': 'Gray',
+                'body_style': 'Sedan',
+                'fuel_type': 'Gasoline',
+                'status': 'In Stock',
+                'date_in_stock': '2024-02-05',
+                'location': 'Main Lot',
+                'street_address': '123 Main St',
+                'locality': 'St Louis',
+                'region': 'MO',
+                'postal_code': '63101',
+                'vehicle_url': 'https://dealer.com/vehicle/12349'
+            }
+        ];
+    }
 
-        if (!selectedDealership) {
-            alert('Please select a dealership to preview template with sample data');
-            dealershipSelect.focus();
-            return;
+    resolveFieldValue(row, field) {
+        // If it's a combined field, resolve it
+        if (field.isCombined && field.combinedFields) {
+            const parts = [];
+            const separators = field.separators || [];
+
+            field.combinedFields.forEach((fieldKey, index) => {
+                const value = row[fieldKey] || row[fieldKey.toUpperCase()] || '';
+                parts.push(value);
+
+                // Add separator if not the last field
+                if (index < field.combinedFields.length - 1) {
+                    const sep = separators[index] || ' ';
+                    parts.push(sep);
+                }
+            });
+
+            return parts.join('');
         }
 
-        this.loadPreviewData(selectedDealership);
+        // Regular field lookup
+        return row[field.key] || row[field.key.toUpperCase()] || '';
+    }
+
+    setupHeaderDragAndDrop() {
+        const headers = document.querySelectorAll('.draggable-header');
+        let draggedHeader = null;
+
+        headers.forEach(header => {
+            header.addEventListener('dragstart', (e) => {
+                draggedHeader = header;
+                header.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/html', header.innerHTML);
+            });
+
+            header.addEventListener('dragend', (e) => {
+                header.classList.remove('dragging');
+                headers.forEach(h => h.classList.remove('drag-over'));
+            });
+
+            header.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+
+                if (draggedHeader && draggedHeader !== header) {
+                    header.classList.add('drag-over');
+                }
+            });
+
+            header.addEventListener('dragleave', (e) => {
+                header.classList.remove('drag-over');
+            });
+
+            header.addEventListener('drop', (e) => {
+                e.preventDefault();
+                header.classList.remove('drag-over');
+
+                if (!draggedHeader || draggedHeader === header) return;
+
+                const fromIndex = parseInt(draggedHeader.dataset.columnIndex);
+                const toIndex = parseInt(header.dataset.columnIndex);
+
+                // Reorder columns in template
+                const movedField = this.currentTemplate.fields.columns.splice(fromIndex, 1)[0];
+                this.currentTemplate.fields.columns.splice(toIndex, 0, movedField);
+
+                // Update UI
+                this.renderTemplateColumns();
+                this.updatePreview();
+            });
+        });
     }
 
     // Helper methods

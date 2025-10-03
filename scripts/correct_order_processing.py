@@ -1639,18 +1639,19 @@ class CorrectOrderProcessor:
             logger.info(f"[BILLING DEBUG] filtered_vins_clean: {filtered_vins_clean}")
             logger.info(f"[BILLING DEBUG] not_produced_vins: {not_produced_vins}")
 
-            # Check for duplicates by comparing produced VINs against VIN log
+            # Check for duplicates by comparing input VINs against VIN log
+            # This tracks vehicles that are "losing graphics" (getting re-done)
             duplicates_count = 0
             duplicate_vins = []
 
             # Get VIN log table name using centralized method (ensures consistency)
             vin_log_table = self._get_dealership_vin_log_table(dealership_name)
 
-            logger.info(f"[BILLING DEBUG] Checking {len(filtered_vin_list)} VINs for duplicates in {vin_log_table}")
-            logger.info(f"[BILLING DEBUG] filtered_vin_list contents: {filtered_vin_list}")
+            logger.info(f"[BILLING DEBUG] Checking {len(original_vin_list)} input VINs for duplicates in {vin_log_table}")
+            logger.info(f"[BILLING DEBUG] original_vin_list contents: {original_vin_list}")
 
-            # Check each produced VIN against the VIN log
-            for vin in filtered_vin_list:
+            # Check each INPUT VIN (from original order) against the VIN log
+            for vin in original_vin_list:
                 # Strip prefix (NEW -, USED -, etc.) to get raw VIN
                 clean_vin = vin.split(' - ')[-1] if ' - ' in vin else vin
 
@@ -1658,12 +1659,13 @@ class CorrectOrderProcessor:
                 logger.info(f"[BILLING DEBUG] Executing query: {check_query} with VIN={clean_vin} (original: {vin})")
                 result = db_manager.execute_query(check_query, (clean_vin,))
                 logger.info(f"[BILLING DEBUG] Query result for {clean_vin}: {result}")
+
                 if result and len(result) > 0:
                     duplicates_count += 1
                     duplicate_vins.append(vin)
-                    logger.info(f"[BILLING DEBUG] Found duplicate: {vin}")
+                    logger.info(f"[BILLING DEBUG] Found duplicate (re-done vehicle): {vin}")
 
-            logger.info(f"[BILLING DEBUG] Total duplicates found: {duplicates_count}")
+            logger.info(f"[BILLING DEBUG] Total duplicates found: {duplicates_count} (vehicles being re-done)")
         else:
             ordered_count = None
             produced_count = None
@@ -1692,9 +1694,13 @@ class CorrectOrderProcessor:
                             })
                             break
 
-            # Row 1: Header row with Duplicates count
-            logger.info(f"[BILLING DEBUG] Writing header row with duplicates_count={duplicates_count}")
-            writer.writerow(['Printed Vehicles:', '', '', '', '', 'TOTALS:', '', '', 'Duplicates:', duplicates_count, '', '', '', ''])
+            # Row 1: Header row with Duplicates count and VINs
+            logger.info(f"[BILLING DEBUG] Writing header row with duplicates_count={duplicates_count}, duplicate_vins={duplicate_vins}")
+            header_row = ['Printed Vehicles:', '', '', '', '', 'TOTALS:', '', '', 'Duplicates:', duplicates_count, '']
+            # Add duplicate VINs to the right of the count
+            if duplicate_vins:
+                header_row.extend(duplicate_vins)
+            writer.writerow(header_row)
 
             # Rows 2-8: Vehicle data with totals on right
             for i, (vehicle_line, vehicle_type) in enumerate(vehicle_lines):

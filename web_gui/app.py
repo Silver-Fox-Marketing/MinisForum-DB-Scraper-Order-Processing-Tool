@@ -5057,13 +5057,15 @@ def enhanced_csv_download():
 
             # Generate billing CSV using the correct method with VIN lists
             timestamp_str = timestamp.strftime('%Y%m%d_%H%M%S')
+            order_type = 'LIST' if list_original_vins is not None else 'CAO'
             billing_csv_path = processor._generate_billing_sheet_csv(
                 vehicles=ordered_vehicles,
                 dealership_name=dealership_name,
                 output_folder=output_folder,
                 timestamp=timestamp_str,
                 original_vin_list=list_original_vins,
-                filtered_vin_list=list_filtered_vins
+                filtered_vin_list=list_filtered_vins,
+                order_type=order_type
             )
 
             if billing_csv_path and billing_csv_path.exists():
