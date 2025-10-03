@@ -90,6 +90,14 @@ class TemplateBuilder {
         const fieldItems = document.querySelectorAll('.field-item[draggable="true"]');
 
         fieldItems.forEach(item => {
+            // Skip if handlers already attached
+            if (item.dataset.handlersAttached === 'true') {
+                return;
+            }
+
+            // Mark handlers as attached
+            item.dataset.handlersAttached = 'true';
+
             // Add click functionality
             item.addEventListener('click', (e) => {
                 e.preventDefault();

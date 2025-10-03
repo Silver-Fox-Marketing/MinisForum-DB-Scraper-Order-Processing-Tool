@@ -510,7 +510,8 @@ class CorrectOrderProcessor:
                 order_folder,
                 timestamp,
                 original_vin_list=vin_list,  # What user ordered
-                filtered_vin_list=filtered_vin_list  # What we actually produced
+                filtered_vin_list=filtered_vin_list,  # What we actually produced
+                order_type='LIST'  # Explicitly mark as LIST order
             )
             
             # CRITICAL: Log processed vehicle VINs to history database for future order accuracy - use filtered vehicles (unless testing)
@@ -1524,7 +1525,7 @@ class CorrectOrderProcessor:
             return 'USED'
     
     def _generate_billing_sheet_csv(self, vehicles: List[Dict], dealership_name: str, output_folder: Path, timestamp: str,
-                                    original_vin_list: List[str] = None, filtered_vin_list: List[str] = None) -> Path:
+                                    original_vin_list: List[str] = None, filtered_vin_list: List[str] = None, order_type: str = 'CAO') -> Path:
         """Generate billing sheet CSV automatically after QR codes - matches exact format from examples
 
         Args:
@@ -1560,17 +1561,25 @@ class CorrectOrderProcessor:
             vin = vehicle.get('vin', '')
             vtype = vehicle.get('vehicle_condition', '').lower()
 
-            # If vehicle_condition is missing, try to look it up from the database
-            if not vtype and vin:
+            # Strip prefix from VIN for database lookup (e.g., "NEW - VIN" -> "VIN")
+            clean_vin = vin.split(' - ')[-1] if ' - ' in vin else vin
+
+            # If vehicle_condition is missing, try to look it up from the database using clean VIN
+            if not vtype and clean_vin:
                 query = "SELECT vehicle_condition FROM normalized_vehicle_data WHERE vin = %s LIMIT 1"
-                result = db_manager.execute_query(query, (vin,))
+                result = db_manager.execute_query(query, (clean_vin,))
                 if result and len(result) > 0:
                     vtype = (result[0].get('vehicle_condition') or '').lower()
-                    logger.info(f"[BILLING DEBUG] Looked up vehicle_condition for VIN {vin}: '{vtype}'")
+                    logger.info(f"[BILLING DEBUG] Looked up vehicle_condition for VIN {clean_vin}: '{vtype}'")
 
-            # DEBUG: Log first 3 vehicles to see what vehicle_condition values we're getting
-            if len(vehicle_lines) < 3:
-                logger.info(f"[BILLING DEBUG] Vehicle: {year} {make} {model}, vehicle_condition: '{vtype}', full vehicle data keys: {list(vehicle.keys())}")
+            # DEBUG: Log first 5 vehicles to see what vehicle_condition values we're getting
+            if len(vehicle_lines) < 5:
+                logger.info(f"[BILLING DEBUG] Vehicle {len(vehicle_lines)+1}: {year} {make} {model}")
+                logger.info(f"[BILLING DEBUG]   - VIN (original): '{vin}'")
+                logger.info(f"[BILLING DEBUG]   - VIN (clean): '{clean_vin}'")
+                logger.info(f"[BILLING DEBUG]   - vehicle_condition from dict: '{vehicle.get('vehicle_condition', 'MISSING')}'")
+                logger.info(f"[BILLING DEBUG]   - vtype (processed): '{vtype}'")
+                logger.info(f"[BILLING DEBUG]   - All keys in vehicle: {list(vehicle.keys())}")
 
             # Determine vehicle type for billing using _get_type_prefix logic
             type_prefix = self._get_type_prefix(vtype)
@@ -1596,29 +1605,37 @@ class CorrectOrderProcessor:
         
         total_vehicles = len(vehicles)
 
-        # Determine if this is a LIST order (has original_vin_list)
-        is_list_order = original_vin_list is not None and filtered_vin_list is not None
+        # Determine if this is a LIST order - explicitly check order_type
+        # CRITICAL: Only LIST orders should show "Not on Website:" section and Ordered/Produced counts
+        is_list_order = (order_type == 'LIST' and original_vin_list is not None and filtered_vin_list is not None)
 
         # DEBUG: Log the LIST order detection
-        logger.info(f"[BILLING DEBUG] is_list_order={is_list_order}, original_vin_list={'None' if original_vin_list is None else f'{len(original_vin_list)} VINs'}, filtered_vin_list={'None' if filtered_vin_list is None else f'{len(filtered_vin_list)} VINs'}")
+        logger.info(f"[BILLING DEBUG] order_type={order_type}, is_list_order={is_list_order}, original_vin_list={'None' if original_vin_list is None else f'{len(original_vin_list)} VINs'}, filtered_vin_list={'None' if filtered_vin_list is None else f'{len(filtered_vin_list)} VINs'}")
 
         # Calculate ordered vs produced for LIST orders
         if is_list_order:
             ordered_count = len(original_vin_list)
             produced_count = len(filtered_vin_list)
 
-            # Strip prefixes from filtered_vin_list for comparison
-            # filtered_vin_list has "NEW - VIN" or "USED - VIN" format
+            # Strip prefixes from both lists for comparison
+            # filtered_vin_list may have "NEW - VIN" or "USED - VIN" format
             filtered_vins_clean = []
             for vin in filtered_vin_list:
                 clean_vin = vin.split(' - ')[-1] if ' - ' in vin else vin
                 filtered_vins_clean.append(clean_vin)
 
+            # Also clean original_vin_list in case it has prefixes
+            original_vins_clean = []
+            for vin in original_vin_list:
+                clean_vin = vin.split(' - ')[-1] if ' - ' in vin else vin
+                original_vins_clean.append(clean_vin)
+
             # Find VINs that were NOT produced (ordered but not in output)
-            # Compare raw VINs from original_vin_list against cleaned filtered VINs
-            not_produced_vins = [vin for vin in original_vin_list if vin not in filtered_vins_clean]
+            # Compare cleaned VINs from both lists
+            not_produced_vins = [vin for vin in original_vins_clean if vin not in filtered_vins_clean]
 
             logger.info(f"[BILLING DEBUG] original_vin_list: {original_vin_list}")
+            logger.info(f"[BILLING DEBUG] original_vins_clean: {original_vins_clean}")
             logger.info(f"[BILLING DEBUG] filtered_vins_clean: {filtered_vins_clean}")
             logger.info(f"[BILLING DEBUG] not_produced_vins: {not_produced_vins}")
 
