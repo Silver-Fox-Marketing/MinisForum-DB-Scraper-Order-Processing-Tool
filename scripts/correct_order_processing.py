@@ -420,28 +420,47 @@ class CorrectOrderProcessor:
             valid_vehicles = []
             invalid_vins = []
 
-            for vin in vin_list:
-                # Check if VIN exists in active scraper data
-                vehicle_data = db_manager.execute_query("""
-                    SELECT nvd.*, rvd.status as raw_status, rvd.stock as raw_stock, rvd.vehicle_url as vehicle_url
-                    FROM normalized_vehicle_data nvd
-                    JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
-                    JOIN scraper_imports si ON rvd.import_id = si.import_id
-                    WHERE nvd.vin = %s
-                    AND nvd.location = %s
-                    AND si.status = 'active'
-                    ORDER BY rvd.import_timestamp DESC
-                    LIMIT 1
-                """, (vin, actual_location_name))
+            for identifier in vin_list:
+                # Smart lookup: VINs are always 17 characters, stock numbers are shorter
+                identifier_length = len(identifier.strip())
+
+                if identifier_length == 17:
+                    # This is a VIN - query by VIN column
+                    logger.info(f"[PREPARE LIST] Looking up by VIN (17 chars): {identifier}")
+                    vehicle_data = db_manager.execute_query("""
+                        SELECT nvd.*, rvd.status as raw_status, rvd.stock as raw_stock, rvd.vehicle_url as vehicle_url
+                        FROM normalized_vehicle_data nvd
+                        JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
+                        JOIN scraper_imports si ON rvd.import_id = si.import_id
+                        WHERE nvd.vin = %s
+                        AND nvd.location = %s
+                        AND si.status = 'active'
+                        ORDER BY rvd.import_timestamp DESC
+                        LIMIT 1
+                    """, (identifier, actual_location_name))
+                else:
+                    # This is a stock number - query by stock column
+                    logger.info(f"[PREPARE LIST] Looking up by STOCK ({identifier_length} chars): {identifier}")
+                    vehicle_data = db_manager.execute_query("""
+                        SELECT nvd.*, rvd.status as raw_status, rvd.stock as raw_stock, rvd.vehicle_url as vehicle_url
+                        FROM normalized_vehicle_data nvd
+                        JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
+                        JOIN scraper_imports si ON rvd.import_id = si.import_id
+                        WHERE rvd.stock = %s
+                        AND nvd.location = %s
+                        AND si.status = 'active'
+                        ORDER BY rvd.import_timestamp DESC
+                        LIMIT 1
+                    """, (identifier, actual_location_name))
 
                 if vehicle_data and len(vehicle_data) > 0:
-                    # VIN found in scraper data
+                    # Identifier found in scraper data
                     valid_vehicles.append(vehicle_data[0])
-                    logger.info(f"[PREPARE LIST] Valid VIN: {vin}")
+                    logger.info(f"[PREPARE LIST] Valid identifier: {identifier}")
                 else:
-                    # VIN not found in scraper data
-                    invalid_vins.append(vin)
-                    logger.warning(f"[PREPARE LIST] Invalid VIN (no scraper data): {vin}")
+                    # Identifier not found in scraper data
+                    invalid_vins.append(identifier)
+                    logger.warning(f"[PREPARE LIST] Invalid identifier (no scraper data): {identifier}")
 
             logger.info(f"[PREPARE LIST] Results: {len(valid_vehicles)} valid, {len(invalid_vins)} invalid")
 
@@ -481,33 +500,51 @@ class CorrectOrderProcessor:
             actual_location_name = self.dealership_name_mapping.get(dealership_name, dealership_name)
             logger.info(f"[LIST DEBUG] Mapping {dealership_name} -> {actual_location_name}")
 
-            # LIST orders: Create vehicle records from user-provided VINs
-            # No inventory lookup or filtering needed - process whatever VINs user provides
+            # LIST orders: Create vehicle records from user-provided VINs OR stock numbers
+            # No inventory lookup or filtering needed - process whatever identifiers user provides
             vehicles = []
-            for vin in vin_list:
-                # Try to get vehicle data from inventory first (including vehicle_url for QR codes)
-                vehicle_data = db_manager.execute_query("""
-                    SELECT rvd.*, rvd.vehicle_url as vehicle_url
-                    FROM raw_vehicle_data rvd
-                    JOIN scraper_imports si ON rvd.import_id = si.import_id
-                    WHERE rvd.vin = %s AND rvd.location = %s
-                    AND si.status = 'active'
-                    ORDER BY rvd.import_timestamp DESC
-                    LIMIT 1
-                """, (vin, actual_location_name))
-                
+            for identifier in vin_list:
+                # Smart lookup: VINs are always 17 characters, stock numbers are shorter
+                identifier_length = len(identifier.strip())
+
+                if identifier_length == 17:
+                    # This is a VIN - query by VIN column
+                    logger.info(f"[LIST] Looking up by VIN (17 chars): {identifier}")
+                    vehicle_data = db_manager.execute_query("""
+                        SELECT rvd.*, rvd.vehicle_url as vehicle_url
+                        FROM raw_vehicle_data rvd
+                        JOIN scraper_imports si ON rvd.import_id = si.import_id
+                        WHERE rvd.vin = %s AND rvd.location = %s
+                        AND si.status = 'active'
+                        ORDER BY rvd.import_timestamp DESC
+                        LIMIT 1
+                    """, (identifier, actual_location_name))
+                else:
+                    # This is a stock number - query by stock column
+                    logger.info(f"[LIST] Looking up by STOCK ({identifier_length} chars): {identifier}")
+                    vehicle_data = db_manager.execute_query("""
+                        SELECT rvd.*, rvd.vehicle_url as vehicle_url
+                        FROM raw_vehicle_data rvd
+                        JOIN scraper_imports si ON rvd.import_id = si.import_id
+                        WHERE rvd.stock = %s AND rvd.location = %s
+                        AND si.status = 'active'
+                        ORDER BY rvd.import_timestamp DESC
+                        LIMIT 1
+                    """, (identifier, actual_location_name))
+
                 if vehicle_data:
                     # Use existing vehicle data if found
                     vehicles.append(vehicle_data[0])
+                    logger.info(f"[LIST] Found vehicle: VIN={vehicle_data[0].get('vin', 'N/A')}, Stock={vehicle_data[0].get('stock', 'N/A')}")
                 else:
-                    # Create placeholder vehicle record for user-provided VIN
+                    # Create placeholder vehicle record for user-provided identifier
                     placeholder_vehicle = {
-                        'vin': vin,
+                        'vin': identifier if identifier_length == 17 else f'STOCK_{identifier}',
                         'year': 'Unknown',
-                        'make': 'Unknown', 
+                        'make': 'Unknown',
                         'model': 'Unknown',
                         'trim': 'Unknown',
-                        'stock_number': f'LIST_{vin[-6:]}',  # Use last 6 chars of VIN
+                        'stock_number': identifier if identifier_length < 17 else f'LIST_{identifier[-6:]}',
                         'type': 'Used',  # Default to Used for LIST orders
                         'mileage': 0,
                         'price': 0,
@@ -515,7 +552,7 @@ class CorrectOrderProcessor:
                         'location': dealership_name
                     }
                     vehicles.append(placeholder_vehicle)
-                    logger.info(f"Created placeholder record for LIST VIN: {vin}")
+                    logger.info(f"[LIST] Created placeholder record for identifier: {identifier}")
             
             logger.info(f"Created {len(vehicles)} vehicle records for LIST processing")
             
@@ -1727,8 +1764,10 @@ class CorrectOrderProcessor:
                     # Find vehicle details for this duplicate VIN
                     for vehicle in vehicles:
                         if vehicle.get('vin') == dup_vin:
+                            # Strip type prefix from VIN for clean display
+                            clean_dup_vin = dup_vin.split(' - ')[-1].strip() if ' - ' in dup_vin else dup_vin
                             duplicate_vehicle_details.append({
-                                'vin': dup_vin,
+                                'vin': clean_dup_vin,
                                 'year': vehicle.get('year', ''),
                                 'make': vehicle.get('make', ''),
                                 'model': vehicle.get('model', ''),
@@ -1740,9 +1779,10 @@ class CorrectOrderProcessor:
             # Row 1: Header row with Duplicates count and VINs
             logger.info(f"[BILLING DEBUG] Writing header row with duplicates_count={duplicates_count}, duplicate_vins={duplicate_vins}")
             header_row = ['Printed Vehicles:', '', '', '', '', 'TOTALS:', '', '', 'Duplicates:', duplicates_count, '']
-            # Add duplicate VINs to the right of the count
+            # Add duplicate VINs to the right of the count (strip type prefix to get clean VINs)
             if duplicate_vins:
-                header_row.extend(duplicate_vins)
+                clean_duplicate_vins = [vin.split(' - ')[-1].strip() if ' - ' in vin else vin for vin in duplicate_vins]
+                header_row.extend(clean_duplicate_vins)
             writer.writerow(header_row)
 
             # Rows 2-8: Vehicle data with totals on right

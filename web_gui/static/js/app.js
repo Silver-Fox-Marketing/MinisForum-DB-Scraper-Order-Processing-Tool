@@ -9708,9 +9708,10 @@ Example:
                     <div class="vin-help">
                         <p><strong>Instructions:</strong></p>
                         <ul>
-                            <li>Enter one VIN per line</li>
-                            <li>Each VIN must be exactly 17 characters</li>
-                            <li>VINs will be automatically validated</li>
+                            <li>Enter one VIN or Stock Number per line</li>
+                            <li>VINs: Exactly 17 characters</li>
+                            <li>Stock Numbers: Up to 17 characters</li>
+                            <li>Entries will be automatically validated</li>
                         </ul>
                     </div>
                 </div>
@@ -9728,16 +9729,16 @@ Example:
         const vins = vinInput.value.trim().split('\n')
             .map(vin => vin.trim())
             .filter(vin => vin.length > 0);
-        
+
         if (vins.length === 0) {
-            alert('Please enter valid VINs');
+            alert('Please enter valid VINs or Stock Numbers');
             return;
         }
-        
-        // Validate VINs
-        const invalidVins = vins.filter(vin => vin.length !== 17);
-        if (invalidVins.length > 0) {
-            alert(`Invalid VINs detected (must be 17 characters): ${invalidVins.join(', ')}`);
+
+        // Validate entries: Accept VINs (17 chars) and Stock Numbers (<17 chars, max 17)
+        const invalidEntries = vins.filter(entry => entry.length > 17);
+        if (invalidEntries.length > 0) {
+            alert(`Invalid entries detected (maximum 17 characters): ${invalidEntries.join(', ')}`);
             return;
         }
         

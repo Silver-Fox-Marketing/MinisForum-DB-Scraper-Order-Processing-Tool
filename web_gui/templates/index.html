@@ -7,10 +7,10 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>MinisForum Database Control - Silver Fox Marketing [TEMPLATE-FIX-FINAL]</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/vin_log_update.css') }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/template_builder.css') }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/keyboard_shortcuts.css') }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.1759561651.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/vin_log_update.css') }}?timestamp=20251004-{{ range(10000000, 99999999) | random }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/template_builder.css') }}?timestamp=20251004-{{ range(10000000, 99999999) | random }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/keyboard_shortcuts.css') }}?timestamp=20251004-{{ range(10000000, 99999999) | random }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
@@ -702,16 +702,16 @@
         color: white !important;
     }
 
-    /* 6. Dealership list always visible and 2 panels per row - PRESERVE EXISTING GRID SYSTEM */
+    /* 6. Dealership list with responsive grid - fits multiple dealerships per row */
     .dealership-list {
         display: grid !important;
-        grid-template-columns: repeat(2, 1fr) !important;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important;
         gap: 12px !important;
         margin-top: 16px !important;
         padding: 8px !important;
     }
 
-    /* Ensure dealership panels work properly in 2-column grid */
+    /* Ensure dealership panels work properly in responsive grid */
     .dealership-list .modern-dealer-panel {
         margin: 0 !important;
         width: 100% !important;
@@ -843,8 +843,8 @@
                 
                 <div class="sidebar-footer">
                     <div class="sidebar-logo-section">
-                        <img src="{{ url_for('static', filename='images/silver_fox_logo.svg') }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}" alt="Silver Fox Marketing" class="sidebar-sf-logo">
-                        <img src="{{ url_for('static', filename='images/car_logo_orange.png') }}?timestamp=20250925-{{ range(10000000, 99999999) | random }}" alt="LotSherpa" class="sidebar-car-logo">
+                        <img src="{{ url_for('static', filename='images/silver_fox_logo.svg') }}?timestamp=20251004-{{ range(10000000, 99999999) | random }}" alt="Silver Fox Marketing" class="sidebar-sf-logo">
+                        <img src="{{ url_for('static', filename='images/car_logo_orange.png') }}?timestamp=20251004-{{ range(10000000, 99999999) | random }}" alt="LotSherpa" class="sidebar-car-logo">
                     </div>
                     <div class="sidebar-status">
                         <i class="fas fa-circle status-dot"></i>
@@ -1194,7 +1194,7 @@
                                 <!-- Individual Dealerships -->
                                 <div class="dealership-selection">
                                     <h3>Individual Dealerships</h3>
-                                    
+
                                     <!-- Dealership Search -->
                                     <div class="dealership-search">
                                         <div class="dealership-search-container">
@@ -1204,7 +1204,23 @@
                                             </div>
                                         </div>
                                     </div>
-                                    
+
+                                    <!-- Filter Controls -->
+                                    <div class="dealership-filters">
+                                        <div class="filter-group" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center !important;">
+                                            <span class="filter-label">Filter by Type:</span>
+                                            <button class="filter-btn active" data-filter="all" onclick="app.filterDealershipsByType('all')">
+                                                All <span class="filter-count" id="filterCountAll">0</span>
+                                            </button>
+                                            <button class="filter-btn" data-filter="cao" onclick="app.filterDealershipsByType('cao')">
+                                                CAO <span class="filter-count" id="filterCountCAO">0</span>
+                                            </button>
+                                            <button class="filter-btn" data-filter="list" onclick="app.filterDealershipsByType('list')">
+                                                LIST <span class="filter-count" id="filterCountLIST">0</span>
+                                            </button>
+                                        </div>
+                                    </div>
+
                                     <div class="dealership-list" id="dealershipList">
                                         <!-- Will be populated dynamically -->
                                         <div class="loading">Loading dealerships...</div>
@@ -1215,6 +1231,25 @@
                             <!-- Right Panel - Processing Queue -->
                             <div class="queue-panel">
                                 <h3>Processing Queue</h3>
+
+                                <!-- Queue Actions Toolbar -->
+                                <div class="queue-toolbar" id="queueToolbar" style="display: none;">
+                                    <div class="toolbar-section">
+                                        <span class="queue-count"><i class="fas fa-list-check"></i> <strong id="queueCountDisplay">0</strong> in queue</span>
+                                    </div>
+                                    <div class="toolbar-actions">
+                                        <button class="toolbar-btn" onclick="app.setAllQueueItems('CAO')" title="Set all items to CAO">
+                                            <i class="fas fa-robot"></i> All CAO
+                                        </button>
+                                        <button class="toolbar-btn" onclick="app.setAllQueueItems('LIST')" title="Set all items to LIST">
+                                            <i class="fas fa-list"></i> All LIST
+                                        </button>
+                                        <button class="toolbar-btn danger" onclick="app.clearQueue()" title="Clear all items from queue">
+                                            <i class="fas fa-trash"></i> Clear All
+                                        </button>
+                                    </div>
+                                </div>
+
                                 <div class="queue-items" id="queueItems">
                                     <div class="empty-queue">
                                         <i class="fas fa-clipboard-list"></i>
@@ -2973,7 +3008,7 @@ SF24002
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="{{ url_for('static', filename='js/keyboard_shortcuts.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?cache-bust=vinlog-checkbox-fix-{{ range(100000000, 999999999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?cache-bust=stock-number-support-{{ range(100000000, 999999999) | random }}"></script>
     <script src="{{ url_for('static', filename='js/' + (unique_template_builder_js or 'template_builder.js')) }}?v={{ cache_version }}"></script>
     <script src="{{ url_for('static', filename='js/template_wizard_v2.js') }}?v={{ cache_version }}"></script>
 
