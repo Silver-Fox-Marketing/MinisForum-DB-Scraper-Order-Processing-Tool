@@ -6532,6 +6532,16 @@ def update_template(template_id):
         data = request.get_json()
         import json
 
+        # Check if template_name is being changed to a name that already exists for a different template
+        if 'template_name' in data:
+            existing = db_manager.execute_query("""
+                SELECT id FROM template_configs
+                WHERE template_name = %s AND id != %s AND is_active = true
+            """, (data['template_name'], template_id))
+
+            if existing:
+                return jsonify({'error': 'A template with this name already exists'}), 400
+
         # Build dynamic update query
         update_fields = []
         params = []

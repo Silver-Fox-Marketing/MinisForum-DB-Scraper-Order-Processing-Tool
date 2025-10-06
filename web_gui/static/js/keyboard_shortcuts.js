@@ -185,10 +185,9 @@ class KeyboardShortcutManager {
         });
 
         this.registerShortcut('/', {
-            description: 'Focus Dealership Search',
-            category: 'Queue Management',
-            context: 'queue-management',
-            handler: () => this.focusDealershipSearch()
+            description: 'Focus Search Field',
+            category: 'Search',
+            handler: () => this.focusContextualSearch()
         });
 
         // Day selection shortcuts
@@ -607,12 +606,43 @@ class KeyboardShortcutManager {
         }
     }
 
-    focusDealershipSearch() {
-        const searchInput = document.querySelector('#dealershipSearchInput');
+    focusContextualSearch() {
+        // Smart search handler that focuses the appropriate search field based on context
+        let searchInput = null;
+        let searchType = '';
+
+        // Try to find visible search inputs to determine actual context
+        const queueSearch = document.querySelector('#dealershipSearchInput');
+        const settingsSearch = document.querySelector('#dealershipSettingsSearchInput');
+
+        const queueVisible = queueSearch && queueSearch.offsetParent !== null;
+        const settingsVisible = settingsSearch && settingsSearch.offsetParent !== null;
+
+        // Prioritize visible search fields over context
+        if (queueVisible) {
+            searchInput = queueSearch;
+            searchType = 'queue dealership search';
+        } else if (settingsVisible) {
+            searchInput = settingsSearch;
+            searchType = 'dealership settings search';
+        } else if (this.currentContext === 'queue-management' && queueSearch) {
+            searchInput = queueSearch;
+            searchType = 'queue dealership search (by context)';
+        } else if (this.currentContext === 'dealership-settings' && settingsSearch) {
+            searchInput = settingsSearch;
+            searchType = 'dealership settings search (by context)';
+        } else {
+            // Fallback: find any visible search field
+            searchInput = document.querySelector('input[type="search"]:not([style*="display: none"]):not([style*="display:none"])');
+            searchType = 'fallback search';
+        }
+
         if (searchInput) {
             searchInput.focus();
             searchInput.select();
-            console.log('[SHORTCUTS] Focused dealership search');
+            console.log(`[SHORTCUTS] Focused ${searchType} (context: ${this.currentContext}, queueVisible: ${queueVisible}, settingsVisible: ${settingsVisible})`);
+        } else {
+            console.log(`[SHORTCUTS] No search field found for context: ${this.currentContext}`);
         }
     }
 
