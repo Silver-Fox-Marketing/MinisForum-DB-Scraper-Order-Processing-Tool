@@ -3461,15 +3461,90 @@ class MinisFornumApp {
             
             dealershipList.innerHTML = html;
             console.log('✅ Dealership list rendered successfully');
+
+            // Hide dealerships that are already in the queue
+            if (this.processingQueue && this.processingQueue.size > 0) {
+                const dealershipItems = dealershipList.querySelectorAll('.modern-dealer-panel');
+                dealershipItems.forEach(item => {
+                    const dealershipName = item.getAttribute('data-dealership');
+                    if (this.processingQueue.has(dealershipName)) {
+                        item.style.display = 'none';
+                    }
+                });
+            }
         } catch (error) {
             console.error('❌ Error rendering dealership list:', error);
             dealershipList.innerHTML = '<div class="loading error">Error loading dealerships</div>';
         }
-        
+
         // Set up event delegation for dealership items
         this.setupDealershipEventListeners();
+
+        // Update filter counts
+        this.updateFilterCounts();
     }
-    
+
+    updateFilterCounts() {
+        const dealershipList = document.getElementById('dealershipList');
+        if (!dealershipList) return;
+
+        const allPanels = dealershipList.querySelectorAll('.modern-dealer-panel');
+        const visiblePanels = Array.from(allPanels).filter(panel => panel.style.display !== 'none');
+
+        // Count by type
+        const caoPanels = visiblePanels.filter(panel => panel.classList.contains('cao'));
+        const listPanels = visiblePanels.filter(panel => panel.classList.contains('list'));
+
+        // Update count displays
+        const filterCountAll = document.getElementById('filterCountAll');
+        const filterCountCAO = document.getElementById('filterCountCAO');
+        const filterCountLIST = document.getElementById('filterCountLIST');
+
+        if (filterCountAll) filterCountAll.textContent = visiblePanels.length;
+        if (filterCountCAO) filterCountCAO.textContent = caoPanels.length;
+        if (filterCountLIST) filterCountLIST.textContent = listPanels.length;
+    }
+
+    filterDealershipsByType(filterType) {
+        const dealershipList = document.getElementById('dealershipList');
+        if (!dealershipList) return;
+
+        const allPanels = dealershipList.querySelectorAll('.modern-dealer-panel');
+        const filterButtons = document.querySelectorAll('.filter-btn');
+
+        // Update active button
+        filterButtons.forEach(btn => {
+            if (btn.dataset.filter === filterType) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        // Apply filter
+        allPanels.forEach(panel => {
+            // Skip panels already hidden because they're in queue
+            const isInQueue = this.processingQueue && this.processingQueue.has(panel.getAttribute('data-dealership'));
+            if (isInQueue) {
+                panel.style.display = 'none';
+                return;
+            }
+
+            if (filterType === 'all') {
+                panel.style.display = '';
+            } else if (filterType === 'cao') {
+                panel.style.display = panel.classList.contains('cao') ? '' : 'none';
+            } else if (filterType === 'list') {
+                panel.style.display = panel.classList.contains('list') ? '' : 'none';
+            }
+        });
+
+        // Update counts after filtering
+        this.updateFilterCounts();
+
+        this.addTerminalMessage(`Filtered dealerships: ${filterType.toUpperCase()}`, 'info');
+    }
+
     setupDealershipEventListeners() {
         const dealershipList = document.getElementById('dealershipList');
         if (!dealershipList) return;
@@ -3834,6 +3909,14 @@ class MinisFornumApp {
                 });
                 addedCount++;
                 console.log(`✅ Added ${dealershipName} to queue with type ${defaultType}`);
+
+                // Hide the dealership from the individual dealerships panel
+                const dealershipItems = document.querySelectorAll('.modern-dealer-panel');
+                dealershipItems.forEach(item => {
+                    if (item.getAttribute('data-dealership') === dealershipName) {
+                        item.style.display = 'none';
+                    }
+                });
             } else {
                 console.log(`⚠️ ${dealershipName} already in queue, skipping`);
             }
@@ -3854,28 +3937,27 @@ class MinisFornumApp {
         // Debug logging to identify trigger source
         console.log('🔍 DEBUG: addDealershipToQueue called for:', dealershipName);
         console.trace('Call stack trace:');
-        
+
         if (this.processingQueue.has(dealershipName)) {
             this.addTerminalMessage(`${dealershipName} already in queue`, 'warning');
             return;
         }
-        
+
         const defaultType = this.getDealershipDefault(dealershipName);
         this.processingQueue.set(dealershipName, {
             name: dealershipName,
             orderType: defaultType,
             addedBy: 'manual selection'
         });
-        
+
         this.renderQueue();
         this.addTerminalMessage(`Added ${dealershipName} to queue`, 'success');
-        
-        // Highlight the dealership item temporarily
+
+        // Remove the dealership item from the list when added to queue
         const dealershipItems = document.querySelectorAll('.modern-dealer-panel');
         dealershipItems.forEach(item => {
-            if (item.querySelector('.dealer-title').textContent === dealershipName) {
-                item.classList.add('selected');
-                setTimeout(() => item.classList.remove('selected'), 1000);
+            if (item.getAttribute('data-dealership') === dealershipName) {
+                item.style.display = 'none';
             }
         });
     }
@@ -3885,6 +3967,14 @@ class MinisFornumApp {
             this.processingQueue.delete(dealershipName);
             this.renderQueue();
             this.addTerminalMessage(`Removed ${dealershipName} from queue`, 'success');
+
+            // Show the dealership item back in the list
+            const dealershipItems = document.querySelectorAll('.modern-dealer-panel');
+            dealershipItems.forEach(item => {
+                if (item.getAttribute('data-dealership') === dealershipName) {
+                    item.style.display = '';
+                }
+            });
         }
     }
     
@@ -3900,15 +3990,57 @@ class MinisFornumApp {
     renderQueue() {
         const queueItems = document.getElementById('queueItems');
         const processBtn = document.getElementById('processQueueBtn');
-        
+        const queueToolbar = document.getElementById('queueToolbar');
+        const queueCountDisplay = document.getElementById('queueCountDisplay');
+
         if (!queueItems) return;
-        
+
+        // Update toolbar visibility and count
+        if (queueToolbar) {
+            if (this.processingQueue.size > 0) {
+                queueToolbar.style.display = 'flex';
+                if (queueCountDisplay) {
+                    queueCountDisplay.textContent = this.processingQueue.size;
+                }
+            } else {
+                queueToolbar.style.display = 'none';
+            }
+        }
+
         if (this.processingQueue.size === 0) {
+            // Get today's day name for smart suggestion
+            const today = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
+            const todaySchedule = this.currentScheduleSettings?.[today] || [];
+
             queueItems.innerHTML = `
                 <div class="empty-queue">
-                    <i class="fas fa-clipboard-list"></i>
-                    <p>No dealerships in queue</p>
-                    <p class="help-text">Select dealerships or day buttons to add to queue</p>
+                    <div class="empty-icon">
+                        <i class="fas fa-clipboard-list"></i>
+                    </div>
+                    <h4>Queue is Empty</h4>
+                    <p class="empty-subtitle">Add dealerships to begin processing</p>
+
+                    <div class="quick-actions">
+                        ${todaySchedule.length > 0 ? `
+                            <button class="quick-action-btn primary" onclick="app.addDayToQueue('${today}')">
+                                <i class="fas fa-calendar-day"></i>
+                                Add Today's Schedule (${todaySchedule.length})
+                            </button>
+                        ` : ''}
+                        <button class="quick-action-btn secondary" onclick="document.getElementById('dealershipSearchInput').focus()">
+                            <i class="fas fa-search"></i>
+                            Search Dealerships
+                        </button>
+                    </div>
+
+                    <div class="empty-help">
+                        <p><strong>How to add dealerships:</strong></p>
+                        <ul>
+                            <li>Click a day button (MON-FRI) to add scheduled dealerships</li>
+                            <li>Click individual dealership cards below</li>
+                            <li>Drag and drop dealerships to the queue</li>
+                        </ul>
+                    </div>
                 </div>
             `;
             if (processBtn) {
@@ -3977,8 +4109,38 @@ class MinisFornumApp {
         this.processingQueue.clear();
         this.renderQueue();
         this.addTerminalMessage('Queue cleared', 'success');
+
+        // Show all dealership items back in the list
+        const dealershipItems = document.querySelectorAll('.modern-dealer-panel');
+        dealershipItems.forEach(item => {
+            item.style.display = '';
+        });
+
+        // Update filter counts after clearing queue
+        if (this.updateFilterCounts) {
+            this.updateFilterCounts();
+        }
     }
-    
+
+    setAllQueueItems(orderType) {
+        if (this.processingQueue.size === 0) {
+            this.addTerminalMessage('Queue is empty', 'warning');
+            return;
+        }
+
+        let updateCount = 0;
+        this.processingQueue.forEach((item, dealershipName) => {
+            if (item.orderType !== orderType) {
+                item.orderType = orderType;
+                this.processingQueue.set(dealershipName, item);
+                updateCount++;
+            }
+        });
+
+        this.renderQueue();
+        this.addTerminalMessage(`Set ${updateCount} items to ${orderType}`, 'success');
+    }
+
     launchOrderWizard() {
         if (this.processingQueue.size === 0) {
             this.addTerminalMessage('No dealerships in queue to process', 'warning');
@@ -10903,15 +11065,34 @@ Example:
     
     async injectRawStatusData(vehicles, tableBody) {
         console.log('🚨 EMERGENCY DOM INJECTION: Forcing raw_status data into table cells');
-        
-        // Get current dealership from the first order
-        const currentOrder = this.processedOrders && this.processedOrders[0];
-        if (!currentOrder || !currentOrder.dealership) {
+
+        // Determine current dealership from active tab, NOT from first order
+        let dealership = null;
+
+        // First try: Get from active dealership tab
+        const activeDealershipTab = document.querySelector('.dealership-tab.active');
+        if (activeDealershipTab) {
+            dealership = activeDealershipTab.getAttribute('data-dealership');
+            if (dealership === 'all') {
+                dealership = null; // Can't inject for "all" view
+            }
+        }
+
+        // Second try: Use selectedReviewDealership property
+        if (!dealership && this.selectedReviewDealership && this.selectedReviewDealership !== 'all') {
+            dealership = this.selectedReviewDealership;
+        }
+
+        // Third try: Fall back to first order (single dealership scenario)
+        if (!dealership && this.processedOrders && this.processedOrders.length === 1) {
+            dealership = this.processedOrders[0].dealership;
+        }
+
+        if (!dealership) {
             console.error('❌ Cannot inject raw_status: No dealership found');
             return;
         }
-        
-        const dealership = currentOrder.dealership;
+
         console.log(`🎯 Injecting raw_status for dealership: ${dealership}`);
         
         try {

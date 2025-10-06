@@ -1437,7 +1437,13 @@ def get_vehicle_raw_status(dealership_name):
         raw_status_map = {}
         for vehicle in vehicles_with_raw_status:
             vin = vehicle.get('vin', '')
-            raw_status = vehicle.get('raw_status', 'N/A')
+            raw_status = vehicle.get('raw_status', '')
+
+            # Display "Empty" for blank fields so user knows the field exists but scraper didn't capture it
+            # This is common for used vehicles at dealerships that don't display status
+            if not raw_status or (isinstance(raw_status, str) and raw_status.strip() == ''):
+                raw_status = 'Empty'
+
             if vin:
                 raw_status_map[vin] = raw_status
         

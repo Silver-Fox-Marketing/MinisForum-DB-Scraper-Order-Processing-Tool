@@ -357,6 +357,48 @@ class CorrectOrderProcessor:
         except Exception as e:
             logger.error(f"Error processing CAO order: {e}")
             return {'success': False, 'error': str(e)}
+
+    def prepare_cao_data(self, dealership_name: str) -> Dict[str, Any]:
+        """
+        PHASE 1: Prepare CAO order data for review (no file generation).
+        Returns vehicle data with raw_status for frontend display.
+        """
+        try:
+            logger.info(f"[PREPARE CAO] Preparing data for {dealership_name}")
+
+            # Get all current vehicles (includes raw_status from query)
+            current_vehicles = self._get_dealership_vehicles(dealership_name)
+            if not current_vehicles:
+                return {'success': False, 'error': 'No vehicles found', 'vehicle_count': 0, 'vehicles_data': []}
+
+            # Find NEW vehicles
+            current_vins = [v['vin'] for v in current_vehicles]
+            new_vins = self._find_new_vehicles_enhanced(dealership_name, current_vins, current_vehicles)
+            new_vehicles = [v for v in current_vehicles if v['vin'] in new_vins]
+
+            # Apply dealership filtering
+            filtered_vehicles = self._apply_dealership_filters(new_vehicles, dealership_name)
+
+            if not filtered_vehicles:
+                return {
+                    'success': False,
+                    'error': f'No vehicles match filtering criteria',
+                    'vehicle_count': 0,
+                    'vehicles_data': []
+                }
+
+            return {
+                'success': True,
+                'dealership': dealership_name,
+                'vehicle_count': len(filtered_vehicles),
+                'vehicles_data': filtered_vehicles,
+                'order_type': 'cao'
+            }
+
+        except Exception as e:
+            logger.error(f"[PREPARE CAO] Error: {e}")
+            return {'success': False, 'error': str(e), 'vehicle_count': 0, 'vehicles_data': []}
+
     def prepare_list_data(self, dealership_name: str, vin_list: List[str]) -> Dict[str, Any]:
         """
         PHASE 1: Prepare and validate LIST order VINs against scraper data.
@@ -529,6 +571,7 @@ class CorrectOrderProcessor:
                 'vehicles_processed': len(filtered_vehicles),
                 'vehicle_count': len(filtered_vehicles),
                 'vehicles_filtered_out': len(vehicles) - len(filtered_vehicles),
+                'vehicles_data': filtered_vehicles,
                 'qr_codes_generated': len(qr_paths),
                 'qr_folder': str(qr_folder),
                 'csv_file': str(csv_path),
