@@ -462,7 +462,13 @@ class CorrectOrderProcessor:
                     invalid_vins.append(identifier)
                     logger.warning(f"[PREPARE LIST] Invalid identifier (no scraper data): {identifier}")
 
-            logger.info(f"[PREPARE LIST] Results: {len(valid_vehicles)} valid, {len(invalid_vins)} invalid")
+            # CRITICAL: Apply dealership filters to show only vehicles matching config (vehicle_types, stock requirements, etc.)
+            # This ensures the UI preview phase shows filtered results, not just validated VINs
+            pre_filter_count = len(valid_vehicles)
+            valid_vehicles = self._apply_dealership_filters(valid_vehicles, dealership_name)
+
+            logger.info(f"[PREPARE LIST] Results: {len(valid_vehicles)} valid (after filters), {len(invalid_vins)} invalid")
+            logger.info(f"[PREPARE LIST] Filtered out {pre_filter_count - len(valid_vehicles)} vehicles that don't match dealership config")
 
             return {
                 'success': True,
@@ -555,10 +561,11 @@ class CorrectOrderProcessor:
                     logger.info(f"[LIST] Created placeholder record for identifier: {identifier}")
             
             logger.info(f"Created {len(vehicles)} vehicle records for LIST processing")
-            
-            # LIST orders: Skip dealership filtering - process all provided VINs
-            filtered_vehicles = vehicles  # No filtering for LIST orders
-            logger.info(f"LIST processing: Using all {len(filtered_vehicles)} provided VINs")
+
+            # CRITICAL FIX: Apply dealership filtering to LIST orders to respect vehicle_types config
+            # If dealership is configured for "used" only, don't process "new" vehicles even if in VIN list
+            filtered_vehicles = self._apply_dealership_filters(vehicles, dealership_name)
+            logger.info(f"LIST processing: {len(vehicles)} VINs provided, {len(filtered_vehicles)} match dealership filters (vehicle_types, etc.)")
             
             if not filtered_vehicles:
                 return {
@@ -1155,6 +1162,56 @@ class CorrectOrderProcessor:
                         # If no date_in_stock, filter it out to be safe
                         logger.info(f"[SEASONING] Filtered out VIN {vehicle.get('vin')[-8:]}: No date_in_stock available")
                         continue
+
+                # Stock number filter - exclude vehicles with missing stock numbers
+                if filtering_rules.get('exclude_missing_stock', False) or filtering_rules.get('require_stock', False):
+                    # Check raw_stock first (from raw_vehicle_data), fallback to stock (from normalized_vehicle_data)
+                    # Use whichever field has a non-null value
+                    stock = vehicle.get('raw_stock') or vehicle.get('stock')
+
+                    # Handle None/null values - only filter if BOTH fields are null/missing
+                    if stock is None:
+                        logger.info(f"[STOCK FILTER] Filtered out VIN {vehicle.get('vin', 'Unknown')[-8:]}: Both raw_stock and stock are None/null")
+                        continue
+
+                    # Convert to string and strip whitespace
+                    if isinstance(stock, str):
+                        stock = stock.strip()
+                    else:
+                        stock = str(stock)
+
+                    # Filter out missing, invalid, or placeholder stock numbers
+                    if not stock or stock.upper() in ['', '*', 'N/A', 'NONE', 'NULL', 'NAN', 'AUTO', 'TBD', 'TBA']:
+                        logger.info(f"[STOCK FILTER] Filtered out VIN {vehicle.get('vin', 'Unknown')[-8:]}: Missing or invalid stock number (stock='{stock}')")
+                        continue
+
+                # Price filter - exclude vehicles with missing prices
+                if filtering_rules.get('exclude_missing_price', False):
+                    price = vehicle.get('price', 0)
+                    if not price or price <= 0:
+                        logger.info(f"[PRICE FILTER] Filtered out VIN {vehicle.get('vin', 'Unknown')[-8:]}: Missing or zero price")
+                        continue
+
+                # Exclude conditions filter (e.g., exclude specific vehicle_condition values)
+                exclude_conditions = filtering_rules.get('exclude_conditions', [])
+                if exclude_conditions:
+                    # Check if this is a "used" umbrella scenario where po/cpo should NOT be excluded
+                    # (handled by the processing code's CRITICAL FIX at line 854-876)
+                    includes_used = 'used' in vehicle_types
+                    if includes_used and isinstance(exclude_conditions, list):
+                        # Filter out po/cpo from exclude_conditions since they're part of "used"
+                        exclude_conditions = [c for c in exclude_conditions if c not in ['po', 'cpo']]
+
+                    # Apply the remaining exclusions
+                    if exclude_conditions:
+                        if isinstance(exclude_conditions, list):
+                            if vehicle_type in exclude_conditions:
+                                logger.info(f"[EXCLUDE CONDITIONS] Filtered out VIN {vehicle.get('vin', 'Unknown')[-8:]}: vehicle_condition '{vehicle_type}' in exclude list")
+                                continue
+                        else:
+                            if vehicle_type == exclude_conditions:
+                                logger.info(f"[EXCLUDE CONDITIONS] Filtered out VIN {vehicle.get('vin', 'Unknown')[-8:]}: vehicle_condition '{vehicle_type}' matches exclude condition")
+                                continue
 
                 # If all filters pass, include the vehicle
                 filtered_vehicles.append(vehicle)
