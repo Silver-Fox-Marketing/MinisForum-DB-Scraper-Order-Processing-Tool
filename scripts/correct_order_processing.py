@@ -633,22 +633,22 @@ class CorrectOrderProcessor:
             logger.error(f"Error processing list order: {e}")
             return {'success': False, 'error': str(e)}
 
-    def process_maintenance_order(self, dealership_name: str, vin_list: List[str], skip_vin_logging: bool = False) -> Dict[str, Any]:
+    def process_maintenance_order(self, dealership_name: str, vin_list: List[str] = None, skip_vin_logging: bool = False) -> Dict[str, Any]:
         """
-        Process Maintenance Order - combines CAO + LIST approach
-        - CAO portion: Find NEW vehicles from inventory (applies VIN log filtering)
-        - LIST portion: Process provided VINs (typically USED, ignores VIN log)
+        Process Maintenance Order - combines CAO + manually entered LIST
 
-        For Auffenberg:
-        - NEW vehicles -> shortcut_pack template (from CAO)
-        - USED vehicles -> shortcut template (from LIST)
+        MAINTENANCE ORDER = CAO + LIST
+        - CAO portion: Find NEW vehicles (NOT in VIN log, in current active inventory)
+        - LIST portion: Process manually provided VINs (user input)
+        - Result: All vehicles that need graphics (new arrivals + manually specified vehicles)
         """
 
-        logger.info(f"[MAINTENANCE] Processing {dealership_name} - CAO for NEW vehicles + LIST for {len(vin_list)} provided VINs")
+        logger.info(f"[MAINTENANCE] Processing {dealership_name} - CAO + manual LIST")
 
         try:
-            # Step 1: Run CAO to get NEW vehicles (applies VIN log)
-            cao_result = self.process_cao_order(dealership_name, template_type="shortcut_pack", skip_vin_logging=skip_vin_logging)
+            # Step 1: Run CAO to get NEW vehicles (NOT in VIN log)
+            logger.info(f"[MAINTENANCE] Step 1: Running CAO to find NEW vehicles not yet processed")
+            cao_result = self.process_cao_order(dealership_name, skip_vin_logging=skip_vin_logging)
 
             cao_vehicles = []
             cao_count = 0
@@ -659,34 +659,89 @@ class CorrectOrderProcessor:
             else:
                 logger.warning(f"[MAINTENANCE] CAO failed: {cao_result.get('error', 'Unknown error')}")
 
-            # Step 2: Run LIST to process provided VINs (ignores VIN log)
+            # Step 2: Process manually entered VINs (if provided)
+            # CRITICAL: Maintenance order LIST portion does NOT check VIN log
+            # Purpose: Process ANY VIN that has scraper data, even if previously processed
             list_vehicles = []
             list_count = 0
+
             if vin_list and len(vin_list) > 0:
-                list_result = self.process_list_order(dealership_name, vin_list, template_type="shortcut", skip_vin_logging=skip_vin_logging)
+                logger.info(f"[MAINTENANCE] Step 2: Processing {len(vin_list)} manually entered VINs (NO VIN LOG CHECK)")
 
-                if list_result.get('success'):
-                    list_vehicles = list_result.get('vehicles_data', [])
-                    # Filter out placeholder/not found vehicles (they have 'Unknown' make or year='Unknown')
-                    list_vehicles = [v for v in list_vehicles if v.get('make') != 'Unknown' and v.get('year') != 'Unknown']
-                    list_count = len(list_vehicles)
-                    logger.info(f"[MAINTENANCE] LIST returned {list_count} valid vehicles from {len(vin_list)} provided VINs")
-                else:
-                    logger.warning(f"[MAINTENANCE] LIST failed: {list_result.get('error', 'Unknown error')}")
+                # Get dealership location mapping
+                actual_location_name = self.dealership_name_mapping.get(dealership_name, dealership_name)
 
-            # Step 3: Remove duplicates - LIST VINs take priority over CAO VINs
-            list_vins = set(v['vin'] for v in list_vehicles)
-            cao_vehicles_deduplicated = [v for v in cao_vehicles if v['vin'] not in list_vins]
+                # Get dealership config for vehicle type filtering
+                config = db_manager.execute_query("""
+                    SELECT filtering_rules FROM dealership_configs WHERE name = %s
+                """, (dealership_name,))
 
-            duplicates_removed = cao_count - len(cao_vehicles_deduplicated)
-            if duplicates_removed > 0:
-                logger.info(f"[MAINTENANCE] Removed {duplicates_removed} duplicate VINs from CAO that were in LIST")
+                filtering_rules = {}
+                if config:
+                    filtering_rules = config[0]['filtering_rules']
+                    if isinstance(filtering_rules, str):
+                        filtering_rules = json.loads(filtering_rules)
 
-            # Combine results - LIST first, then unique CAO vehicles
-            total_vehicles = list_vehicles + cao_vehicles_deduplicated
+                # Process each manually entered VIN
+                for vin in vin_list:
+                    vin = vin.strip().upper()
+                    logger.info(f"[MAINTENANCE LIST] Looking up VIN: {vin}")
+
+                    # Query vehicle from scraper data - NO VIN LOG CHECK
+                    query = """
+                        SELECT nvd.*, rvd.status as raw_status, rvd.stock as raw_stock, rvd.date_in_stock
+                        FROM normalized_vehicle_data nvd
+                        JOIN raw_vehicle_data rvd ON nvd.raw_data_id = rvd.id
+                        JOIN scraper_imports si ON rvd.import_id = si.import_id
+                        WHERE nvd.vin = %s
+                        AND nvd.location = %s
+                        AND si.status = 'active'
+                    """
+                    params = [vin, actual_location_name]
+
+                    # Apply vehicle type filter if specified
+                    vehicle_types = filtering_rules.get('allowed_vehicle_types', filtering_rules.get('vehicle_types', ['new', 'used']))
+                    if vehicle_types and 'all' not in vehicle_types:
+                        allowed_conditions = []
+                        for vtype in vehicle_types:
+                            if vtype == 'new':
+                                allowed_conditions.append('new')
+                            elif vtype == 'used':
+                                allowed_conditions.extend(['used', 'po', 'cpo'])
+                            elif vtype in ['certified', 'cpo']:
+                                allowed_conditions.append('cpo')
+                            elif vtype in ['po', 'pre-owned']:
+                                allowed_conditions.append('po')
+
+                        if allowed_conditions:
+                            allowed_conditions = list(set(allowed_conditions))
+                            placeholders = ', '.join(['%s'] * len(allowed_conditions))
+                            query += f" AND nvd.vehicle_condition IN ({placeholders})"
+                            params.extend(allowed_conditions)
+
+                    # Check if stock number is required
+                    if filtering_rules.get('require_stock_numbers', False):
+                        query += " AND rvd.stock IS NOT NULL AND TRIM(rvd.stock) != ''"
+
+                    vehicle_result = db_manager.execute_query(query, tuple(params))
+
+                    if vehicle_result and len(vehicle_result) > 0:
+                        vehicle = vehicle_result[0]
+                        list_vehicles.append(vehicle)
+                        logger.info(f"[MAINTENANCE LIST] Found vehicle for VIN {vin}: {vehicle.get('year')} {vehicle.get('make')} {vehicle.get('model')}")
+                    else:
+                        logger.warning(f"[MAINTENANCE LIST] VIN {vin} not found in active scraper data or does not meet dealership requirements")
+
+                list_count = len(list_vehicles)
+                logger.info(f"[MAINTENANCE] LIST returned {list_count} vehicles from {len(vin_list)} manual VINs")
+            else:
+                logger.info(f"[MAINTENANCE] Step 2: No manual VINs provided, skipping LIST portion")
+
+            # Step 3: Combine results
+            total_vehicles = cao_vehicles + list_vehicles
             total_count = len(total_vehicles)
 
-            logger.info(f"[MAINTENANCE] Total: {total_count} unique vehicles ({len(cao_vehicles_deduplicated)} from CAO + {list_count} from LIST)")
+            logger.info(f"[MAINTENANCE] Total: {total_count} vehicles ({cao_count} from CAO + {list_count} from manual LIST)")
 
             return {
                 'success': True,
@@ -694,17 +749,19 @@ class CorrectOrderProcessor:
                 'cao_count': cao_count,
                 'list_count': list_count,
                 'total_count': total_count,
-                'vehicles_data': total_vehicles,  # DEDUPLICATED combined vehicles (LIST + unique CAO)
-                'vehicle_count': total_count,  # Use total count, not just CAO
-                'new_vehicles': total_count,  # Use total count
-                'vehicles': total_vehicles,  # Use DEDUPLICATED vehicles, not just CAO
+                'vehicles_data': total_vehicles,
+                'vehicle_count': total_count,
+                'new_vehicles': total_count,
+                'vehicles': total_vehicles,
                 'order_type': 'maintenance',
                 'cao_result': cao_result,
-                'list_result': list_result if vin_list else None
+                'list_query_success': list_count > 0 or cao_count > 0
             }
 
         except Exception as e:
             logger.error(f"[MAINTENANCE] Error processing maintenance order: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return {'success': False, 'error': str(e)}
 
     def _log_processed_vins_to_history(self, vehicles: List[Dict], dealership_name: str, order_type: str) -> Dict[str, Any]:

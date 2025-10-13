@@ -3008,7 +3008,7 @@ SF24002
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="{{ url_for('static', filename='js/keyboard_shortcuts.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?cache-bust=stock-number-support-{{ range(100000000, 999999999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?cache-bust=maintenance-vin-fix-{{ range(100000000, 999999999) | random }}"></script>
     <script src="{{ url_for('static', filename='js/' + (unique_template_builder_js or 'template_builder.js')) }}?v={{ cache_version }}"></script>
     <script src="{{ url_for('static', filename='js/template_wizard_v2.js') }}?v={{ cache_version }}"></script>
 

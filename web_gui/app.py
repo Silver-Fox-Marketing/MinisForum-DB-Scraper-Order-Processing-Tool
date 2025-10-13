@@ -1488,22 +1488,21 @@ def process_list_order():
 
 @app.route('/api/orders/process-maintenance', methods=['POST'])
 def process_maintenance_order():
-    """Process maintenance-based order (CAO + LIST combination)"""
+    """Process maintenance-based order (CAO + manually entered LIST)"""
     try:
         data = request.get_json()
         dealership = data.get('dealership')
-        vins = data.get('vins', [])
+        vins = data.get('vins', [])  # Optional manual VIN list
         skip_vin_logging = data.get('skip_vin_logging', False)
 
         if not dealership:
             return jsonify({'error': 'Dealership required'}), 400
 
-        # Maintenance orders can have empty VIN list (CAO-only)
-        # The 'vins' parameter defaults to empty list in get(), so no need to check
-        logger.info(f"Processing MAINTENANCE order for {dealership} with {len(vins)} VINs (skip_vin_logging: {skip_vin_logging})")
+        # Maintenance order = CAO + optional manual LIST
+        logger.info(f"Processing MAINTENANCE order for {dealership} (CAO + {len(vins)} manual VINs) (skip_vin_logging: {skip_vin_logging})")
 
-        # Process maintenance order - combines CAO (apply vinlog) + LIST (ignore vinlog)
-        result = order_processor.process_maintenance_order(dealership, vins, skip_vin_logging=skip_vin_logging)
+        # Process maintenance order - CAO + manual LIST
+        result = order_processor.process_maintenance_order(dealership, vin_list=vins if vins else None, skip_vin_logging=skip_vin_logging)
         return jsonify(result)
     except Exception as e:
         logger.error(f"Error processing maintenance order: {e}")
@@ -3983,9 +3982,9 @@ def process_csv_import():
                 # Template type will be determined from dealership config
                 result = order_processor.process_cao_order(dealership_name, skip_vin_logging=skip_vin_logging)
             elif order_type == 'maintenance':
-                # MAINTENANCE processing - CAO + LIST combination (CAO applies vinlog, LIST ignores vinlog)
-                logger.info(f"Processing MAINTENANCE order for {dealership_name} with {len(imported_vins)} VINs (skip_vin_logging: {skip_vin_logging})")
-                result = order_processor.process_maintenance_order(dealership_name, imported_vins, skip_vin_logging=skip_vin_logging)
+                # MAINTENANCE processing - CAO + manual LIST
+                logger.info(f"Processing MAINTENANCE order for {dealership_name} (CAO + {len(imported_vins)} manual VINs) (skip_vin_logging: {skip_vin_logging})")
+                result = order_processor.process_maintenance_order(dealership_name, vin_list=imported_vins if imported_vins else None, skip_vin_logging=skip_vin_logging)
             else:
                 # LIST processing - process specific VIN list
                 logger.info(f"Processing LIST order for {dealership_name} with {len(imported_vins)} VINs (skip_vin_logging: {skip_vin_logging})")
@@ -7022,12 +7021,12 @@ if __name__ == '__main__':
         # Use production settings
         app.run(
             host=getattr(config, 'HOST', '127.0.0.1'),
-            port=getattr(config, 'PORT', 5000),
+            port=getattr(config, 'PORT', 5002),  # Development server on port 5002
             debug=getattr(config, 'DEBUG', False),
             threaded=getattr(config, 'THREADED', True)
         )
-        
+
     except ImportError:
         # Fallback to basic configuration
         logger.warning("Production config not found, using basic settings")
-        app.run(host='127.0.0.1', port=5000, debug=False)
+        app.run(host='127.0.0.1', port=5002, debug=False)  # Development server on port 5002

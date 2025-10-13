@@ -9594,12 +9594,22 @@ class ModalOrderWizard {
     }
     
     async processMaintenanceVins() {
+        console.log('[MAINTENANCE DEBUG] processMaintenanceVins() called');
+
         const vinInput = document.getElementById('maintenanceVinInput');
+        console.log('[MAINTENANCE DEBUG] vinInput element:', vinInput);
+        console.log('[MAINTENANCE DEBUG] vinInput.value:', vinInput ? vinInput.value : 'NULL');
+
         const manualVins = vinInput ? vinInput.value.trim().split('\n').filter(vin => vin.trim()) : [];
+        console.log('[MAINTENANCE DEBUG] manualVins array:', manualVins);
+        console.log('[MAINTENANCE DEBUG] manualVins count:', manualVins.length);
 
         if (this.maintenanceResults[this.currentMaintenanceIndex]) {
             const currentOrder = this.maintenanceOrders[this.currentMaintenanceIndex];
             const dealershipName = currentOrder.name;
+
+            console.log('[MAINTENANCE DEBUG] Dealership:', dealershipName);
+            console.log('[MAINTENANCE DEBUG] Sending to API - VINs:', manualVins);
 
             try {
                 // Call the maintenance API with manual VINs - it will handle CAO + LIST deduplication
