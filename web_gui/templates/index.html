@@ -352,25 +352,26 @@
         transform: none !important;
     }
 
-    /* Sidebar Logo Section - Responsive to sidebar state with optimized spacing for larger logos */
+    /* Sidebar Logo Section - Responsive to sidebar state with optimized spacing */
     .sidebar-logo-section {
         text-align: center;
-        padding: 25px 20px;
-        margin: 20px 0;
+        padding: 12px 20px;
+        margin: 12px 0;
         transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         border-top: 1px solid rgba(253, 65, 13, 0.1);
         border-bottom: 1px solid rgba(253, 65, 13, 0.1);
         display: flex;
-        flex-direction: column;
+        flex-direction: row;
         align-items: center;
+        justify-content: center;
         gap: 12px;
     }
 
-    /* Both logos - Larger size when sidebar is expanded for professional appearance */
+    /* Both logos - Smaller size when sidebar is expanded for better space utilization */
     .sidebar-sf-logo,
     .sidebar-car-logo {
-        width: 150px;
-        height: 150px;
+        width: 60px;
+        height: 60px;
         object-fit: contain;
         filter: brightness(1.1);
         transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
@@ -554,6 +555,28 @@
         max-width: 120px !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
+    }
+
+    .sidebar-version {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 6px !important;
+        font-size: 11px !important;
+        margin-top: 6px !important;
+        padding: 4px 8px !important;
+        background: rgba(99, 102, 241, 0.1) !important;
+        border-radius: 4px !important;
+        color: #6366f1 !important;
+        font-weight: 500 !important;
+    }
+
+    .sidebar-version i {
+        font-size: 10px !important;
+    }
+
+    .sidebar-navigation.collapsed .sidebar-version {
+        display: none !important;
     }
 
     /* 4. Update collapsed state for new width */
@@ -849,6 +872,10 @@
                     <div class="sidebar-status">
                         <i class="fas fa-circle status-dot"></i>
                         <span class="status-label">All Systems Online</span>
+                    </div>
+                    <div class="sidebar-version">
+                        <i class="fas fa-code-branch"></i>
+                        <span>v2.1.2</span>
                     </div>
                     <div class="keyboard-shortcuts-hint" style="margin-top: 12px; padding: 8px 12px; background: rgba(99, 102, 241, 0.1); border-left: 3px solid #6366f1; border-radius: 4px; font-size: 12px; cursor: pointer;" onclick="if(window.keyboardShortcuts) window.keyboardShortcuts.toggleHelp()">
                         <i class="fas fa-keyboard" style="color: #6366f1; margin-right: 6px;"></i>
@@ -3008,7 +3035,7 @@ SF24002
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="{{ url_for('static', filename='js/keyboard_shortcuts.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?cache-bust=maintenance-vin-fix-{{ range(100000000, 999999999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/' + (unique_app_js or 'app.js')) }}?cache-bust=version-display-{{ range(100000000, 999999999) | random }}"></script>
     <script src="{{ url_for('static', filename='js/' + (unique_template_builder_js or 'template_builder.js')) }}?v={{ cache_version }}"></script>
     <script src="{{ url_for('static', filename='js/template_wizard_v2.js') }}?v={{ cache_version }}"></script>
 

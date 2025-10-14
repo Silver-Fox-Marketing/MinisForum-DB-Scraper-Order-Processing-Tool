@@ -10058,8 +10058,8 @@ Example:
                 success: order.result?.success
             });
 
-            // Check for vehicles_processed (current API) or vehicles_generated (legacy)
-            const vehicleCount = order.result?.vehicles_processed || order.result?.vehicles_generated || 0;
+            // Check for vehicles_processed (current API) or vehicles_generated (legacy) or vehicle_count (LIST orders)
+            const vehicleCount = order.result?.vehicles_processed || order.result?.vehicles_generated || order.result?.vehicle_count || 0;
 
             // Check if this dealership has already been completed
             const isCompleted = this.completedDealerships && this.completedDealerships.has(order.dealership);
@@ -10069,10 +10069,10 @@ Example:
                 dealerships.set(order.dealership, {
                     name: order.dealership,
                     count: vehicleCount,
-                    type: 'cao',
+                    type: order.type || 'cao',  // Use actual order type (cao, list, etc.)
                     data: order
                 });
-                console.log('🏢 SETUP: Added dealership:', order.dealership, 'with', vehicleCount, 'vehicles');
+                console.log('🏢 SETUP: Added dealership:', order.dealership, 'with', vehicleCount, 'vehicles', `(type: ${order.type || 'cao'})`);
             } else if (isCompleted) {
                 console.log(`🏢 SETUP: Skipped ${order.dealership} - already completed via individual processing`);
             }
@@ -10309,22 +10309,8 @@ Example:
                     console.log('[LIST PREVIEW DEBUG] Has STOCK?', vehicles[0]?.STOCK);
                     console.log('[LIST PREVIEW DEBUG] Has VIN?', vehicles[0]?.VIN);
 
-                    // Display the vehicles immediately
-                    const tableBody = document.getElementById('modalVehicleDataBody') ||
-                                    document.getElementById('modalVehicleTableBody') ||
-                                    document.getElementById('vehicleTableBody');
-                    const noDataPlaceholder = document.getElementById('modalNoDataPlaceholder');
-                    const vehicleCountEl = document.getElementById('modalVehicleCount');
-
-                    if (tableBody && vehicles.length > 0) {
-                        this.renderVehicleTable(vehicles, tableBody);
-                        console.log(`Populated table with ${vehicles.length} prepared vehicles for ${order.dealership}`);
-                    }
-
-                    if (noDataPlaceholder) noDataPlaceholder.style.display = 'none';
-                    if (vehicleCountEl) vehicleCountEl.textContent = vehicles.length.toString();
-
-                    // Add to allVehicles for display
+                    // Add to allVehicles for batched display (don't render immediately)
+                    // This allows multiple LIST orders to be accumulated before rendering
                     allVehicles.push(...vehicles);
 
                 } else if (order.result.phase1_data?.vehicles_data || order.result.download_csv) {
