@@ -412,7 +412,23 @@ class CorrectOrderProcessor:
             Dict with success, valid_vins, invalid_vins, vehicles_data
         """
         try:
-            logger.info(f"[PREPARE LIST] Validating {len(vin_list)} VINs for {dealership_name}")
+            # Deduplicate VIN list to prevent accidental duplicate entries
+            original_count = len(vin_list)
+            # Preserve order while removing duplicates (case-insensitive)
+            seen = set()
+            unique_vin_list = []
+            for vin in vin_list:
+                vin_upper = vin.strip().upper()
+                if vin_upper not in seen:
+                    seen.add(vin_upper)
+                    unique_vin_list.append(vin)
+
+            duplicates_removed = original_count - len(unique_vin_list)
+            if duplicates_removed > 0:
+                logger.info(f"[PREPARE LIST] Removed {duplicates_removed} duplicate VIN(s) from input list")
+
+            vin_list = unique_vin_list
+            logger.info(f"[PREPARE LIST] Validating {len(vin_list)} unique VINs for {dealership_name}")
 
             # Map dealership config name to actual data location name
             actual_location_name = self.dealership_name_mapping.get(dealership_name, dealership_name)
@@ -499,7 +515,23 @@ class CorrectOrderProcessor:
         Process List Order (transcribed VINs from installers)
         """
 
-        logger.info(f"[LIST] Processing {dealership_name} with {len(vin_list)} VINs")
+        # Deduplicate VIN list to prevent accidental duplicate entries
+        original_count = len(vin_list)
+        # Preserve order while removing duplicates (case-insensitive)
+        seen = set()
+        unique_vin_list = []
+        for vin in vin_list:
+            vin_upper = vin.strip().upper()
+            if vin_upper not in seen:
+                seen.add(vin_upper)
+                unique_vin_list.append(vin)
+
+        duplicates_removed = original_count - len(unique_vin_list)
+        if duplicates_removed > 0:
+            logger.info(f"[LIST] Removed {duplicates_removed} duplicate VIN(s) from input list")
+
+        vin_list = unique_vin_list
+        logger.info(f"[LIST] Processing {dealership_name} with {len(vin_list)} unique VINs")
 
         try:
             # Map dealership config name to actual data location name
@@ -666,28 +698,37 @@ class CorrectOrderProcessor:
             list_count = 0
 
             if vin_list and len(vin_list) > 0:
-                logger.info(f"[MAINTENANCE] Step 2: Processing {len(vin_list)} manually entered VINs (NO VIN LOG CHECK)")
+                # Deduplicate VIN list to prevent accidental duplicate entries
+                original_count = len(vin_list)
+                # Preserve order while removing duplicates (case-insensitive)
+                seen = set()
+                unique_vin_list = []
+                for vin in vin_list:
+                    vin_upper = vin.strip().upper()
+                    if vin_upper not in seen:
+                        seen.add(vin_upper)
+                        unique_vin_list.append(vin)
+
+                duplicates_removed = original_count - len(unique_vin_list)
+                if duplicates_removed > 0:
+                    logger.info(f"[MAINTENANCE] Removed {duplicates_removed} duplicate VIN(s) from manual input list")
+
+                vin_list = unique_vin_list
+                logger.info(f"[MAINTENANCE] Step 2: Processing {len(vin_list)} unique manually entered VINs (NO VIN LOG CHECK)")
 
                 # Get dealership location mapping
                 actual_location_name = self.dealership_name_mapping.get(dealership_name, dealership_name)
 
-                # Get dealership config for vehicle type filtering
-                config = db_manager.execute_query("""
-                    SELECT filtering_rules FROM dealership_configs WHERE name = %s
-                """, (dealership_name,))
-
-                filtering_rules = {}
-                if config:
-                    filtering_rules = config[0]['filtering_rules']
-                    if isinstance(filtering_rules, str):
-                        filtering_rules = json.loads(filtering_rules)
+                # CRITICAL: Maintenance order LIST processing does NOT apply vehicle_types or stock filters
+                # Purpose: Process ANY manually entered VIN with scraper data, regardless of dealership config
+                logger.info(f"[MAINTENANCE LIST] Processing manual VINs WITHOUT vehicle_types or stock filters")
 
                 # Process each manually entered VIN
                 for vin in vin_list:
                     vin = vin.strip().upper()
                     logger.info(f"[MAINTENANCE LIST] Looking up VIN: {vin}")
 
-                    # Query vehicle from scraper data - NO VIN LOG CHECK
+                    # Query vehicle from scraper data - NO VIN LOG CHECK, NO FILTERS
                     query = """
                         SELECT nvd.*, rvd.status as raw_status, rvd.stock as raw_stock, rvd.date_in_stock
                         FROM normalized_vehicle_data nvd
@@ -699,29 +740,7 @@ class CorrectOrderProcessor:
                     """
                     params = [vin, actual_location_name]
 
-                    # Apply vehicle type filter if specified
-                    vehicle_types = filtering_rules.get('allowed_vehicle_types', filtering_rules.get('vehicle_types', ['new', 'used']))
-                    if vehicle_types and 'all' not in vehicle_types:
-                        allowed_conditions = []
-                        for vtype in vehicle_types:
-                            if vtype == 'new':
-                                allowed_conditions.append('new')
-                            elif vtype == 'used':
-                                allowed_conditions.extend(['used', 'po', 'cpo'])
-                            elif vtype in ['certified', 'cpo']:
-                                allowed_conditions.append('cpo')
-                            elif vtype in ['po', 'pre-owned']:
-                                allowed_conditions.append('po')
-
-                        if allowed_conditions:
-                            allowed_conditions = list(set(allowed_conditions))
-                            placeholders = ', '.join(['%s'] * len(allowed_conditions))
-                            query += f" AND nvd.vehicle_condition IN ({placeholders})"
-                            params.extend(allowed_conditions)
-
-                    # Check if stock number is required
-                    if filtering_rules.get('require_stock_numbers', False):
-                        query += " AND rvd.stock IS NOT NULL AND TRIM(rvd.stock) != ''"
+                    # NO FILTERS for maintenance orders - process ANY VIN with scraper data
 
                     vehicle_result = db_manager.execute_query(query, tuple(params))
 
@@ -730,7 +749,7 @@ class CorrectOrderProcessor:
                         list_vehicles.append(vehicle)
                         logger.info(f"[MAINTENANCE LIST] Found vehicle for VIN {vin}: {vehicle.get('year')} {vehicle.get('make')} {vehicle.get('model')}")
                     else:
-                        logger.warning(f"[MAINTENANCE LIST] VIN {vin} not found in active scraper data or does not meet dealership requirements")
+                        logger.warning(f"[MAINTENANCE LIST] VIN {vin} not found in active scraper data for {actual_location_name}")
 
                 list_count = len(list_vehicles)
                 logger.info(f"[MAINTENANCE] LIST returned {list_count} vehicles from {len(vin_list)} manual VINs")

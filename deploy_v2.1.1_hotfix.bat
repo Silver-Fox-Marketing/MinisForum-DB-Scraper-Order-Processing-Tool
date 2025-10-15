@@ -22,9 +22,10 @@ echo ========================================================================
 echo.
 
 REM Configuration
-set PROD_PATH=C:\SilverFox
+set BASE_PATH=C:\SilverFox
+set PROD_PATH=%BASE_PATH%\releases\v2.1.0
 set DEV_PATH=C:\Users\Workstation_1\Documents\Tools\ClaudeCode\projects\minisforum_database_transfer\bulletproof_package
-set BACKUP_DIR=%PROD_PATH%\backups\v2.1.1_hotfix_%date:~-4,4%%date:~-10,2%%date:~-7,2%_%time:~0,2%%time:~3,2%%time:~6,2%
+set BACKUP_DIR=%BASE_PATH%\backups\code\v2.1.1_hotfix_%date:~-4,4%%date:~-10,2%%date:~-7,2%_%time:~0,2%%time:~3,2%%time:~6,2%
 set CRITICAL_FILE=scripts\correct_order_processing.py
 
 echo [STEP 1/6] Verifying production path...
@@ -34,7 +35,14 @@ if not exist "%PROD_PATH%" (
     pause
     exit /b 1
 )
+if not exist "%PROD_PATH%\%CRITICAL_FILE%" (
+    echo [ERROR] Production file not found: %PROD_PATH%\%CRITICAL_FILE%
+    echo Please verify the file exists.
+    pause
+    exit /b 1
+)
 echo [OK] Production path verified
+echo [OK] Current version: v2.1.0 (via releases directory)
 
 echo.
 echo [STEP 2/6] Creating backup...
@@ -83,7 +91,8 @@ echo.
 echo  copy /Y "%BACKUP_DIR%\correct_order_processing.py.backup" ^
 echo           "%PROD_PATH%\%CRITICAL_FILE%"
 echo.
-echo  Then restart the server.
+echo  Production path: %PROD_PATH%
+echo  Then restart the server (see Step 2 in DEPLOY_v2.1.1_README.md).
 echo ========================================================================
 echo.
 

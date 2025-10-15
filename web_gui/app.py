@@ -1325,27 +1325,64 @@ def prepare_cao_data():
 
 @app.route('/api/orders/prepare-list', methods=['POST'])
 def prepare_list_data():
-    """PHASE 1: Prepare LIST data for review with VIN validation"""
+    """PHASE 1: Prepare LIST data for review with VIN validation (supports batch and single)"""
     try:
         data = request.get_json()
-        dealership = data.get('dealership')
-        vins = data.get('vins', [])
 
-        if not dealership:
-            return jsonify({'error': 'Dealership name required'}), 400
-        if not vins:
-            return jsonify({'error': 'VIN list required'}), 400
+        # Support both batch and single dealership modes
+        # Batch mode: {'dealerships': [{'name': 'Dealer1', 'vins': [...]}, ...]}
+        # Single mode: {'dealership': 'Dealer1', 'vins': [...]}
 
-        logger.info(f"[LIST PREPARE] Preparing LIST data for {dealership} with {len(vins)} VINs")
+        dealerships_data = data.get('dealerships')
+        single_dealership = data.get('dealership')
+        single_vins = data.get('vins', [])
 
-        # Call the new prepare_list_data method (with VIN validation)
-        result = order_processor.prepare_list_data(dealership, vins)
+        # Determine mode
+        if dealerships_data:
+            # Batch mode
+            logger.info(f"[LIST PREPARE BATCH] Preparing LIST data for {len(dealerships_data)} dealerships")
 
-        logger.info(f"[LIST PREPARE] Data preparation result for {dealership}: success={result.get('success')}, valid_vins={result.get('valid_vins')}, invalid_vins={result.get('invalid_vins')}")
+            results = []
+            for dealership_info in dealerships_data:
+                dealership_name = dealership_info.get('name')
+                vins = dealership_info.get('vins', [])
 
-        # Convert all Path objects to strings for JSON serialization
-        result = _convert_paths_to_strings(result)
-        return jsonify(result)
+                if not dealership_name or not vins:
+                    logger.warning(f"[LIST PREPARE BATCH] Skipping dealership with missing name or vins")
+                    continue
+
+                logger.info(f"[LIST PREPARE BATCH] Preparing data for {dealership_name} with {len(vins)} VINs")
+
+                # Call the prepare_list_data method
+                result = order_processor.prepare_list_data(dealership_name, vins)
+
+                logger.info(f"[LIST PREPARE BATCH] Result for {dealership_name}: success={result.get('success')}, valid_vins={result.get('valid_vins')}")
+
+                # Convert all Path objects to strings for JSON serialization
+                result = _convert_paths_to_strings(result)
+                results.append(result)
+
+            logger.info(f"[LIST PREPARE BATCH] Completed preparation for {len(results)} dealerships")
+            return jsonify(results)
+
+        elif single_dealership:
+            # Single mode (backwards compatibility)
+            if not single_vins:
+                return jsonify({'error': 'VIN list required'}), 400
+
+            logger.info(f"[LIST PREPARE] Preparing LIST data for {single_dealership} with {len(single_vins)} VINs")
+
+            # Call the prepare_list_data method (with VIN validation)
+            result = order_processor.prepare_list_data(single_dealership, single_vins)
+
+            logger.info(f"[LIST PREPARE] Data preparation result for {single_dealership}: success={result.get('success')}, valid_vins={result.get('valid_vins')}, invalid_vins={result.get('invalid_vins')}")
+
+            # Convert all Path objects to strings for JSON serialization
+            result = _convert_paths_to_strings(result)
+            return jsonify(result)
+        else:
+            return jsonify({'error': 'Either dealership or dealerships required'}), 400
+
     except Exception as e:
         logger.error(f"Error preparing LIST data: {e}")
         return jsonify({'error': str(e)}), 500

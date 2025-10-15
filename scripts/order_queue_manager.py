@@ -87,7 +87,65 @@ class OrderQueueManager:
         except Exception as e:
             logger.error(f"Error loading templates: {e}")
             return {}
-    
+
+    def get_template_by_id(self, template_id: str) -> Optional[Dict]:
+        """Get template configuration by template ID or name from template_configs table"""
+        try:
+            # First try to get by template_id (if numeric)
+            if template_id.isdigit():
+                template_data = db_manager.execute_query("""
+                    SELECT id, template_name, description, template_type, fields
+                    FROM template_configs
+                    WHERE id = %s AND is_active = true
+                """, (int(template_id),))
+            else:
+                # Try to get by template_name
+                template_data = db_manager.execute_query("""
+                    SELECT id, template_name, description, template_type, fields
+                    FROM template_configs
+                    WHERE template_name = %s AND is_active = true
+                """, (template_id,))
+
+            if not template_data:
+                logger.warning(f"Template not found for ID: {template_id}")
+                return None
+
+            template = template_data[0]
+
+            # Handle JSONB fields data - PostgreSQL returns as dict or string
+            fields = template['fields']
+            if isinstance(fields, str):
+                fields = json.loads(fields)
+            elif fields is None:
+                fields = {}
+
+            # Extract column information from the fields structure
+            columns = fields.get('columns', [])
+
+            # Convert to the expected structure for _generate_custom_template_csv
+            template_fields = []
+            for col in columns:
+                template_fields.append({
+                    'name': col.get('label', ''),
+                    'mapping': col.get('source', col.get('key', '')),
+                    'type': col.get('type', 'text'),
+                    'calculation': col.get('calculation', ''),
+                    'markup_amount': col.get('markup_amount', 0)
+                })
+
+            return {
+                'id': template['id'],
+                'name': template['template_name'],
+                'type': template['template_type'],
+                'description': template.get('description', ''),
+                'fields': template_fields,  # Convert to expected format
+                'raw_fields': fields  # Keep original for reference
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting template by ID {template_id}: {e}")
+            return None
+
     def populate_daily_queue(self, target_date: date = None) -> int:
         """Populate the order queue for a specific date based on weekly schedule"""
         if target_date is None:

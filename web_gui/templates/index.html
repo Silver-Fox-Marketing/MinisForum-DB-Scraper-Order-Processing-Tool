@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>MinisForum Database Control - Silver Fox Marketing [TEMPLATE-FIX-FINAL]</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.1759561651.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.1760567500.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/vin_log_update.css') }}?timestamp=20251004-{{ range(10000000, 99999999) | random }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/template_builder.css') }}?timestamp=20251004-{{ range(10000000, 99999999) | random }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/keyboard_shortcuts.css') }}?timestamp=20251004-{{ range(10000000, 99999999) | random }}">
@@ -764,15 +764,7 @@
                         <i class="fas fa-chevron-left"></i>
                     </button>
                 </div>
-                
-                <!-- System Status Indicator -->
-                <div class="sidebar-status-section">
-                    <div class="status-indicator" id="systemStatus">
-                        <i class="fas fa-circle status-icon"></i>
-                        <span class="status-text">System Ready</span>
-                    </div>
-                </div>
-                
+
                 <!-- Last Scrape Indicator -->
                 <div class="sidebar-scrape-section">
                     <div class="last-scrape" id="lastScrape">
@@ -845,11 +837,6 @@
                             <i class="fas fa-tools"></i>
                             System Tools
                         </h4>
-                        <button class="sidebar-tab external" onclick="window.open('/stress-test', '_blank')">
-                            <i class="fas fa-vial"></i>
-                            <span class="tab-label">System Tests</span>
-                            <i class="fas fa-external-link-alt external-icon"></i>
-                        </button>
                         <button class="sidebar-tab external" onclick="window.open('/websocket-test', '_blank')" title="Test WebSocket Connection">
                             <i class="fas fa-wifi"></i>
                             <span class="tab-label">WebSocket Test</span>
@@ -1064,10 +1051,6 @@
                                     <button class="btn btn-primary" onclick="app.switchTab('queue-management')">
                                         <i class="fas fa-tasks"></i>
                                         Open Queue Manager
-                                    </button>
-                                    <button class="btn btn-secondary" onclick="window.open('/stress-test', '_blank')">
-                                        <i class="fas fa-vial"></i>
-                                        Run System Tests
                                     </button>
                                     <button class="btn btn-secondary" id="exportSystemReport">
                                         <i class="fas fa-download"></i>

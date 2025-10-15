@@ -8620,15 +8620,15 @@ body[data-manual-mode="true"] #startVinLogImport {
 /* Enhanced Dealership Settings Grid */
 .dealership-settings-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 16px;
-    padding: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    padding: 16px;
 }
 
 .dealership-settings-card {
     background: var(--card-background);
-    border-radius: 12px;
-    padding: 24px;
+    border-radius: 8px;
+    padding: 12px;
     border: 1px solid var(--border-color);
     transition: all 0.3s ease;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
@@ -12209,20 +12209,33 @@ html[data-theme="dark"] .selection-panel * {
 .sidebar-navigation.collapsed .tab-label,
 .sidebar-navigation.collapsed .status-text,
 .sidebar-navigation.collapsed .last-scrape,
-.sidebar-navigation.collapsed .sidebar-section-title {
+.sidebar-navigation.collapsed .sidebar-section-title,
+.sidebar-navigation.collapsed .shortcut-hint {
     display: none !important;
 }
 
 /* Center all buttons and icons */
 .sidebar-navigation.collapsed .sidebar-tab {
     justify-content: center !important;
-    padding: 12px !important;
-    margin: 2px 8px !important;
+    align-items: center !important;
+    padding: 14px 0 !important;
+    margin: 4px 8px !important;
+    text-align: center !important;
+    border-radius: 12px !important;
+    display: flex !important;
 }
 
 .sidebar-navigation.collapsed .sidebar-tab i {
-    margin: 0 !important;
-    font-size: 16px !important;
+    margin: 0 auto !important;
+    font-size: 18px !important;
+    display: block !important;
+}
+
+/* Hide bottom sections in collapsed state */
+.sidebar-navigation.collapsed .sidebar-logo-section,
+.sidebar-navigation.collapsed .sidebar-version,
+.sidebar-navigation.collapsed .keyboard-shortcuts-hint {
+    display: none !important;
 }
 
 /* Fix status section */

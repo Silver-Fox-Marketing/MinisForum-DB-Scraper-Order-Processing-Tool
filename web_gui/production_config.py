@@ -60,11 +60,11 @@ class ProductionConfig:
 
 class DevelopmentConfig:
     """Development Flask configuration"""
-    
+
     DEBUG = True
     SECRET_KEY = 'dev-key-not-for-production'
     HOST = '127.0.0.1'
-    PORT = 5000
+    PORT = 5002  # Development server on port 5002
     THREADED = True
     LOG_LEVEL = 'DEBUG'
 

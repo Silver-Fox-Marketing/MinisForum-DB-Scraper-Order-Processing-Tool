@@ -75,7 +75,8 @@ class ScraperImportManager:
     def ensure_active_normalization(self, import_id: int):
         """Ensure all vehicles from the active import have normalized records"""
         try:
-            from scraper_data_normalizer import ScraperDataNormalizer
+            # CRITICAL FIX: Use global normalizer instance with updated mappings
+            from scraper_data_normalizer import normalizer
             
             logger.info(f"Ensuring normalization for active import {import_id}...")
             
@@ -99,7 +100,7 @@ class ScraperImportManager:
             
             logger.info(f"Creating normalized records for {len(missing_vehicles)} missing vehicles...")
             
-            normalizer = ScraperDataNormalizer()
+            # CRITICAL: Use the global normalizer instance that has our updated mappings
             normalized_data = []
             
             for vehicle in missing_vehicles:

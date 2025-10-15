@@ -441,8 +441,11 @@ class Scraper18WebController:
         
         return result
     
-    def run_multiple_scrapers(self, dealership_names: List[str], force_run: bool = False) -> Dict[str, Any]:
-        """Run multiple scrapers in sequence"""
+    def run_all_scrapers(self, dealership_names: List[str], force_run: bool = False) -> Dict[str, Any]:
+        """
+        Run multiple scrapers writing to ONE unified complete_data.csv
+        This is the correct method for running all dealerships into a single output file
+        """
         session_result = {
             'start_time': datetime.datetime.now(),
             'total_scrapers': len(dealership_names),
@@ -451,18 +454,30 @@ class Scraper18WebController:
             'results': {},
             'errors': []
         }
-        
+
+        # Set up ONE unified output directory (no dealership_name = complete_data.csv)
+        paths = self.setup_output_directories(dealership_name=None)
+        unified_output_file = paths['output_file']
+        sites_processed_file = paths['sites_processed_file']
+        data_folder = paths['data_folder']
+
+        self.logger.info(f"Starting unified scraper session for {len(dealership_names)} dealerships")
+        self.logger.info(f"Unified output file: {unified_output_file}")
+
         # Emit session start
         if self.socketio:
             self.socketio.emit('scraper_session_start', {
                 'total_scrapers': len(dealership_names),
                 'scrapers': dealership_names
             })
-        
+
+        # Get sites processed data
+        sites_processed_data = self.get_sites_processed_data(sites_processed_file)
+
         for index, dealership_name in enumerate(dealership_names):
             try:
                 print(f"{index + 1} / {len(dealership_names)} : {dealership_name} : starting")
-                
+
                 # Emit individual scraper start
                 if self.socketio:
                     self.socketio.emit('scraper_start', {
@@ -470,7 +485,238 @@ class Scraper18WebController:
                         'progress': index + 1,
                         'total': len(dealership_names)
                     })
-                
+
+                # Convert display name to site name
+                site_name = self.display_to_site_mapping.get(dealership_name)
+                if not site_name:
+                    error_msg = f"Unknown dealership: {dealership_name}"
+                    session_result['results'][dealership_name] = {'success': False, 'error': error_msg}
+                    session_result['failed_scrapers'] += 1
+                    continue
+
+                # Check if already processed (unless force_run)
+                if not force_run and site_name in sites_processed_data:
+                    self.emit_progress(f"SKIPPED: {dealership_name} - Already processed", dealership_name, 'skip')
+                    session_result['results'][dealership_name] = {'success': True, 'skipped': True}
+                    session_result['successful_scrapers'] += 1
+                    continue
+
+                self.emit_progress(f"STARTING: {dealership_name}", dealership_name, 'start')
+
+                # Change to scraper18_integration directory for proper execution
+                original_cwd = os.getcwd()
+                os.chdir(self.scraper18_dir)
+
+                scraper_result = {
+                    'dealership_name': dealership_name,
+                    'success': False,
+                    'error': None,
+                    'start_time': datetime.datetime.now(),
+                    'vehicles_processed': 0
+                }
+
+                try:
+                    # Execute scraper - ALL write to SAME unified_output_file
+                    self.emit_progress(f"EXECUTING: {dealership_name} scraper", dealership_name, 'execute')
+
+                    if site_name == 'joemachensnissan.com':
+                        JOEMACHENSNISSAN(data_folder, unified_output_file).start_scraping_joemachensnissan()
+                    elif site_name == 'joemachenscdjr.com':
+                        JOEMACHENSCDJR(data_folder, unified_output_file).start_scraping_joemachenscdjr()
+                    elif site_name == 'joemachenshyundai.com':
+                        JOEMACHENSHYUNDAI(data_folder, unified_output_file).start_scraping_joemachenshyundai()
+                    elif site_name == 'kiaofcolumbia.com':
+                        KIAOFCOLUMBIA(data_folder, unified_output_file).start_scraping_kiaofcolumbia()
+                    elif site_name == 'porschestlouis.com':
+                        PORSCHESTLOUIS(data_folder, unified_output_file).start_scraping_porschestlouis()
+                    elif site_name == 'auffenberghyundai.com':
+                        AUFFENBERGHYUNDAI(data_folder, unified_output_file).start_scraping_auffenberghyundai()
+                    elif site_name == 'hondafrontenac.com':
+                        HONDAFRONTENAC(data_folder, unified_output_file).start_scraping_hondafrontenac()
+                    elif site_name == 'bommaritocadillac.com':
+                        BOMMARITOCADILLAC(data_folder, unified_output_file).start_scraping_bommaritocadillac()
+                    elif site_name == 'pappastoyota.com':
+                        PAPPASTOYOTA(data_folder, unified_output_file).start_scraping_pappastoyota()
+                    elif site_name == 'serrahondaofallon.com':
+                        SERRAHONDAOFALLON(data_folder, unified_output_file).start_scraping_serrahondaofallon()
+                    elif site_name == 'southcountyautos.com':
+                        SOUTHCOUNTYAUTOS(data_folder, unified_output_file).start_scraping_southcountyautos()
+                    elif site_name == 'glendalechryslerjeep.net':
+                        GLENDALECHRYSLERJEEP(data_folder, unified_output_file).start_scraping_glendalechryslerjeep()
+                    elif site_name == 'davesinclairlincolnsouth.com':
+                        DAVESINCLAIRLINCOLNSOUTH(data_folder, unified_output_file).start_scraping_davesinclairlincolnsouth()
+                    elif site_name == 'suntrupkiasouth.com':
+                        SUNTRUPKIASOUTH(data_folder, unified_output_file).start_scraping_suntrupkiasouth()
+                    elif site_name == 'columbiabmw.com':
+                        COLUMBIABMW(data_folder, unified_output_file).start_scraping_columbiabmw()
+                    elif site_name == 'rustydrewingcadillac.com':
+                        RUSTYDREWINGCADILLAC(data_folder, unified_output_file).start_scraping_rustydrewingcadillac()
+                    elif site_name == 'rustydrewingchevroletbuickgmc.com':
+                        RUSTYDREWINGCHEVROLETBUICKGMC(data_folder, unified_output_file).start_scraping_rustydrewingchevroletbuickgmc()
+                    elif site_name == 'pundmannford.com':
+                        PUNDMANNFORD(data_folder, unified_output_file).start_scraping_pundmannford()
+                    elif site_name == 'bmwofweststlouis.com':
+                        BMWOFWESTSTLOUIS(data_folder, unified_output_file).start_scraping_bmwofweststlouis()
+                    elif site_name == 'bommaritowestcounty.com':
+                        BOMMARITOWESTCOUNTY(data_folder, unified_output_file).start_scraping_bommaritowestcounty()
+                    elif site_name == 'hwkia.com':
+                        HWKIA(data_folder, unified_output_file).start_scraping_hwkia()
+                    elif site_name == 'wcvolvocars.com':
+                        WCVOLVOCARS(data_folder, unified_output_file).start_scraping_wcvolvocars()
+                    elif site_name == 'joemachenstoyota.com':
+                        JOEMACHENSTOYOTA(data_folder, unified_output_file).start_scraping_joemachenstoyota()
+                    elif site_name == 'suntruphyundaisouth.com':
+                        SUNTRUPHYUNDAISOUTH(data_folder, unified_output_file).start_scraping_suntruphyundaisouth()
+                    elif site_name == 'landroverranchomirage.com':
+                        LANDROVERRANCHOMIRAGE(data_folder, unified_output_file).start_scraping_landroverranchomirage()
+                    elif site_name == 'miniofstlouis.com':
+                        MINIOFSTLOUIS(data_folder, unified_output_file).start_scraping_miniofstlouis()
+                    elif site_name == 'suntrupfordkirkwood.com':
+                        SUNTRUPFORDKIRKWOOD(data_folder, unified_output_file).start_scraping_suntrupfordkirkwood()
+                    elif site_name == 'thoroughbredford.com':
+                        THOROUGHBREDFORD(data_folder, unified_output_file).start_scraping_thoroughbredford()
+                    elif site_name == 'spiritlexus.com':
+                        SPIRITLEXUS(data_folder, unified_output_file).start_scraping_spiritlexus()
+                    elif site_name == 'frankletahonda.com':
+                        FRANKLETAHONDA(data_folder, unified_output_file).start_scraping_frankletahonda()
+                    elif site_name == 'columbiahonda.com':
+                        COLUMBIAHONDA(data_folder, unified_output_file).start_scraping_columbiahonda()
+                    elif site_name == 'davesinclairlincolnstpeters.com':
+                        DAVESINCLAIRLINCOLNSTPETERS(data_folder, unified_output_file).start_scraping_davesinclairlincolnstpeters()
+                    elif site_name == 'weberchev.com':
+                        WEBERCHEV(data_folder, unified_output_file).start_scraping_weberchev()
+                    elif site_name == 'suntrupbuickgmc.com':
+                        SUNTRUPBUICKGMC(data_folder, unified_output_file).start_scraping_suntrupbuickgmc()
+                    elif site_name == 'suntrupfordwest.com':
+                        SUNTRUPFORDWEST(data_folder, unified_output_file).start_scraping_suntrupfordwest()
+                    else:
+                        raise ValueError(f"Unknown site_name: {site_name}")
+
+                    # Update processed sites
+                    sites_processed_data = self.update_sites_processed_data(sites_processed_data, sites_processed_file, site_name)
+
+                    scraper_result['success'] = True
+                    scraper_result['end_time'] = datetime.datetime.now()
+                    scraper_result['duration_seconds'] = (scraper_result['end_time'] - scraper_result['start_time']).total_seconds()
+
+                    self.emit_progress(f"SUCCESS: {dealership_name} completed", dealership_name, 'success')
+                    session_result['successful_scrapers'] += 1
+
+                    # Emit scraper completion
+                    if self.socketio:
+                        self.socketio.emit('scraper_complete', {
+                            'scraper_name': dealership_name,
+                            'success': True,
+                            'vehicles_processed': scraper_result['vehicles_processed'],
+                            'duration': scraper_result['duration_seconds']
+                        })
+
+                except Exception as scraper_e:
+                    scraper_result['success'] = False
+                    scraper_result['error'] = str(scraper_e)
+                    scraper_result['end_time'] = datetime.datetime.now()
+                    scraper_result['duration_seconds'] = (scraper_result['end_time'] - scraper_result['start_time']).total_seconds()
+
+                    self.emit_progress(f"ERROR: {dealership_name} failed - {str(scraper_e)}", dealership_name, 'error')
+                    session_result['failed_scrapers'] += 1
+                    session_result['errors'].append(f"{dealership_name}: {str(scraper_e)}")
+
+                    # Emit scraper failure
+                    if self.socketio:
+                        self.socketio.emit('scraper_complete', {
+                            'scraper_name': dealership_name,
+                            'success': False,
+                            'error': str(scraper_e),
+                            'duration': scraper_result['duration_seconds']
+                        })
+
+                    self.logger.error(f"Scraper error for {dealership_name}: {scraper_e}", exc_info=True)
+
+                finally:
+                    # Always return to original directory
+                    os.chdir(original_cwd)
+
+                session_result['results'][dealership_name] = scraper_result
+                print('-' * 50)
+                print()
+
+            except Exception as e:
+                session_result['failed_scrapers'] += 1
+                session_result['errors'].append(f"{dealership_name}: System error - {str(e)}")
+                self.logger.error(f"System error running {dealership_name}: {e}")
+
+        # After ALL scrapers complete, import the unified CSV once
+        if self.database_integration_enabled and os.path.exists(unified_output_file):
+            try:
+                self.logger.info(f"Importing unified CSV with all dealership data: {unified_output_file}")
+                import_result = self.csv_importer.import_complete_csv(unified_output_file)
+                vehicles_imported = import_result.get('imported_rows', 0)
+
+                if vehicles_imported > 0:
+                    self.logger.info(f"Successfully imported {vehicles_imported} total vehicles from unified CSV")
+
+                    if self.socketio:
+                        self.socketio.emit('scraper_output', {
+                            'message': f'DATABASE: Imported {vehicles_imported} total vehicles from all dealerships',
+                            'type': 'import_success'
+                        })
+                else:
+                    error_msg = f"No vehicles imported from unified CSV. Total rows: {import_result.get('total_rows', 0)}"
+                    self.logger.error(error_msg)
+
+            except Exception as import_e:
+                self.logger.error(f"Failed to import unified CSV: {import_e}")
+
+        # Complete session
+        session_result['end_time'] = datetime.datetime.now()
+        session_result['total_duration'] = (session_result['end_time'] - session_result['start_time']).total_seconds()
+        session_result['success_rate'] = (session_result['successful_scrapers'] / session_result['total_scrapers']) * 100 if session_result['total_scrapers'] > 0 else 0
+        session_result['unified_output_file'] = unified_output_file
+
+        # Emit session completion
+        if self.socketio:
+            self.socketio.emit('scraper_session_complete', {
+                'total_scrapers': session_result['total_scrapers'],
+                'successful_scrapers': session_result['successful_scrapers'],
+                'failed_scrapers': session_result['failed_scrapers'],
+                'success_rate': session_result['success_rate'],
+                'duration': session_result['total_duration'],
+                'unified_output_file': unified_output_file
+            })
+
+        self.logger.info(f"Unified scraper session complete: {session_result['successful_scrapers']}/{session_result['total_scrapers']} successful")
+        return session_result
+
+    def run_multiple_scrapers(self, dealership_names: List[str], force_run: bool = False) -> Dict[str, Any]:
+        """Run multiple scrapers in sequence with SEPARATE CSV files per dealership"""
+        session_result = {
+            'start_time': datetime.datetime.now(),
+            'total_scrapers': len(dealership_names),
+            'successful_scrapers': 0,
+            'failed_scrapers': 0,
+            'results': {},
+            'errors': []
+        }
+
+        # Emit session start
+        if self.socketio:
+            self.socketio.emit('scraper_session_start', {
+                'total_scrapers': len(dealership_names),
+                'scrapers': dealership_names
+            })
+
+        for index, dealership_name in enumerate(dealership_names):
+            try:
+                print(f"{index + 1} / {len(dealership_names)} : {dealership_name} : starting")
+
+                # Emit individual scraper start
+                if self.socketio:
+                    self.socketio.emit('scraper_start', {
+                        'scraper_name': dealership_name,
+                        'progress': index + 1,
+                        'total': len(dealership_names)
+                    })
+
                 # Run the scraper with system-level error handling
                 try:
                     result = self.run_single_scraper(dealership_name, force_run)
@@ -488,10 +734,10 @@ class Scraper18WebController:
                     }
                     session_result['results'][dealership_name] = result
                     self.logger.error(f"System-level error for {dealership_name}: {system_e}", exc_info=True)
-                
+
                 if result['success']:
                     session_result['successful_scrapers'] += 1
-                    
+
                     # Emit scraper completion
                     if self.socketio:
                         self.socketio.emit('scraper_complete', {
@@ -503,7 +749,7 @@ class Scraper18WebController:
                 else:
                     session_result['failed_scrapers'] += 1
                     session_result['errors'].append(f"{dealership_name}: {result['error']}")
-                    
+
                     # Emit scraper failure
                     if self.socketio:
                         self.socketio.emit('scraper_complete', {
@@ -512,30 +758,30 @@ class Scraper18WebController:
                             'error': result['error'],
                             'duration': result['duration_seconds']
                         })
-                
+
                 print('-' * 50)
                 print()
-                
+
             except Exception as e:
                 session_result['failed_scrapers'] += 1
                 session_result['errors'].append(f"{dealership_name}: System error - {str(e)}")
                 self.logger.error(f"System error running {dealership_name}: {e}")
-        
+
         # Complete session
         session_result['end_time'] = datetime.datetime.now()
         session_result['total_duration'] = (session_result['end_time'] - session_result['start_time']).total_seconds()
         session_result['success_rate'] = (session_result['successful_scrapers'] / session_result['total_scrapers']) * 100
-        
+
         # Emit session completion
         if self.socketio:
             self.socketio.emit('scraper_session_complete', {
                 'total_scrapers': session_result['total_scrapers'],
-                'successful_scrapers': session_result['successful_scrapers'], 
+                'successful_scrapers': session_result['successful_scrapers'],
                 'failed_scrapers': session_result['failed_scrapers'],
                 'success_rate': session_result['success_rate'],
                 'duration': session_result['total_duration']
             })
-        
+
         return session_result
     
     def get_available_dealerships(self) -> List[str]:

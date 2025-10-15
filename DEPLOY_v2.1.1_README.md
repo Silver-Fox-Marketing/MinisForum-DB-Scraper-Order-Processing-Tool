@@ -22,9 +22,10 @@ This hotfix resolves critical issues with LIST order processing:
 ## Deployment Instructions
 
 ### Prerequisites
-- **Production Server Path**: `C:\SilverFox`
+- **Production Server Path**: `C:\SilverFox\releases\v2.1.0`
+- **Versioned Deployment**: Production uses version-based releases
 - **Access**: Administrator privileges required
-- **Backup**: Automatic backup created by deployment script
+- **Backup**: Automatic backup created by deployment script to `C:\SilverFox\backups\code\`
 
 ### Step 1: Run the Deployment Script
 
@@ -52,7 +53,7 @@ net start SilverFoxOrderProcessing
 1. Stop the current server process (Ctrl+C or close terminal)
 2. Restart the server:
    ```batch
-   cd C:\SilverFox\web_gui
+   cd C:\SilverFox\releases\v2.1.0\web_gui
    python production_server.py
    ```
 
@@ -60,7 +61,7 @@ net start SilverFoxOrderProcessing
 
 1. **Check Server Logs**:
    - Look for startup without errors
-   - Location: `C:\SilverFox\logs\` or server console
+   - Location: `C:\SilverFox\shared\logs\` or server console
 
 2. **Test LIST Order**:
    - Create a LIST order for "Columbia Honda" (configured for used only)
@@ -95,13 +96,13 @@ If you encounter issues, the deployment script creates an automatic backup.
 
 1. **Automatic Backup Location**:
    ```
-   C:\SilverFox\backups\v2.1.1_hotfix_[TIMESTAMP]\
+   C:\SilverFox\backups\code\v2.1.1_hotfix_[TIMESTAMP]\
    ```
 
 2. **Restore Command**:
    ```batch
-   copy /Y "C:\SilverFox\backups\v2.1.1_hotfix_[TIMESTAMP]\correct_order_processing.py.backup" ^
-         "C:\SilverFox\scripts\correct_order_processing.py"
+   copy /Y "C:\SilverFox\backups\code\v2.1.1_hotfix_[TIMESTAMP]\correct_order_processing.py.backup" ^
+         "C:\SilverFox\releases\v2.1.0\scripts\correct_order_processing.py"
    ```
    (Replace `[TIMESTAMP]` with actual backup folder timestamp)
 

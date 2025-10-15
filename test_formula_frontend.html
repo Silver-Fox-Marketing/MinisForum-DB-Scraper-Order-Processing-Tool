@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Formula Frontend Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        h1 {
+            color: #4a9eff;
+        }
+        .test-result {
+            margin: 20px 0;
+            padding: 15px;
+            background: #2a2a2a;
+            border-left: 4px solid #4a9eff;
+            border-radius: 4px;
+        }
+        .pass {
+            border-left-color: #4caf50;
+        }
+        .fail {
+            border-left-color: #f44336;
+        }
+        .status {
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        code {
+            background: #333;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #4a9eff;
+        }
+    </style>
+</head>
+<body>
+    <h1>Dynamic Concatenated Field Formula - Frontend Test</h1>
+    <div id="results"></div>
+
+    <script>
+        // Copied from template_builder.js
+        function _generateFormula(selectedFields, fieldSeparators) {
+            if (!selectedFields || selectedFields.length === 0) {
+                return '';
+            }
+
+            let formulaParts = [];
+
+            for (let i = 0; i < selectedFields.length; i++) {
+                const field = selectedFields[i];
+                let placeholder = '';
+
+                // Special handling for stock field - backend extracts just the stock number
+                if (field.key === 'stock' || field.key === 'raw_stock') {
+                    placeholder = '{stock_number}';
+                } else {
+                    // Direct field access for all other fields
+                    placeholder = `{${field.key}}`;
+                }
+
+                formulaParts.push(placeholder);
+
+                // Add separator if not the last field
+                if (i < selectedFields.length - 1 && fieldSeparators && fieldSeparators[i]) {
+                    formulaParts.push(fieldSeparators[i]);
+                }
+            }
+
+            const formula = formulaParts.join('');
+            return formula;
+        }
+
+        function runTests() {
+            const results = [];
+
+            // Test 1: Year Make + Stock Number (Porsche NEW template case)
+            const test1 = {
+                name: "Year Make + Stock (Porsche NEW template)",
+                fields: [
+                    { key: 'yearmake', label: 'Year Make' },
+                    { key: 'stock', label: 'Stock' }
+                ],
+                separators: [' - '],
+                expected: '{yearmake} - {stock_number}'
+            };
+            const result1 = _generateFormula(test1.fields, test1.separators);
+            results.push({
+                ...test1,
+                result: result1,
+                pass: result1 === test1.expected
+            });
+
+            // Test 2: Year Model + Stock (USED template case)
+            const test2 = {
+                name: "Year Model + Stock (USED template)",
+                fields: [
+                    { key: 'year_model', label: 'Year Model' },
+                    { key: 'stock', label: 'Stock' }
+                ],
+                separators: [' - '],
+                expected: '{year_model} - {stock_number}'
+            };
+            const result2 = _generateFormula(test2.fields, test2.separators);
+            results.push({
+                ...test2,
+                result: result2,
+                pass: result2 === test2.expected
+            });
+
+            // Test 3: Three fields with different separators
+            const test3 = {
+                name: "Year Make + Model + Stock",
+                fields: [
+                    { key: 'yearmake', label: 'Year Make' },
+                    { key: 'model', label: 'Model' },
+                    { key: 'stock', label: 'Stock' }
+                ],
+                separators: [' - ', ' - '],
+                expected: '{yearmake} - {model} - {stock_number}'
+            };
+            const result3 = _generateFormula(test3.fields, test3.separators);
+            results.push({
+                ...test3,
+                result: result3,
+                pass: result3 === test3.expected
+            });
+
+            // Test 4: Custom separator
+            const test4 = {
+                name: "Model + Stock with custom separator",
+                fields: [
+                    { key: 'model', label: 'Model' },
+                    { key: 'stock', label: 'Stock' }
+                ],
+                separators: [' | '],
+                expected: '{model} | {stock_number}'
+            };
+            const result4 = _generateFormula(test4.fields, test4.separators);
+            results.push({
+                ...test4,
+                result: result4,
+                pass: result4 === test4.expected
+            });
+
+            // Test 5: Raw stock field handling
+            const test5 = {
+                name: "Year Make + Raw Stock",
+                fields: [
+                    { key: 'yearmake', label: 'Year Make' },
+                    { key: 'raw_stock', label: 'Raw Stock' }
+                ],
+                separators: [' - '],
+                expected: '{yearmake} - {stock_number}'
+            };
+            const result5 = _generateFormula(test5.fields, test5.separators);
+            results.push({
+                ...test5,
+                result: result5,
+                pass: result5 === test5.expected
+            });
+
+            // Display results
+            const resultsDiv = document.getElementById('results');
+            results.forEach((test, index) => {
+                const div = document.createElement('div');
+                div.className = `test-result ${test.pass ? 'pass' : 'fail'}`;
+                div.innerHTML = `
+                    <strong>Test ${index + 1}: ${test.name}</strong><br>
+                    Fields: ${test.fields.map(f => f.key).join(', ')}<br>
+                    Separators: ${JSON.stringify(test.separators)}<br>
+                    Expected: <code>${test.expected}</code><br>
+                    Result: <code>${test.result}</code><br>
+                    <div class="status">${test.pass ? '✓ PASS' : '✗ FAIL'}</div>
+                `;
+                resultsDiv.appendChild(div);
+            });
+
+            // Summary
+            const passed = results.filter(r => r.pass).length;
+            const total = results.length;
+            const summaryDiv = document.createElement('div');
+            summaryDiv.className = 'test-result';
+            summaryDiv.innerHTML = `
+                <strong>Summary</strong><br>
+                Passed: ${passed}/${total}<br>
+                Status: ${passed === total ? '✓ All tests passed!' : '✗ Some tests failed'}
+            `;
+            resultsDiv.appendChild(summaryDiv);
+        }
+
+        // Run tests when page loads
+        runTests();
+    </script>
+</body>
+</html>
